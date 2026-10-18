@@ -39,6 +39,7 @@ type LaunchRequest struct {
 	Agent       string   `json:"agent"`
 	Prompt      string   `json:"prompt"`
 	Environment string   `json:"environment,omitempty"`
+	Command     string   `json:"command,omitempty"` // the resolved start command; empty: the runtime default
 }
 
 // WorkspaceName is the name, else the item key.

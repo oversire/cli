@@ -1,0 +1,7 @@
+{
+  "repo": "/Users/ada/Projects/oversire-workspace",
+  "name": "OVERSIRE-112",
+  "agent": "claude",
+  "prompt": "work on https://app.plane.so/ocral/browse/OVERSIRE-112/ in worktree group .wt/oversire-112",
+  "command": "claude -n OVERSIRE-112 --dangerously-skip-permissions"
+}

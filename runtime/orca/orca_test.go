@@ -98,6 +98,58 @@ func TestStartInANewWorkspaceUsesTheShell(t *testing.T) {
 	}
 }
 
+func TestCheckCommand(t *testing.T) {
+	cases := []struct{ agent, cmd, err string }{
+		{"claude", "claude -n ENG-4 --dangerously-skip-permissions", ""},
+		{"claude", "claude -n 'Fix the retry' --model opus", ""},
+		{"codex", "/opt/homebrew/bin/codex --full-auto", ""},
+		{"claude", "codex --full-auto", "The command must start with claude."},
+		{"claude", "claudex -n x", "The command must start with claude."},
+		{"claude", "/bin/notclaude", "The command must start with claude."},
+		{"claude", "  ", "The command must start with claude."},
+		{"claude", "claude\nrm -rf ~", "newline"},
+	}
+	for _, op := range []string{";", "|", "&", "`", "$(", ">", "<"} {
+		cases = append(cases, struct{ agent, cmd, err string }{"claude", "claude -n x " + op + " echo", "shell operator " + op + "."})
+	}
+	for _, c := range cases {
+		err := checkCommand(c.agent, c.cmd)
+		if c.err == "" {
+			if err != nil {
+				t.Errorf("%q: %v", c.cmd, err)
+			}
+		} else if err == nil || !strings.Contains(err.Error(), c.err) {
+			t.Errorf("%q: got %v, want %q", c.cmd, err, c.err)
+		}
+	}
+}
+
+func TestStartUsesTheCheckedCommand(t *testing.T) {
+	o, r := setup()
+	r.on("worktree ps", `{"ok":true,"result":{"worktrees":[]}}`)
+	r.on("worktree create", `{"ok":true,"result":{"worktree":{"id":"c1"}}}`)
+	r.on("terminal list", `{"ok":true,"result":{"terminals":[{"handle":"h1","worktreeId":"c1"}]}}`)
+	r.on("terminal wait", `{"ok":true,"result":{"wait":{"satisfied":true}}}`)
+	r.on("terminal send", `{"ok":true,"result":{}}`)
+
+	custom := "claude -n ENG-4 --dangerously-skip-permissions"
+	if _, err := o.Start(context.Background(), runtime.Order{}, wire.LaunchRequest{Repo: "/w", Name: "ENG-4", Agent: "claude", Prompt: "go", Command: custom}); err != nil {
+		t.Fatal(err)
+	}
+	if sends := r.args("terminal send"); len(sends) != 2 || sends[0][5] != custom {
+		t.Fatalf("sends %q", sends)
+	}
+
+	calls := len(r.calls)
+	_, err := o.Start(context.Background(), runtime.Order{}, wire.LaunchRequest{Repo: "/w", Name: "ENG-4", Agent: "claude", Prompt: "go", Command: "claude; rm -rf ~"})
+	if err == nil || err.Error() != "The command has the shell operator ;. The runner does not run it." {
+		t.Fatalf("err %v", err)
+	}
+	if len(r.calls) != calls {
+		t.Fatal("a refused command calls no Orca")
+	}
+}
+
 func TestStartReusesTheWorkspace(t *testing.T) {
 	o, r := setup()
 	r.on("worktree ps", recorded(t, "worktree-ps.json"))

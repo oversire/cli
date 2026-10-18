@@ -71,6 +71,12 @@ func (o *Orca) Start(ctx context.Context, _ runtime.Order, r wire.LaunchRequest)
 	}
 	env := environment(r.Environment)
 	command := AgentCommand(r.Agent, name)
+	if r.Command != "" {
+		if err := checkCommand(r.Agent, r.Command); err != nil {
+			return none, err
+		}
+		command = r.Command
+	}
 
 	card, err := o.findWorkspace(ctx, env, r.Repo, name)
 	if err != nil {
@@ -205,6 +211,26 @@ func AgentCommand(agent, name string) string {
 		return "claude -n '" + strings.ReplaceAll(name, "'", "") + "'"
 	}
 	return agent
+}
+
+// shellOperators may not show in a start command, also not in quotes.
+var shellOperators = []string{";", "|", "&", "`", "$(", ">", "<", "\n"}
+
+// checkCommand accepts a start command only if its first word is the agent (or a path to it) and it has no shell operator.
+func checkCommand(agent, cmd string) error {
+	for _, op := range shellOperators {
+		if strings.Contains(cmd, op) {
+			if op == "\n" {
+				op = "newline"
+			}
+			return fmt.Errorf("The command has the shell operator %s. The runner does not run it.", op)
+		}
+	}
+	words := strings.Fields(cmd)
+	if len(words) == 0 || (words[0] != agent && !strings.HasSuffix(words[0], "/"+agent)) {
+		return fmt.Errorf("The command must start with %s.", agent)
+	}
+	return nil
 }
 
 func (o *Orca) Stop(ctx context.Context, s wire.SessionRef) error {

@@ -139,6 +139,7 @@ On macOS, `install --keep-awake` keeps the Mac awake while the runner runs (`caf
 
 - **Dial-out only.** The runner opens the connection. It needs no open port.
 - **Typed orders.** An order is one of `sessionStart`, `sessionStop`, `sessionRead` and `sessionSend`. There is no shell order. The `oversire` runtime asks the hub before an agent uses a tool, and denies it when no answer comes. An order with a field that the contract does not know fails.
+- **Checked start command.** A `sessionStart` order can carry `command`, the start command that the user set in OverSire (Settings › Runtime). The `orca` runtime types it into the terminal in place of its default. It accepts the command only if the first word is the agent of the order (or a path that ends in `/<agent>`), and the text has no shell operator (`;` `|` `&` `` ` `` `$(` `>` `<` or a newline). Else the order fails with the reason. An empty field gives the default command. The `oversire` runtime starts the agent over agent-wire, without a command line, and ignores the field.
 - **Local allow list.** The machine owner decides which runtimes, repos, agents and environments the hub can use. The hub cannot change the list.
 - **Expiry.** Each order has an expiry time. The runner never does an expired order.
 - **At most once.** The runner keeps the last 500 finished orders in `orders.json`. An order that the hub sends again does not run again. The runner only sends its result again.

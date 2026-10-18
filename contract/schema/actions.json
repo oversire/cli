@@ -41,7 +41,8 @@
         "branch": { "type": "string" },
         "agent": { "description": "Same raw values as the AgentBinder Harness: claude, codex, opencode, cursor.", "type": "string" },
         "prompt": { "type": "string" },
-        "environment": { "description": "Runtime environment id.", "type": "string" }
+        "environment": { "description": "Runtime environment id.", "type": "string" },
+        "command": { "description": "The resolved shell command that starts the agent in a terminal runtime. Empty: the runtime default. The first word is the agent program.", "type": "string" }
       },
       "required": ["repo", "agent", "prompt"],
       "additionalProperties": false

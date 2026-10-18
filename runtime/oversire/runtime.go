@@ -107,7 +107,7 @@ var (
 )
 
 // Start makes the worktree and gives the session at once. The agent starts when a slot is free.
-// A session that has no slot at o.ExpiresAt fails.
+// A session that has no slot at o.ExpiresAt fails. agent-wire has no command line, so r.Command has no effect.
 func (rt *Runtime) Start(ctx context.Context, o runtime.Order, r wire.LaunchRequest) (wire.SessionRef, error) {
 	var none wire.SessionRef
 	key := r.Name
