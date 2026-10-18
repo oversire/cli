@@ -17,6 +17,16 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      # The app installs only a signed, notarized runner. Stop before an unsigned release.
+      - name: Check the signing secrets
+        env:
+          MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}
+          MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
+        run: |
+          if [ -z "$MACOS_SIGN_P12" ] || [ -z "$MACOS_NOTARY_KEY" ]; then
+            echo "::error::Set the MACOS_SIGN_* and MACOS_NOTARY_* secrets before a release."
+            exit 1
+          fi
       - uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
