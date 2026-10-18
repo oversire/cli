@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -109,7 +110,7 @@ func TestFileFallback(t *testing.T) {
 		if got, err := s.Get(ctx, "dev1"); err != nil || got != token {
 			t.Fatal(c.goos, got, err)
 		}
-		if st, _ := os.Stat(file); c.goos != "windows" && st.Mode().Perm() != 0o600 {
+		if st, _ := os.Stat(file); c.goos != "windows" && runtime.GOOS != "windows" && st.Mode().Perm() != 0o600 {
 			t.Fatalf("mode %v", st.Mode())
 		}
 		c.run.argvHasToken(t)
