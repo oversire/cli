@@ -1,0 +1,75 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+
+project_name: oversire-runner
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - id: oversire-runner
+    main: ./cmd/oversire-runner
+    binary: oversire-runner
+    env:
+      - CGO_ENABLED=0
+    goos: [darwin, linux, windows]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+    # TODO(windows-signing): sign oversire-runner.exe with Authenticode. This needs a code signing
+    # certificate. Add a post hook here (for example signtool or osslsigncode) when the certificate exists.
+
+archives:
+  - id: default
+    name_template: "oversire-runner_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+notarize:
+  macos:
+    - enabled: '{{ isEnvSet "MACOS_SIGN_P12" }}'
+      ids: [oversire-runner]
+      sign:
+        certificate: "{{ .Env.MACOS_SIGN_P12 }}"
+        password: "{{ .Env.MACOS_SIGN_PASSWORD }}"
+      notarize:
+        issuer_id: "{{ .Env.MACOS_NOTARY_ISSUER_ID }}"
+        key_id: "{{ .Env.MACOS_NOTARY_KEY_ID }}"
+        key: "{{ .Env.MACOS_NOTARY_KEY }}"
+        wait: true
+        timeout: 20m
+
+nfpms:
+  - id: packages
+    package_name: oversire-runner
+    file_name_template: "oversire-runner_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    ids: [oversire-runner]
+    vendor: OverSire
+    homepage: https://github.com/oversire/runner
+    maintainer: OverSire <noreply@oversire.dev>
+    description: Headless OverSire runner. It connects to the OverSire hub and drives agent runtimes.
+    license: MIT
+    formats: [deb, rpm]
+    bindir: /usr/bin
+
+release:
+  github:
+    owner: oversire
+    name: runner
+  draft: false
+  prerelease: auto
+
+changelog:
+  sort: asc

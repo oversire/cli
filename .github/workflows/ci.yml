@@ -1,0 +1,44 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: go test ./...
+
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check out the app contract
+        uses: actions/checkout@v4
+        continue-on-error: true
+        with:
+          repository: oversire/oversire
+          path: oversire
+          sparse-checkout: Contract
+      - name: Compare contract/ with oversire/Contract
+        shell: bash
+        run: |
+          if [ ! -d oversire/Contract ]; then
+            echo "Skip: oversire/oversire is not checked out."
+            exit 0
+          fi
+          OVERSIRE_APP="$GITHUB_WORKSPACE/oversire" scripts/contract-check.sh
