@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/oversire/runner/config"
+	"github.com/oversire/runner/runtime/oversire"
 	"github.com/oversire/runner/service"
 )
 
@@ -39,7 +40,7 @@ func (c *cli) status(ctx context.Context, args []string) error {
 	}
 	r := statusReport{
 		Version: version, Paired: paired, Device: cfg.Device, Hub: cfg.Hub,
-		Service: c.service.Status(ctx), Runtimes: c.registry().IDs(), LastError: st.LastError,
+		Service: c.service.Status(ctx), Runtimes: c.registry(oversire.New(oversire.Options{}, nil, nil, nil)).IDs(), LastError: st.LastError,
 	}
 	// A state file of a stopped service is old.
 	if st.Connected && st.Device == cfg.Device && (r.Service.Running || !r.Service.Installed) {

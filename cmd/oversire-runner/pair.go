@@ -88,7 +88,8 @@ func (c *cli) pair(ctx context.Context, args []string) error {
 	if err := c.secrets.Set(ctx, res.DeviceID, res.Token); err != nil {
 		return fmt.Errorf("store the token: %w", err)
 	}
-	cfg := config.Config{Hub: *hub, Device: res.DeviceID, Account: res.Account, Name: *name, KeepAwake: old.KeepAwake}
+	cfg := config.Config{Hub: *hub, Device: res.DeviceID, Account: res.Account, Name: *name, KeepAwake: old.KeepAwake,
+		MaxSessions: old.MaxSessions, DataDir: old.DataDir}
 	if err := c.paths.SaveConfig(cfg); err != nil {
 		return err
 	}

@@ -4,8 +4,10 @@
 It connects to the OverSire hub over one WebSocket, takes typed work orders and drives agent runtimes on the machine.
 The runner dials out. The hub never connects in. There is no shell order.
 
-The runtime now is Orca: the runner starts agent sessions in Orca workspaces, reads them, sends text to them and closes them.
-An `oversire` runtime (sessions without Orca) comes later.
+There are two runtimes:
+
+- `orca` starts agent sessions in Orca workspaces, reads them, sends text to them and closes them. The runner has it when the Orca CLI is on the machine.
+- `oversire` runs agent sessions without Orca. See [runtime:oversire](#runtimeoversire).
 
 ## Install
 
@@ -56,7 +58,7 @@ Write `allow.json` in the config folder:
 
 ```json
 {
-  "runtimes": ["orca"],
+  "runtimes": ["orca", "oversire"],
   "repos": ["/Users/ada/Projects/app", "/Users/ada/work"],
   "agents": ["claude", "codex"],
   "environments": ["local"]
@@ -68,10 +70,29 @@ Write `allow.json` in the config folder:
 | `runtimes` | The runtime of each order must be in the list. |
 | `repos` | A `sessionStart` repo must be a listed path or in a listed folder. The runner cleans the path first. A remote URL must be the same text. |
 | `agents` | A `sessionStart` agent must be in the list. |
-| `environments` | The runtime environment of each order must be in the list. `local` is this machine. Other names are paired Orca environments. |
+| `environments` | The runtime environment of each order must be in the list. `local` is this machine. Other names are paired Orca environments. The `oversire` runtime uses only `local`. |
 
 The runner reads the file again for each order. An edit applies without a restart.
 The hub shows a summary of the list (the runtimes, the agents and the number of repos). The full list stays on the machine.
+
+## runtime:oversire
+
+The `oversire` runtime drives the agent CLI directly through [agent-wire](https://github.com/trebi-ai/agent-wire), over the structured protocol of the CLI.
+It uses the CLI and the login that are on the machine.
+
+| Topic | Rule |
+|---|---|
+| Agents | `claude`, `codex`, `opencode`, `opencode2`, `pi`, `copilot`, `cursor` and `gemini` (the agent-wire harness names). The allow list must also have the agent. |
+| Worktree | Each item gets one git worktree at `<data>/worktrees/<repo name>/<item key>`. The branch is the item key in lowercase, for example `towertail-2`. Without an item, the launch name is the key. A second launch for the same key uses the worktree and the branch again. `sessionStop` keeps the worktree. |
+| Session | `sessionStart` gives the session at once. The workspace id is `<repo name>/<key>`, and the session id starts with `s-`. The state goes from `queued` to `starting` to `working`, then `waitingInput` at the end of each turn, and `done` or `failed` at the end. |
+| Slots | At most `maxSessions` sessions run at the same time (default 2). A new session waits in `queued`. If the order expires before a slot is free, the session is `failed`. |
+| Permissions | The agent asks before it uses a tool. The session goes to `waitingPermission` with a prompt. Answer it with `sessionSend` and a `permission` answer. With no answer in 10 minutes, the runner denies the request. |
+| Transcript | `sessionRead` gives the last lines of the transcript. The full transcript is in `<data>/sessions/<session id>.log`. |
+| Reports | Each change of state, summary or permission prompt goes to the hub as a `session` message. Without a connection, the runner keeps the latest state and sends it after the next welcome. |
+
+The data folder is `~/.local/share/oversire-runner` (macOS and Linux) or `%LocalAppData%\oversire-runner` (Windows).
+With `OVERSIRE_RUNNER_HOME`, it is `$OVERSIRE_RUNNER_HOME/data`.
+To change the data folder or the number of slots, set `dataDir` or `maxSessions` in `config.json`. `pair` keeps these fields.
 
 ## Commands
 
@@ -98,7 +119,7 @@ The hub shows a summary of the list (the runtimes, the agents and the number of 
   "since": "2026-10-17T09:00:00Z",
   "lastError": "",
   "service": { "installed": true, "running": true },
-  "runtimes": ["orca"]
+  "runtimes": ["orca", "oversire"]
 }
 ```
 
@@ -117,7 +138,7 @@ On macOS, `install --keep-awake` keeps the Mac awake while the runner runs (`caf
 ## Security model
 
 - **Dial-out only.** The runner opens the connection. It needs no open port.
-- **Typed orders.** An order is one of `sessionStart`, `sessionStop`, `sessionRead` and `sessionSend`. There is no shell order. An order with a field that the contract does not know fails.
+- **Typed orders.** An order is one of `sessionStart`, `sessionStop`, `sessionRead` and `sessionSend`. There is no shell order. The `oversire` runtime asks the hub before an agent uses a tool, and denies it when no answer comes. An order with a field that the contract does not know fails.
 - **Local allow list.** The machine owner decides which runtimes, repos, agents and environments the hub can use. The hub cannot change the list.
 - **Expiry.** Each order has an expiry time. The runner never does an expired order.
 - **At most once.** The runner keeps the last 500 finished orders in `orders.json`. An order that the hub sends again does not run again. The runner only sends its result again.
@@ -129,6 +150,7 @@ On macOS, `install --keep-awake` keeps the Mac awake while the runner runs (`caf
 ```bash
 go vet ./...
 go test ./...
+OVERSIRE_LIVE=1 go test -run TestLive ./runtime/oversire   # a real harness (OVERSIRE_LIVE_AGENT, default claude)
 scripts/contract-check.sh   # compare contract/ with ../oversire/Contract (OVERSIRE_APP overrides)
 ```
 
@@ -136,7 +158,7 @@ Set `OVERSIRE_RUNNER_HOME` to use another config folder, for example for a test 
 
 `contract/` is a copy of `Contract/` from [oversire/oversire](https://github.com/oversire/oversire): `schema/`, `fixtures/` and `prompts/`.
 Do not edit it here. Change the contract in the app first, then copy it again and run the tests.
-The `wire` tests decode and encode each fixture of `work-order/`, `runner-message/` and `launch-request/`.
+The `wire` tests decode and encode each fixture of `work-order/`, `runner-message/`, `runner-session/` and `launch-request/`.
 
 The layout:
 
@@ -145,7 +167,7 @@ The layout:
 | `cmd/oversire-runner` | The commands. |
 | `wire` | The Go types of the wire contract. |
 | `hub` | The WebSocket client and the journal of finished orders. |
-| `runtime` | The `Runtime` interface and the registry. `runtime/orca` is the Orca driver. |
+| `runtime` | The `Runtime` interface and the registry. `runtime/orca` is the Orca driver. `runtime/oversire` is the agent-wire driver. |
 | `allow` | The allow list. |
 | `config` | The config folder, `config.json` and `state.json`. |
 | `secret` | The token storage. |

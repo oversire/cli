@@ -65,6 +65,34 @@ func TestRuntime(t *testing.T) {
 	}
 }
 
+func TestOversireRuntime(t *testing.T) {
+	l := list
+	l.Runtimes = []string{"orca", "oversire"}
+	o := start(abs("/Users/ada/Projects/app"), "claude", "")
+	o.Runtime = "oversire"
+	if err := l.Check(o); err != nil {
+		t.Fatal(err)
+	}
+	o.Payload = wire.LaunchRequest{Repo: abs("/Users/ada/elsewhere"), Agent: "claude", Prompt: "go"}
+	if err := l.Check(o); err == nil || !strings.Contains(err.Error(), "no repo") {
+		t.Fatalf("repo: %v", err)
+	}
+	o.Payload = wire.LaunchRequest{Repo: abs("/Users/ada/Projects/app"), Agent: "gemini", Prompt: "go"}
+	if err := l.Check(o); err == nil || !strings.Contains(err.Error(), "agent gemini") {
+		t.Fatalf("agent: %v", err)
+	}
+	s := wire.SessionRef{Workspace: wire.WorkspaceRef{Account: wire.AccountID{Provider: "oversire", ID: "local"}, ID: "app/APP-2"}, ID: "s-1"}
+	for _, p := range []wire.Payload{
+		wire.StopPayload{Session: s},
+		wire.ReadPayload{Session: s, Lines: 4},
+		wire.SendPayload{Session: s, Permission: &wire.PermissionAnswer{ID: "p-1", Allow: true}},
+	} {
+		if err := l.Check(wire.WorkOrder{Runtime: "oversire", Payload: p}); err != nil {
+			t.Errorf("%s: %v", p.Op(), err)
+		}
+	}
+}
+
 func TestSessionOrders(t *testing.T) {
 	for _, p := range []wire.Payload{
 		wire.StopPayload{Session: session("mbp")},

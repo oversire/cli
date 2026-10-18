@@ -6,9 +6,12 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	goruntime "runtime"
 	"strconv"
 	"time"
+
+	agentwire "github.com/trebi-ai/agent-wire"
 
 	"github.com/oversire/runner/allow"
 	"github.com/oversire/runner/config"
@@ -16,14 +19,17 @@ import (
 	"github.com/oversire/runner/proc"
 	"github.com/oversire/runner/runtime"
 	"github.com/oversire/runner/runtime/orca"
+	"github.com/oversire/runner/runtime/oversire"
 	"github.com/oversire/runner/update"
+	"github.com/oversire/runner/wire"
 )
 
 // stopWait is the wait after a refused token or hello, so that the service does not retry fast.
 const stopWait = time.Hour
 
-func (c *cli) registry() *runtime.Registry {
-	var rts []runtime.Runtime
+// registry has ov, and orca when its CLI is on this machine.
+func (c *cli) registry(ov runtime.Runtime) *runtime.Registry {
+	rts := []runtime.Runtime{ov}
 	if exe, ok := orca.FindCLI(); ok {
 		rts = append(rts, orca.New(exe, proc.Local{}))
 	}
@@ -44,11 +50,26 @@ func (c *cli) run(ctx context.Context) error {
 			c.log.Warn("caffeinate failed", "err", err)
 		}
 	}
-	reg := c.registry()
-	c.log.Info("runner start", "version", version, "hub", cfg.Hub, "device", cfg.Device, "runtimes", reg.IDs())
+	data, err := cfg.Data()
+	if err != nil {
+		return err
+	}
+	agents := agentwire.New(agentwire.Options{ClientName: "oversire-runner", ClientVersion: version, LedgerPath: filepath.Join(data, "agents.json"), Logger: c.log})
+	_ = agents.Reconcile()
+	var client *hub.Client
+	ov := oversire.New(oversire.Options{Runner: cfg.Device, DataDir: data, Slots: cfg.Sessions()}, agents, proc.Local{},
+		oversire.ReportFunc(func(s wire.RunnerSession) { client.Report(s) }))
+	defer func() {
+		ctx, done := context.WithTimeout(context.Background(), 30*time.Second)
+		defer done()
+		ov.Close(ctx)
+		agents.Close(ctx)
+	}()
+	reg := c.registry(ov)
+	c.log.Info("runner start", "version", version, "hub", cfg.Hub, "device", cfg.Device, "runtimes", reg.IDs(), "data", data)
 
 	state := config.NewStateFile(c.paths.State(), config.State{Device: cfg.Device, Hub: cfg.Hub, Version: version})
-	client := hub.NewClient(cfg.Hub, token, version, reg, allow.File{Path: c.paths.Allow()}, hub.OpenJournal(c.paths.Journal()), state)
+	client = hub.NewClient(cfg.Hub, token, version, reg, allow.File{Path: c.paths.Allow()}, hub.OpenJournal(c.paths.Journal()), state)
 	client.Log = c.log
 
 	ctx, cancel := context.WithCancel(ctx)

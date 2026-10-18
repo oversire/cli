@@ -435,3 +435,68 @@ func TestJournalKeepsTheLast500(t *testing.T) {
 		t.Fatal("the oldest entry stays")
 	}
 }
+
+func runnerSession(id string, state wire.RunnerSessionState, at time.Time) wire.RunnerSession {
+	return wire.RunnerSession{
+		ID: id, Runner: "r1", Order: "o1", Agent: "claude", Repo: "/w", State: state, StartedAt: at, UpdatedAt: at,
+		Session: wire.SessionRef{Workspace: wire.WorkspaceRef{Account: wire.AccountID{Provider: "oversire", ID: "local"}, ID: "w/ENG-4"}, ID: id},
+	}
+}
+
+func TestSessionReportsAndResendAfterWelcome(t *testing.T) {
+	got := make(chan wire.Message, 8)
+	var c *Client
+	at := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+	h := newFakeHub(t, 0, func(ctx context.Context, conn *websocket.Conn, n int) {
+		welcome(t, ctx, conn)
+		switch n {
+		case 1:
+			got <- next(t, ctx, conn)
+			c.Report(runnerSession("s-1", wire.SessionWorking, at.Add(time.Second)))
+			got <- next(t, ctx, conn)
+			conn.Close(websocket.StatusGoingAway, "hibernate")
+		case 2:
+			got <- next(t, ctx, conn)
+			c.Report(runnerSession("s-1", wire.SessionDone, at.Add(2*time.Second)))
+			got <- next(t, ctx, conn)
+			conn.Close(websocket.StatusGoingAway, "hibernate")
+		case 3:
+			ctx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
+			defer cancel()
+			if _, data, err := conn.Read(ctx); err == nil && string(data) != "ping" {
+				got <- wire.Unknown{Kind: string(data)}
+			}
+			<-ctx.Done()
+		}
+	})
+	c = client(t, h, &fakeRuntimes{}, fakeAllow{})
+	c.Report(runnerSession("s-1", wire.SessionQueued, at))
+	stop := start(t, c)
+	var states []wire.RunnerSessionState
+	for range 4 {
+		select {
+		case m := <-got:
+			s, ok := m.(wire.Session)
+			if !ok || s.Session.ID != "s-1" {
+				t.Fatalf("got %#v", m)
+			}
+			states = append(states, s.Session.State)
+		case <-time.After(5 * time.Second):
+			t.Fatal("no session frame")
+		}
+	}
+	for h.count() < 3 {
+		time.Sleep(10 * time.Millisecond)
+	}
+	time.Sleep(400 * time.Millisecond)
+	stop()
+	want := []wire.RunnerSessionState{wire.SessionQueued, wire.SessionWorking, wire.SessionWorking, wire.SessionDone}
+	if !slices.Equal(states, want) {
+		t.Fatalf("states %v, want %v", states, want)
+	}
+	select {
+	case m := <-got:
+		t.Fatalf("a sent done session went out again: %#v", m)
+	default:
+	}
+}

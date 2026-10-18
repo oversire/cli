@@ -71,6 +71,8 @@ type Client struct {
 	MaxBackoff  time.Duration
 	StableAfter time.Duration
 
+	sessions *sessionBox
+
 	mu      sync.Mutex
 	conn    *websocket.Conn
 	running map[string]bool
@@ -82,9 +84,13 @@ func NewClient(hub, token, version string, runtimes Runtimes, allow Allow, journ
 		runtimes: runtimes, allow: allow, journal: journal, status: status,
 		HTTPClient: http.DefaultClient, Log: slog.Default(), Now: time.Now,
 		PingEvery: 30 * time.Second, MinBackoff: time.Second, MaxBackoff: 5 * time.Minute, StableAfter: time.Minute,
-		running: map[string]bool{},
+		running: map[string]bool{}, sessions: newSessionBox(),
 	}
 }
+
+// Report sends the session state to the hub. Without a connection, the state waits for the next welcome.
+// Report does not block.
+func (c *Client) Report(s wire.RunnerSession) { c.sessions.put(s) }
 
 // ConnectURL is the WebSocket URL of a hub base URL.
 func ConnectURL(hub string) string {
@@ -157,6 +163,7 @@ func (c *Client) session(ctx context.Context) error {
 	}
 	go c.ping(sctx, conn, cancel)
 
+	pushing := false
 	for {
 		kind, data, err := conn.Read(sctx)
 		if err != nil {
@@ -175,6 +182,11 @@ func (c *Client) session(ctx context.Context) error {
 			c.Log.Info("hub welcome", "device", m.Device, "contract", m.Contract)
 			c.status.Connected(c.Now())
 			c.flush(sctx, conn)
+			c.sessions.markAll()
+			if !pushing {
+				pushing = true
+				go c.pushSessions(sctx, conn)
+			}
 		case wire.Refused:
 			conn.Close(websocket.StatusNormalClosure, "refused")
 			return &RefusedError{Reason: m.Reason, Contracts: m.Contracts}
@@ -290,6 +302,24 @@ func (c *Client) flush(ctx context.Context, conn *websocket.Conn) {
 	for _, r := range c.journal.Unsent() {
 		if c.write(ctx, conn, r) == nil {
 			c.journal.MarkSent(r.Order)
+		}
+	}
+}
+
+// pushSessions sends the session states until the connection ends.
+func (c *Client) pushSessions(ctx context.Context, conn *websocket.Conn) {
+	for {
+		for _, s := range c.sessions.take() {
+			err := c.write(ctx, conn, wire.Session{Session: s})
+			c.sessions.sent(s, err == nil)
+			if err != nil {
+				return
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-c.sessions.kick:
 		}
 	}
 }

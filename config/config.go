@@ -28,6 +28,29 @@ func Dir() (string, error) {
 	return filepath.Join(home, ".config", "oversire-runner"), nil
 }
 
+// DefaultMaxSessions is the default of Config.MaxSessions.
+const DefaultMaxSessions = 2
+
+// DataDir is ~/.local/share/oversire-runner on macOS and Linux, %LocalAppData%\oversire-runner on Windows.
+// With OVERSIRE_RUNNER_HOME, it is the data folder in that folder.
+func DataDir() (string, error) {
+	if d := os.Getenv("OVERSIRE_RUNNER_HOME"); d != "" {
+		return filepath.Join(d, "data"), nil
+	}
+	if runtime.GOOS == "windows" {
+		d, err := os.UserCacheDir()
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(d, "oversire-runner"), nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".local", "share", "oversire-runner"), nil
+}
+
 // Config is the pairing of this runner. The token is not here; package secret holds it.
 type Config struct {
 	Hub       string `json:"hub"`
@@ -35,6 +58,26 @@ type Config struct {
 	Account   string `json:"account"`
 	Name      string `json:"name"`
 	KeepAwake bool   `json:"keepAwake,omitempty"`
+	// MaxSessions is the maximum of oversire sessions that run at the same time. Zero is DefaultMaxSessions.
+	MaxSessions int `json:"maxSessions,omitempty"`
+	// DataDir holds the worktrees and transcripts of the oversire runtime. Empty is DataDir().
+	DataDir string `json:"dataDir,omitempty"`
+}
+
+// Sessions is MaxSessions, or DefaultMaxSessions when it is not set.
+func (c Config) Sessions() int {
+	if c.MaxSessions > 0 {
+		return c.MaxSessions
+	}
+	return DefaultMaxSessions
+}
+
+// Data is DataDir, or DataDir() when it is not set.
+func (c Config) Data() (string, error) {
+	if c.DataDir != "" {
+		return c.DataDir, nil
+	}
+	return DataDir()
 }
 
 // Paths names the files in one config dir.
