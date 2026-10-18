@@ -226,14 +226,14 @@ func (c *Client) badMessage(ctx context.Context, data []byte, err error) {
 // handle runs one order at most one time. A finished order only sends its result again.
 func (c *Client) handle(ctx context.Context, o wire.WorkOrder) {
 	c.mu.Lock()
-	if c.running[o.ID] {
-		c.mu.Unlock()
-		return
-	}
-	// Under the lock: a finished order is in the journal before it leaves running.
+	// The journal first: a finished order is in it before it leaves running.
 	if r, ok := c.journal.Get(o.ID); ok {
 		c.mu.Unlock()
 		c.send(ctx, r)
+		return
+	}
+	if c.running[o.ID] {
+		c.mu.Unlock()
 		return
 	}
 	c.running[o.ID] = true
