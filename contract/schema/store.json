@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oversire.dev/contract/store.json",
+  "title": "OverSire store",
+  "description": "The records of the state that OverSire owns. Each record type is one collection. Dates are ISO 8601.",
+  "x-oversire-schema": 2,
+  "$defs": {
+    "Date": { "type": "string", "format": "date-time" },
+    "QueueEntry": {
+      "type": "object",
+      "properties": {
+        "key": { "description": "Item key, for example TOWERTAIL-2.", "type": "string" },
+        "title": { "type": "string" },
+        "condition": { "enum": ["slot", "ciPassed", "done", "tonight"] },
+        "added": { "$ref": "#/$defs/Date" },
+        "source": { "enum": ["you", "label", "assignee"] }
+      },
+      "required": ["key", "title", "condition", "added", "source"],
+      "additionalProperties": false
+    },
+    "QueueLane": {
+      "description": "Collection queue-lanes. The id is the project.",
+      "type": "object",
+      "properties": {
+        "project": { "description": "The store key of the project.", "type": "string" },
+        "identifier": { "type": "string" },
+        "entries": { "type": "array", "items": { "$ref": "#/$defs/QueueEntry" } }
+      },
+      "required": ["project", "identifier", "entries"],
+      "additionalProperties": false
+    },
+    "QueueLaneState": {
+      "description": "Collection queue-lane-state. The id is the project. The queue writes it, not the user.",
+      "type": "object",
+      "properties": {
+        "project": { "description": "The store key of the project.", "type": "string" },
+        "lastStarted": { "description": "Item key of the last start in the lane.", "type": "string" },
+        "error": { "description": "Why the lane cannot start.", "type": "string" },
+        "updatedAt": { "$ref": "#/$defs/Date" }
+      },
+      "required": ["project", "updatedAt"],
+      "additionalProperties": false
+    },
+    "QueueTrigger": {
+      "description": "Collection queue-triggers. The id is the key.",
+      "type": "object",
+      "properties": {
+        "key": { "type": "string" },
+        "at": { "$ref": "#/$defs/Date" }
+      },
+      "required": ["key", "at"],
+      "additionalProperties": false
+    },
+    "IgnoredFailure": {
+      "description": "Collection ignored-failures. The id is the run URL, #, and the attempt.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "at": { "$ref": "#/$defs/Date" }
+      },
+      "required": ["id", "at"],
+      "additionalProperties": false
+    },
+    "Pin": {
+      "description": "Collection pins.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "subject": { "$ref": "refs.json#/$defs/SubjectRef" },
+        "at": { "$ref": "#/$defs/Date" }
+      },
+      "required": ["id", "subject", "at"],
+      "additionalProperties": false
+    },
+    "Snooze": {
+      "description": "Collection snoozes.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "subject": { "$ref": "refs.json#/$defs/SubjectRef" },
+        "until": { "$ref": "#/$defs/Date" }
+      },
+      "required": ["id", "subject", "until"],
+      "additionalProperties": false
+    },
+    "Note": {
+      "description": "Collection notes. A private note. It does not go to the vendor.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "subject": { "$ref": "refs.json#/$defs/SubjectRef" },
+        "text": { "type": "string" },
+        "at": { "$ref": "#/$defs/Date" }
+      },
+      "required": ["id", "subject", "text", "at"],
+      "additionalProperties": false
+    },
+    "AgentLink": {
+      "description": "Collection agent-links. The id is the key.",
+      "type": "object",
+      "properties": {
+        "key": { "description": "Item key, upper case.", "type": "string" },
+        "workspace": { "$ref": "refs.json#/$defs/WorkspaceRef" },
+        "pane": { "type": "string" },
+        "at": { "$ref": "#/$defs/Date" }
+      },
+      "required": ["key", "workspace", "at"],
+      "additionalProperties": false
+    },
+    "StoreOp": {
+      "description": "One write to a synced collection. The hub keeps an op log of them. Last write wins for each collection and id, by hlc.",
+      "type": "object",
+      "properties": {
+        "schema": { "description": "The x-oversire-schema number of store.json that the writer uses.", "type": "integer", "minimum": 1 },
+        "collection": { "type": "string", "minLength": 1 },
+        "id": { "type": "string", "minLength": 1 },
+        "op": { "enum": ["put", "delete"] },
+        "record": { "description": "The record of a put. Missing for a delete.", "type": "object" },
+        "hlc": {
+          "description": "Hybrid clock: milliseconds since 1970 (15 digits), a counter (6 digits) and the device id. The text order is the time order.",
+          "type": "string",
+          "pattern": "^[0-9]{15}-[0-9]{6}-.+$"
+        },
+        "device": { "description": "The device id of the writer.", "type": "string", "minLength": 1 }
+      },
+      "required": ["schema", "collection", "id", "op", "hlc", "device"],
+      "additionalProperties": false
+    }
+  }
+}

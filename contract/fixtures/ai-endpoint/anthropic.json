@@ -1,0 +1,8 @@
+{
+  "id": "deepseek-anthropic",
+  "format": "anthropic",
+  "baseURL": "https://api.deepseek.com/anthropic",
+  "keySecret": "DEEPSEEK_KEY",
+  "tools": true,
+  "structured": false
+}

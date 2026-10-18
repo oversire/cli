@@ -1,0 +1,22 @@
+{
+  "id": "a1b2c3d4-0000-11f0-8000-000000000001",
+  "schema": 1,
+  "provider": "github",
+  "account": { "provider": "github", "id": "oversire" },
+  "kind": "change",
+  "action": "opened",
+  "subject": {
+    "kind": "change",
+    "ref": {
+      "repo": {
+        "account": { "provider": "github", "id": "oversire" },
+        "path": "oversire/oversire",
+        "url": "https://github.com/oversire/oversire"
+      },
+      "number": 12,
+      "url": "https://github.com/oversire/oversire/pull/12"
+    }
+  },
+  "at": "2026-10-16T12:01:30Z",
+  "summary": { "title": "Add the provider registry", "actor": "flarco" }
+}

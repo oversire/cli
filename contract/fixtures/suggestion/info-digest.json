@@ -1,0 +1,22 @@
+{
+  "createdAt": "2026-10-01T09:00:07Z",
+  "expiresAt": "2026-10-08T09:00:07Z",
+  "id": "s-digest",
+  "subject": {
+    "kind": "project",
+    "ref": {
+      "account": {
+        "provider": "plane",
+        "id": "ocral"
+      },
+      "id": "b1f0c2d4",
+      "key": "TOWERTAIL"
+    }
+  },
+  "kind": "digest",
+  "title": "Morning digest",
+  "body": "Two PRs wait for review. CI on main is green.",
+  "state": "open",
+  "dedupeKey": "project:plane/ocral/b1f0c2d4|digest|2026-10-01",
+  "subjectVersion": "2026-10-01"
+}

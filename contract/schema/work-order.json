@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oversire.dev/contract/work-order.json",
+  "title": "OverSire work orders",
+  "description": "Typed orders from the hub to a runner device. There is no shell order. Dates are ISO 8601 UTC.",
+  "x-oversire-schema": 1,
+  "$defs": {
+    "Date": { "type": "string", "format": "date-time" },
+    "SessionOrder": {
+      "description": "The op and its payload. A WorkOrder and a WorkOrderDraft hold these two fields at their top level.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": { "op": { "const": "sessionStart" }, "payload": { "$ref": "actions.json#/$defs/LaunchRequest" } },
+          "required": ["op", "payload"]
+        },
+        {
+          "type": "object",
+          "properties": { "op": { "const": "sessionStop" }, "payload": { "$ref": "#/$defs/SessionPayload" } },
+          "required": ["op", "payload"]
+        },
+        {
+          "type": "object",
+          "properties": { "op": { "const": "sessionRead" }, "payload": { "$ref": "#/$defs/ReadPayload" } },
+          "required": ["op", "payload"]
+        },
+        {
+          "type": "object",
+          "properties": { "op": { "const": "sessionSend" }, "payload": { "$ref": "#/$defs/SendPayload" } },
+          "required": ["op", "payload"]
+        }
+      ]
+    },
+    "SessionPayload": {
+      "type": "object",
+      "properties": { "session": { "$ref": "refs.json#/$defs/SessionRef" } },
+      "required": ["session"],
+      "additionalProperties": false
+    },
+    "ReadPayload": {
+      "type": "object",
+      "properties": {
+        "session": { "$ref": "refs.json#/$defs/SessionRef" },
+        "lines": { "description": "The number of last lines. The runner caps it.", "type": "integer", "minimum": 1 }
+      },
+      "required": ["session", "lines"],
+      "additionalProperties": false
+    },
+    "SendPayload": {
+      "type": "object",
+      "properties": {
+        "session": { "$ref": "refs.json#/$defs/SessionRef" },
+        "text": { "type": "string" }
+      },
+      "required": ["session", "text"],
+      "additionalProperties": false
+    },
+    "WorkOrderDraft": {
+      "description": "The proposal of a suggestion. On accept, the hub makes a WorkOrder from it.",
+      "type": "object",
+      "properties": {
+        "runtime": { "description": "The AgentRuntime provider id, for example orca or oversire.", "$ref": "refs.json#/$defs/ProviderID" },
+        "runner": { "description": "The runner device. Missing: the hub picks a runner with the runtime.", "type": "string" },
+        "op": { "enum": ["sessionStart", "sessionStop", "sessionRead", "sessionSend"] },
+        "payload": { "type": "object" }
+      },
+      "allOf": [{ "$ref": "#/$defs/SessionOrder" }],
+      "required": ["runtime", "op", "payload"],
+      "additionalProperties": false
+    },
+    "WorkOrderState": { "enum": ["queued", "sent", "acked", "done", "failed", "expired"] },
+    "WorkOrderResult": {
+      "type": "object",
+      "properties": {
+        "session": { "description": "The session that sessionStart made.", "$ref": "refs.json#/$defs/SessionRef" },
+        "lines": { "description": "The lines that sessionRead read.", "type": "array", "items": { "type": "string" } },
+        "error": { "description": "Why the order failed.", "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "WorkOrder": {
+      "description": "Collection work-orders.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "runner": { "description": "The runner device id.", "type": "string", "minLength": 1 },
+        "runtime": { "description": "The AgentRuntime provider id, for example orca or oversire.", "$ref": "refs.json#/$defs/ProviderID" },
+        "op": { "enum": ["sessionStart", "sessionStop", "sessionRead", "sessionSend"] },
+        "payload": { "type": "object" },
+        "suggestion": { "description": "The accepted Suggestion id.", "type": "string", "minLength": 1 },
+        "createdAt": { "$ref": "#/$defs/Date" },
+        "expiresAt": { "$ref": "#/$defs/Date" },
+        "state": { "$ref": "#/$defs/WorkOrderState" },
+        "result": { "$ref": "#/$defs/WorkOrderResult" }
+      },
+      "allOf": [{ "$ref": "#/$defs/SessionOrder" }],
+      "required": ["id", "runner", "runtime", "op", "payload", "suggestion", "createdAt", "expiresAt", "state"],
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "id": "ci-failures",
+  "kind": "failureReason",
+  "trigger": {
+    "type": "event",
+    "filter": {
+      "kinds": [
+        "run"
+      ],
+      "actions": [
+        "completed"
+      ],
+      "providers": [
+        "github-actions"
+      ]
+    }
+  },
+  "scope": [
+    {
+      "kind": "repo",
+      "ref": {
+        "account": {
+          "provider": "github",
+          "id": "oversire"
+        },
+        "path": "oversire/oversire",
+        "url": "https://github.com/oversire/oversire"
+      }
+    }
+  ],
+  "enabled": true,
+  "autonomy": "suggest"
+}

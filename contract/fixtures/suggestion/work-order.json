@@ -1,0 +1,57 @@
+{
+  "createdAt": "2026-10-01T09:00:07Z",
+  "expiresAt": "2026-10-08T09:00:07Z",
+  "id": "s-start",
+  "subject": {
+    "kind": "item",
+    "ref": {
+      "project": {
+        "account": {
+          "provider": "plane",
+          "id": "ocral"
+        },
+        "id": "b1f0c2d4",
+        "key": "TOWERTAIL"
+      },
+      "id": "9a7e",
+      "key": "TOWERTAIL-2",
+      "url": "https://app.plane.so/ocral/browse/TOWERTAIL-2/"
+    }
+  },
+  "kind": "triage",
+  "title": "Start an agent on TOWERTAIL-2",
+  "body": "The item is small and has a clear plan.",
+  "proposal": {
+    "type": "workOrder",
+    "order": {
+      "runtime": "orca",
+      "runner": "runner-mini",
+      "op": "sessionStart",
+      "payload": {
+        "repo": "/Users/ada/Projects/towertail-workspace",
+        "item": {
+          "project": {
+            "account": {
+              "provider": "plane",
+              "id": "ocral"
+            },
+            "id": "b1f0c2d4",
+            "key": "TOWERTAIL"
+          },
+          "id": "9a7e",
+          "key": "TOWERTAIL-2",
+          "url": "https://app.plane.so/ocral/browse/TOWERTAIL-2/"
+        },
+        "agent": "claude",
+        "prompt": "work on https://app.plane.so/ocral/browse/TOWERTAIL-2/",
+        "environment": "mbp"
+      }
+    }
+  },
+  "state": "failed",
+  "dedupeKey": "item:9a7e|triage|2026-10-01T08:59:00Z",
+  "subjectVersion": "2026-10-01T08:59:00Z",
+  "decidedAt": "2026-10-01T09:10:00Z",
+  "decidedBy": "phone-ada",
+  "error": "No runner is online."
+}

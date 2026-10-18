@@ -1,0 +1,11 @@
+{
+  "id": "triage",
+  "kind": "triage",
+  "trigger": {
+    "type": "event",
+    "filter": {}
+  },
+  "scope": [],
+  "enabled": true,
+  "autonomy": "suggest"
+}

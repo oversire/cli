@@ -1,0 +1,37 @@
+{
+  "createdAt": "2026-10-01T09:00:07Z",
+  "expiresAt": "2026-10-08T09:00:07Z",
+  "id": "s-rerun",
+  "subject": {
+    "kind": "run",
+    "ref": {
+      "account": {
+        "provider": "github-actions",
+        "id": "oversire"
+      },
+      "repo": {
+        "account": {
+          "provider": "github",
+          "id": "oversire"
+        },
+        "path": "oversire/oversire",
+        "url": "https://github.com/oversire/oversire"
+      },
+      "id": "18000001",
+      "attempt": 1
+    }
+  },
+  "kind": "failureReason",
+  "title": "Rerun the failed jobs",
+  "body": "The test timed out on a network call. It is likely flaky.",
+  "proposal": {
+    "type": "runAction",
+    "action": "rerunFailed"
+  },
+  "state": "dismissed",
+  "dedupeKey": "run:18000001#1|failureReason|1",
+  "subjectVersion": "1",
+  "decidedAt": "2026-10-01T09:12:00Z",
+  "decidedBy": "mac-ada",
+  "jobRun": "run-1"
+}

@@ -1,0 +1,12 @@
+{
+  "id": "digest-daily",
+  "kind": "digest",
+  "trigger": {
+    "type": "schedule",
+    "cron": "0 7 * * *"
+  },
+  "scope": [],
+  "enabled": true,
+  "autonomy": "suggest",
+  "lastRun": "run-1"
+}

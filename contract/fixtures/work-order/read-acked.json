@@ -1,0 +1,23 @@
+{
+  "runner": "runner-mini",
+  "runtime": "orca",
+  "suggestion": "s-start",
+  "createdAt": "2026-10-01T09:10:00Z",
+  "expiresAt": "2026-10-01T21:10:00Z",
+  "id": "o4",
+  "op": "sessionRead",
+  "payload": {
+    "session": {
+      "workspace": {
+        "account": {
+          "provider": "orca",
+          "id": "mbp"
+        },
+        "id": "wt-towertail-2"
+      },
+      "id": "pane-1"
+    },
+    "lines": 40
+  },
+  "state": "acked"
+}

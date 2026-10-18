@@ -1,0 +1,41 @@
+{
+  "runner": "runner-mini",
+  "runtime": "orca",
+  "suggestion": "s-start",
+  "createdAt": "2026-10-01T09:10:00Z",
+  "expiresAt": "2026-10-01T21:10:00Z",
+  "id": "o2",
+  "op": "sessionStart",
+  "payload": {
+    "repo": "/Users/ada/Projects/towertail-workspace",
+    "item": {
+      "project": {
+        "account": {
+          "provider": "plane",
+          "id": "ocral"
+        },
+        "id": "b1f0c2d4",
+        "key": "TOWERTAIL"
+      },
+      "id": "9a7e",
+      "key": "TOWERTAIL-2",
+      "url": "https://app.plane.so/ocral/browse/TOWERTAIL-2/"
+    },
+    "agent": "claude",
+    "prompt": "work on https://app.plane.so/ocral/browse/TOWERTAIL-2/",
+    "environment": "mbp"
+  },
+  "state": "done",
+  "result": {
+    "session": {
+      "workspace": {
+        "account": {
+          "provider": "orca",
+          "id": "mbp"
+        },
+        "id": "wt-towertail-2"
+      },
+      "id": "pane-1"
+    }
+  }
+}

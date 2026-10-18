@@ -1,0 +1,12 @@
+{
+  "id": "u1",
+  "at": "2026-10-01T09:00:03Z",
+  "jobRun": "run-1",
+  "taskKind": "failureReason",
+  "endpoint": "deepseek",
+  "model": "deepseek-chat",
+  "inputTokens": 5400,
+  "outputTokens": 180,
+  "cachedTokens": 2048,
+  "costMicroUSD": 1712
+}

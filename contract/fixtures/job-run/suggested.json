@@ -1,0 +1,14 @@
+{
+  "job": "ci-failures",
+  "startedAt": "2026-10-01T09:00:00Z",
+  "usage": [
+    "u1",
+    "u2"
+  ],
+  "id": "run-1",
+  "endedAt": "2026-10-01T09:00:07Z",
+  "outcome": "suggested",
+  "suggestions": [
+    "s1"
+  ]
+}

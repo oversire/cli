@@ -1,0 +1,40 @@
+{
+  "createdAt": "2026-10-01T09:00:07Z",
+  "expiresAt": "2026-10-08T09:00:07Z",
+  "id": "s-mem",
+  "subject": {
+    "kind": "project",
+    "ref": {
+      "account": {
+        "provider": "plane",
+        "id": "ocral"
+      },
+      "id": "b1f0c2d4",
+      "key": "TOWERTAIL"
+    }
+  },
+  "kind": "memoryUpkeep",
+  "title": "Remember the release day",
+  "body": "Three items say that releases go out on Friday.",
+  "proposal": {
+    "type": "memory",
+    "memory": {
+      "scope": "project",
+      "scopeRef": {
+        "kind": "project",
+        "ref": {
+          "account": {
+            "provider": "plane",
+            "id": "ocral"
+          },
+          "id": "b1f0c2d4",
+          "key": "TOWERTAIL"
+        }
+      },
+      "text": "Releases go out on Friday."
+    }
+  },
+  "state": "expired",
+  "dedupeKey": "project:plane/ocral/b1f0c2d4|memory|releases",
+  "subjectVersion": "1"
+}

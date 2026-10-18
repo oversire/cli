@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "id": "failureReason:https://github.com/acme/web/actions/runs/991#2",
+  "kind": "failureReason",
+  "subject": { "kind": "run", "ref": { "account": { "provider": "github-actions", "id": "acme" }, "id": "acme/web#991", "attempt": 2 } },
+  "input": {
+    "text": "error: cannot find 'x' in scope\n--- last lines ---\nexit 1",
+    "context": { "workflow": "CI", "number": "991", "branch": "main", "sha": "abc1234", "commit": "Fix the build", "job": "build", "files": "unknown" }
+  },
+  "deadline": "2026-10-16T12:00:00Z"
+}

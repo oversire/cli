@@ -1,0 +1,8 @@
+{
+  "type": "result",
+  "order": "o2",
+  "state": "failed",
+  "result": {
+    "error": "The allow list has no repo /Users/ada/Projects/secret."
+  }
+}

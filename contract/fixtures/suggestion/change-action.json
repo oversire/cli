@@ -1,0 +1,35 @@
+{
+  "createdAt": "2026-10-01T09:00:07Z",
+  "expiresAt": "2026-10-08T09:00:07Z",
+  "id": "s-merge",
+  "subject": {
+    "kind": "change",
+    "ref": {
+      "repo": {
+        "account": {
+          "provider": "github",
+          "id": "oversire"
+        },
+        "path": "oversire/oversire",
+        "url": "https://github.com/oversire/oversire"
+      },
+      "number": 42,
+      "url": "https://github.com/oversire/oversire/pull/42"
+    }
+  },
+  "kind": "changeSummary",
+  "title": "Squash and merge #42",
+  "body": "CI passed and the review is approved.",
+  "proposal": {
+    "type": "changeAction",
+    "action": {
+      "type": "merge",
+      "method": "squash"
+    }
+  },
+  "state": "done",
+  "dedupeKey": "change:oversire/oversire#42|changeSummary|abc1234",
+  "subjectVersion": "abc1234",
+  "decidedAt": "2026-10-01T09:10:00Z",
+  "decidedBy": "mac-ada"
+}

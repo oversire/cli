@@ -1,0 +1,14 @@
+{
+  "taskKind": "failureReason",
+  "endpoint": "deepseek",
+  "model": "deepseek-reasoner",
+  "effort": "low",
+  "maxTurns": 4,
+  "maxInputTokens": 32000,
+  "maxOutputTokens": 800,
+  "price": {
+    "inputPerMTok": 550000,
+    "outputPerMTok": 2190000,
+    "cachedPerMTok": 140000
+  }
+}

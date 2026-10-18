@@ -1,0 +1,7 @@
+{
+  "kind": "job",
+  "ref": {
+    "run": { "account": { "provider": "buildkite", "id": "acme" }, "id": "991", "attempt": 2 },
+    "id": "build-linux"
+  }
+}

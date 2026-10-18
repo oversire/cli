@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oversire.dev/contract/billing.json",
+  "title": "OverSire billing",
+  "description": "Cloud AI credits. Money is an integer in micro-USD (1 USD = 1000000). Dates are ISO 8601 UTC. The hub writes these records. Clients only read them.",
+  "x-oversire-schema": 1,
+  "$defs": {
+    "Date": { "type": "string", "format": "date-time" },
+    "MicroUSD": { "type": "integer" },
+    "UsageRow": {
+      "description": "Collection usage. One row for each model call. It is the audit log.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "at": { "$ref": "#/$defs/Date" },
+        "jobRun": { "description": "The JobRun id.", "type": "string" },
+        "taskKind": { "description": "The AITask kind.", "type": "string" },
+        "endpoint": { "description": "The AIEndpoint id.", "type": "string" },
+        "model": { "type": "string" },
+        "inputTokens": { "type": "integer", "minimum": 0 },
+        "outputTokens": { "type": "integer", "minimum": 0 },
+        "cachedTokens": { "type": "integer", "minimum": 0 },
+        "costMicroUSD": { "$ref": "#/$defs/MicroUSD", "minimum": 0 }
+      },
+      "required": ["id", "at", "jobRun", "taskKind", "endpoint", "model", "inputTokens", "outputTokens", "cachedTokens", "costMicroUSD"],
+      "additionalProperties": false
+    },
+    "LedgerKind": { "enum": ["grant", "topup", "usage", "refund", "adjust"] },
+    "LedgerEntry": {
+      "description": "Collection ledger. Append only. The amount is signed: a grant or a top-up is positive, usage is negative.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "at": { "$ref": "#/$defs/Date" },
+        "kind": { "$ref": "#/$defs/LedgerKind" },
+        "amountMicroUSD": { "$ref": "#/$defs/MicroUSD" },
+        "ref": { "description": "A UsageRow id or a Stripe event id.", "type": "string" },
+        "note": { "type": "string" }
+      },
+      "required": ["id", "at", "kind", "amountMicroUSD"],
+      "additionalProperties": false
+    },
+    "AutoTopUp": {
+      "description": "When the balance goes below the threshold, the hub buys the amount.",
+      "type": "object",
+      "properties": {
+        "amountMicroUSD": { "$ref": "#/$defs/MicroUSD", "minimum": 5000000 },
+        "thresholdMicroUSD": { "$ref": "#/$defs/MicroUSD", "minimum": 0 }
+      },
+      "required": ["amountMicroUSD", "thresholdMicroUSD"],
+      "additionalProperties": false
+    },
+    "BillingState": {
+      "description": "Collection billing, one record with the id state. The hub computes it from the ledger.",
+      "type": "object",
+      "properties": {
+        "plan": { "description": "Open set: cloud.", "type": "string" },
+        "periodStart": { "$ref": "#/$defs/Date" },
+        "periodEnd": { "$ref": "#/$defs/Date" },
+        "grantMicroUSD": { "$ref": "#/$defs/MicroUSD", "minimum": 0 },
+        "grantUsedMicroUSD": { "$ref": "#/$defs/MicroUSD", "minimum": 0 },
+        "balanceMicroUSD": { "$ref": "#/$defs/MicroUSD" },
+        "dailyCapMicroUSD": { "$ref": "#/$defs/MicroUSD", "minimum": 0 },
+        "autoTopUp": { "$ref": "#/$defs/AutoTopUp" },
+        "notice80Sent": { "type": "boolean" }
+      },
+      "required": ["plan", "periodStart", "periodEnd", "grantMicroUSD", "grantUsedMicroUSD", "balanceMicroUSD", "dailyCapMicroUSD", "notice80Sent"],
+      "additionalProperties": false
+    }
+  }
+}

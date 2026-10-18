@@ -1,0 +1,28 @@
+{
+  "schema": 2,
+  "collection": "pins",
+  "id": "p1",
+  "op": "put",
+  "record": {
+    "id": "p1",
+    "subject": {
+      "kind": "item",
+      "ref": {
+        "project": {
+          "account": {
+            "provider": "plane",
+            "id": "ocral"
+          },
+          "id": "b1f0c2d4",
+          "key": "TOWERTAIL"
+        },
+        "id": "9a7e",
+        "key": "TOWERTAIL-2",
+        "url": "https://app.plane.so/ocral/browse/TOWERTAIL-2/"
+      }
+    },
+    "at": "2026-10-01T09:00:00Z"
+  },
+  "hlc": "001790000000000-000000-mac-ada",
+  "device": "mac-ada"
+}

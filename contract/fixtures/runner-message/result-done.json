@@ -1,0 +1,17 @@
+{
+  "type": "result",
+  "order": "o1",
+  "state": "done",
+  "result": {
+    "session": {
+      "workspace": {
+        "account": {
+          "provider": "orca",
+          "id": "local"
+        },
+        "id": "wt-towertail-2"
+      },
+      "id": "term-1"
+    }
+  }
+}

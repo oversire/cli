@@ -1,0 +1,5 @@
+{
+  "id": "s1",
+  "subject": { "kind": "project", "ref": { "account": { "provider": "linear", "id": "acme" }, "id": "ENG" } },
+  "until": "2026-10-05T07:00:00Z"
+}

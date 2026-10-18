@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oversire.dev/contract/account.json",
+  "title": "AccountConfig",
+  "description": "One connected vendor account. Secrets are never in this object, only the names of their Keychain or vault keys. The $defs hold the OverSire Cloud account and device pairing.",
+  "x-oversire-schema": 1,
+  "$defs": {
+    "Date": { "type": "string", "format": "date-time" },
+    "HookRoute": {
+      "description": "The account segment of the webhook URLs: /hooks/github/<route> and /hooks/plane/<route>.<workspace>.",
+      "type": "string", "pattern": "^[0-9a-f]{16}$"
+    },
+    "DeviceRole": { "description": "A client shows the state. A runner does work orders. A device has one role only.", "enum": ["client", "runner"] },
+    "OverSireAccount": {
+      "description": "One OverSire Cloud account. One user for each account.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "email": { "type": "string", "minLength": 3 },
+        "createdAt": { "$ref": "#/$defs/Date" },
+        "plan": { "type": "string", "minLength": 1 },
+        "hookRoute": { "$ref": "#/$defs/HookRoute" },
+        "stripeCustomer": { "type": "string" }
+      },
+      "required": ["id", "email", "createdAt", "plan", "hookRoute"],
+      "additionalProperties": false
+    },
+    "PairResult": {
+      "description": "The answer to POST /pair {code, name}. The token shows only once. The app keeps it in the Keychain.",
+      "type": "object",
+      "properties": {
+        "token": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "deviceId": { "type": "string", "pattern": "^[0-9A-F]{16}$" },
+        "role": { "$ref": "#/$defs/DeviceRole" },
+        "account": { "type": "string", "minLength": 1 },
+        "hookRoute": { "$ref": "#/$defs/HookRoute" }
+      },
+      "required": ["token", "deviceId", "role", "account", "hookRoute"],
+      "additionalProperties": false
+    },
+    "WhoAmI": {
+      "description": "The answer to GET /v1/whoami. An old relay sends only deviceId. An old device token has a null account until the single-tenant migration.",
+      "type": "object",
+      "properties": {
+        "deviceId": { "type": "string", "minLength": 1 },
+        "role": { "$ref": "#/$defs/DeviceRole" },
+        "account": { "type": ["string", "null"] },
+        "hookRoute": { "anyOf": [{ "$ref": "#/$defs/HookRoute" }, { "type": "null" }] }
+      },
+      "required": ["deviceId"],
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "properties": {
+    "account": { "$ref": "refs.json#/$defs/AccountID" },
+    "values": { "type": "object", "additionalProperties": { "type": "string" } },
+    "secretKeys": { "type": "array", "items": { "type": "string" } }
+  },
+  "required": ["account", "values", "secretKeys"],
+  "additionalProperties": false
+}

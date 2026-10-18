@@ -1,0 +1,8 @@
+{
+  "schema": 2,
+  "collection": "pins",
+  "id": "p1",
+  "op": "delete",
+  "hlc": "001790000005000-000000-phone-ada",
+  "device": "phone-ada"
+}

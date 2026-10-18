@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oversire.dev/contract/jobs.json",
+  "title": "OverSire jobs",
+  "description": "AI jobs that the cloud hub runs for an account. A job only writes suggestions. Dates are ISO 8601 UTC.",
+  "x-oversire-schema": 1,
+  "$defs": {
+    "Date": { "type": "string", "format": "date-time" },
+    "JobTrigger": {
+      "description": "When the job runs.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "schedule" },
+            "cron": { "description": "Five-field cron, UTC. For example 0 7 * * *.", "type": "string", "minLength": 1 }
+          },
+          "required": ["type", "cron"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "event" },
+            "filter": { "$ref": "#/$defs/EventFilter" }
+          },
+          "required": ["type", "filter"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": { "type": { "const": "manual" } },
+          "required": ["type"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "EventFilter": {
+      "description": "The ProviderEvent values that start the job. An empty or missing list matches all.",
+      "type": "object",
+      "properties": {
+        "kinds": { "description": "ProviderEvent kind values.", "type": "array", "items": { "type": "string" } },
+        "actions": { "description": "ProviderEvent action values.", "type": "array", "items": { "type": "string" } },
+        "providers": { "type": "array", "items": { "$ref": "refs.json#/$defs/ProviderID" } }
+      },
+      "additionalProperties": false
+    },
+    "Job": {
+      "description": "Collection jobs.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kind": { "description": "Open set: triage, failureReason, digest, changeSummary, tidy, memoryUpkeep.", "type": "string" },
+        "trigger": { "$ref": "#/$defs/JobTrigger" },
+        "scope": { "description": "The subjects that the job looks at. Empty: all subjects of the account.", "type": "array", "items": { "$ref": "refs.json#/$defs/SubjectRef" } },
+        "enabled": { "type": "boolean" },
+        "autonomy": { "description": "What the job can do with its result. The only value now is suggest.", "enum": ["suggest"] },
+        "lastRun": { "description": "The id of the last JobRun.", "type": "string" }
+      },
+      "required": ["id", "kind", "trigger", "scope", "enabled", "autonomy"],
+      "additionalProperties": false
+    },
+    "JobOutcome": { "enum": ["running", "suggested", "nothing", "skipped", "capped", "failed"] },
+    "JobRun": {
+      "description": "Collection job-runs. One run of a job.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "job": { "description": "The Job id.", "type": "string" },
+        "startedAt": { "$ref": "#/$defs/Date" },
+        "endedAt": { "$ref": "#/$defs/Date" },
+        "outcome": { "$ref": "#/$defs/JobOutcome" },
+        "usage": { "description": "The UsageRow ids of the model calls of the run.", "type": "array", "items": { "type": "string" } },
+        "suggestions": { "description": "The Suggestion ids that the run wrote.", "type": "array", "items": { "type": "string" } },
+        "error": { "type": "string" }
+      },
+      "required": ["id", "job", "startedAt", "outcome", "usage"],
+      "additionalProperties": false
+    }
+  }
+}

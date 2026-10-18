@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oversire.dev/contract/runner.json",
+  "title": "OverSire runner channel",
+  "description": "The messages on the WebSocket between the hub and a runner device (role runner). Each message is one JSON text frame. A side ignores a message type that it does not know. The text frames ping and pong are not JSON.",
+  "x-oversire-schema": 1,
+  "$defs": {
+    "AllowSummary": {
+      "description": "A summary of the local allow list. The hub shows it. The runner checks the full list.",
+      "type": "object",
+      "properties": {
+        "runtimes": { "type": "array", "items": { "$ref": "refs.json#/$defs/ProviderID" } },
+        "repos": { "description": "The number of repos or workspaces in the list.", "type": "integer", "minimum": 0 },
+        "agents": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["runtimes", "repos", "agents"],
+      "additionalProperties": false
+    },
+    "RunnerState": {
+      "description": "Collection runners, one record for each runner device (id = device). Only the hub writes it, on each hello and close.",
+      "type": "object",
+      "properties": {
+        "device": { "type": "string", "minLength": 1 },
+        "version": { "type": "string" },
+        "contract": { "type": "integer" },
+        "runtimes": { "type": "array", "items": { "$ref": "refs.json#/$defs/ProviderID" } },
+        "os": { "type": "string" },
+        "allow": { "$ref": "#/$defs/AllowSummary" },
+        "online": { "type": "boolean" },
+        "lastSeen": { "description": "The last hello or close.", "type": "string", "format": "date-time" }
+      },
+      "required": ["device", "version", "contract", "runtimes", "online", "lastSeen"],
+      "additionalProperties": false
+    },
+    "RunnerMessage": {
+      "oneOf": [
+        {
+          "description": "Runner to hub, first after each connect.",
+          "type": "object",
+          "properties": {
+            "type": { "const": "hello" },
+            "version": { "description": "The runner version.", "type": "string" },
+            "contract": { "description": "The x-oversire-schema number of work-order.json that the runner knows.", "type": "integer" },
+            "runtimes": { "description": "The AgentRuntime provider ids that the runner hosts.", "type": "array", "items": { "$ref": "refs.json#/$defs/ProviderID" } },
+            "os": { "description": "For example darwin/arm64.", "type": "string" },
+            "allow": { "$ref": "#/$defs/AllowSummary" }
+          },
+          "required": ["type", "version", "contract", "runtimes"],
+          "additionalProperties": false
+        },
+        {
+          "description": "Runner to hub: the runner has the order and starts it.",
+          "type": "object",
+          "properties": { "type": { "const": "ack" }, "order": { "type": "string", "minLength": 1 } },
+          "required": ["type", "order"],
+          "additionalProperties": false
+        },
+        {
+          "description": "Runner to hub: the end of an order.",
+          "type": "object",
+          "properties": {
+            "type": { "const": "result" },
+            "order": { "type": "string", "minLength": 1 },
+            "state": { "enum": ["done", "failed", "expired"] },
+            "result": { "$ref": "work-order.json#/$defs/WorkOrderResult" }
+          },
+          "required": ["type", "order", "state"],
+          "additionalProperties": false
+        },
+        {
+          "description": "Hub to runner: the hello is accepted.",
+          "type": "object",
+          "properties": {
+            "type": { "const": "welcome" },
+            "device": { "type": "string" },
+            "contract": { "description": "The newest work-order schema number of the hub.", "type": "integer" }
+          },
+          "required": ["type", "device", "contract"],
+          "additionalProperties": false
+        },
+        {
+          "description": "Hub to runner: the hello is refused. The hub then closes the socket.",
+          "type": "object",
+          "properties": {
+            "type": { "const": "refused" },
+            "reason": { "type": "string" },
+            "contracts": { "description": "The schema numbers that the hub accepts.", "type": "array", "items": { "type": "integer" } }
+          },
+          "required": ["type", "reason", "contracts"],
+          "additionalProperties": false
+        },
+        {
+          "description": "Hub to runner: an order to do. The hub sends it again after a reconnect until the runner acks it.",
+          "type": "object",
+          "properties": { "type": { "const": "order" }, "order": { "$ref": "work-order.json#/$defs/WorkOrder" } },
+          "required": ["type", "order"],
+          "additionalProperties": false
+        },
+        {
+          "description": "Hub to runner: a newer runner exists. The runner checks its release feed.",
+          "type": "object",
+          "properties": { "type": { "const": "update" }, "version": { "type": "string" } },
+          "required": ["type", "version"],
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

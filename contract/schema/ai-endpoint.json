@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oversire.dev/contract/ai-endpoint.json",
+  "title": "OverSire AI endpoints and routes",
+  "description": "The model endpoints of the cloud and the route of each AI task kind. A route change needs only config. Prices are integers in micro-USD for each million tokens.",
+  "x-oversire-schema": 1,
+  "$defs": {
+    "AIEndpoint": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "format": { "description": "The wire format of the API.", "enum": ["openai", "anthropic"] },
+        "baseURL": { "type": "string", "format": "uri" },
+        "keySecret": { "description": "The name of the Worker secret that holds the API key, for example DEEPSEEK_KEY. Never the key.", "type": "string", "minLength": 1 },
+        "tools": { "description": "The endpoint supports tool calls.", "type": "boolean" },
+        "structured": { "description": "The endpoint supports structured (JSON Schema) output.", "type": "boolean" }
+      },
+      "required": ["id", "format", "baseURL", "keySecret", "tools", "structured"],
+      "additionalProperties": false
+    },
+    "AIPrice": {
+      "type": "object",
+      "properties": {
+        "inputPerMTok": { "type": "integer", "minimum": 0 },
+        "outputPerMTok": { "type": "integer", "minimum": 0 },
+        "cachedPerMTok": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["inputPerMTok", "outputPerMTok", "cachedPerMTok"],
+      "additionalProperties": false
+    },
+    "AIRoute": {
+      "type": "object",
+      "properties": {
+        "taskKind": { "description": "The AITask kind.", "type": "string", "minLength": 1 },
+        "endpoint": { "description": "The AIEndpoint id.", "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "effort": { "description": "Open set: low, medium, high. Missing: the model default.", "type": "string" },
+        "maxTurns": { "type": "integer", "minimum": 1 },
+        "maxInputTokens": { "type": "integer", "minimum": 1 },
+        "maxOutputTokens": { "type": "integer", "minimum": 1 },
+        "price": { "$ref": "#/$defs/AIPrice" }
+      },
+      "required": ["taskKind", "endpoint", "model", "maxTurns", "maxInputTokens", "maxOutputTokens", "price"],
+      "additionalProperties": false
+    }
+  }
+}

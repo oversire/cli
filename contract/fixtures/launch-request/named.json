@@ -1,0 +1,8 @@
+{
+  "repo": "/w",
+  "name": "intake-ENG-4",
+  "note": "https://app.plane.so/ocral/projects/p1/intake",
+  "branch": "main",
+  "agent": "codex",
+  "prompt": "check this ticket"
+}

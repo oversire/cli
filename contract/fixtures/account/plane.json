@@ -1,0 +1,5 @@
+{
+  "account": { "provider": "plane", "id": "ocral" },
+  "values": { "host": "https://api.plane.so" },
+  "secretKeys": ["PLANE_TOKEN_ocral"]
+}

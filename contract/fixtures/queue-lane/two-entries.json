@@ -1,0 +1,20 @@
+{
+  "project": "plane/ocral/b1f0c2d4",
+  "identifier": "TOWERTAIL",
+  "entries": [
+    {
+      "key": "TOWERTAIL-2",
+      "title": "Add the login page",
+      "condition": "slot",
+      "added": "2026-10-01T09:00:00Z",
+      "source": "you"
+    },
+    {
+      "key": "TOWERTAIL-3",
+      "title": "Fix the build",
+      "condition": "ciPassed",
+      "added": "2026-10-01T09:05:00Z",
+      "source": "label"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "id": "tidy-towertail",
+  "kind": "tidy",
+  "trigger": {
+    "type": "manual"
+  },
+  "scope": [
+    {
+      "kind": "project",
+      "ref": {
+        "account": {
+          "provider": "plane",
+          "id": "ocral"
+        },
+        "id": "b1f0c2d4",
+        "key": "TOWERTAIL"
+      }
+    }
+  ],
+  "enabled": false,
+  "autonomy": "suggest"
+}

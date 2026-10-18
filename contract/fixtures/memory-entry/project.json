@@ -1,0 +1,19 @@
+{
+  "id": "m2",
+  "scope": "project",
+  "scopeRef": {
+    "kind": "project",
+    "ref": {
+      "account": {
+        "provider": "plane",
+        "id": "ocral"
+      },
+      "id": "b1f0c2d4",
+      "key": "TOWERTAIL"
+    }
+  },
+  "text": "Releases go out on Friday.",
+  "source": "suggestion",
+  "suggestion": "s-mem",
+  "updatedAt": "2026-10-01T09:00:00Z"
+}

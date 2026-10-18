@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oversire.dev/contract/ai-task.json",
+  "title": "AITask",
+  "description": "A unit of AI work. An API key engine, AgentBinder or cloud credits can run it.",
+  "x-oversire-schema": 1,
+  "type": "object",
+  "properties": {
+    "schema": { "const": 1 },
+    "id": { "type": "string", "minLength": 1 },
+    "kind": {
+      "description": "Open set: ping, triage, failureReason, digest, changeSummary, draft, tidy, check, order, sessionSummary, question.",
+      "type": "string"
+    },
+    "subject": { "$ref": "refs.json#/$defs/SubjectRef" },
+    "input": { "$ref": "#/$defs/AIInput" },
+    "deadline": { "type": "string", "format": "date-time" }
+  },
+  "required": ["schema", "id", "kind", "input"],
+  "additionalProperties": false,
+  "$defs": {
+    "AIInput": {
+      "type": "object",
+      "properties": {
+        "text": { "description": "The main input: item text, a log snippet, a diff.", "type": "string" },
+        "context": { "description": "Named extra inputs, for example labels or statuses.", "type": "object", "additionalProperties": { "type": "string" } }
+      },
+      "required": ["text"],
+      "additionalProperties": false
+    },
+    "AIResult": {
+      "description": "Store collection ai-results. The id is the task.",
+      "type": "object",
+      "properties": {
+        "schema": { "const": 1 },
+        "task": { "type": "string" },
+        "engine": { "description": "Open set: api-key, and later agentbinder and cloud.", "type": "string" },
+        "text": { "type": "string" },
+        "at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["schema", "task", "engine", "text", "at"],
+      "additionalProperties": false
+    }
+  }
+}

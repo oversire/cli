@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oversire.dev/contract/suggestion.json",
+  "title": "OverSire suggestion",
+  "description": "The only output of an AI job. The user accepts or dismisses it. An accepted proposal becomes a vendor write, a work order or a memory entry. Dates are ISO 8601 UTC.",
+  "x-oversire-schema": 1,
+  "$defs": {
+    "Date": { "type": "string", "format": "date-time" },
+    "Proposal": {
+      "description": "What happens on accept. The target is the subject of the suggestion.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": { "type": { "const": "itemPatch" }, "patch": { "$ref": "actions.json#/$defs/ItemPatch" } },
+          "required": ["type", "patch"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": { "type": { "const": "changeAction" }, "action": { "$ref": "actions.json#/$defs/ChangeAction" } },
+          "required": ["type", "action"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": { "type": { "const": "runAction" }, "action": { "$ref": "actions.json#/$defs/RunAction" } },
+          "required": ["type", "action"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": { "type": { "const": "workOrder" }, "order": { "$ref": "work-order.json#/$defs/WorkOrderDraft" } },
+          "required": ["type", "order"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": { "type": { "const": "memory" }, "memory": { "$ref": "memory.json#/$defs/MemoryDraft" } },
+          "required": ["type", "memory"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "SuggestionState": { "enum": ["open", "accepted", "dismissed", "expired", "done", "failed"] },
+    "Suggestion": {
+      "description": "Collection suggestions.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "subject": { "$ref": "refs.json#/$defs/SubjectRef" },
+        "kind": { "description": "The Job kind. Open set: triage, failureReason, digest, changeSummary, tidy, memoryUpkeep.", "type": "string" },
+        "title": { "type": "string" },
+        "body": { "description": "Markdown.", "type": "string" },
+        "proposal": { "description": "Missing: the suggestion only informs. Accept then sets it to done.", "$ref": "#/$defs/Proposal" },
+        "state": { "$ref": "#/$defs/SuggestionState" },
+        "dedupeKey": { "description": "Subject, kind and subject version. A job does not write a second open suggestion with the same key.", "type": "string", "minLength": 1 },
+        "subjectVersion": { "description": "The vendor version of the subject, for example its updatedAt or head SHA.", "type": "string" },
+        "createdAt": { "$ref": "#/$defs/Date" },
+        "expiresAt": { "$ref": "#/$defs/Date" },
+        "decidedAt": { "$ref": "#/$defs/Date" },
+        "decidedBy": { "description": "The device id that accepted or dismissed.", "type": "string" },
+        "jobRun": { "description": "The JobRun id that wrote the suggestion.", "type": "string" },
+        "error": { "description": "Why the accepted proposal failed.", "type": "string" }
+      },
+      "required": ["id", "subject", "kind", "title", "body", "state", "dedupeKey", "subjectVersion", "createdAt", "expiresAt"],
+      "additionalProperties": false
+    }
+  }
+}

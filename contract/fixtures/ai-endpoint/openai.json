@@ -1,0 +1,8 @@
+{
+  "id": "deepseek",
+  "format": "openai",
+  "baseURL": "https://api.deepseek.com/v1",
+  "keySecret": "DEEPSEEK_KEY",
+  "tools": true,
+  "structured": true
+}

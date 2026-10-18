@@ -1,0 +1,6 @@
+{
+  "key": "TOWERTAIL-2",
+  "workspace": { "account": { "provider": "orca", "id": "local" }, "id": "r1::/w::a" },
+  "pane": "t1:l1",
+  "at": "2026-10-07T11:00:00Z"
+}

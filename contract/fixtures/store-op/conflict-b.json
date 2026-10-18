@@ -1,0 +1,28 @@
+{
+  "schema": 2,
+  "collection": "notes",
+  "id": "n1",
+  "op": "put",
+  "record": {
+    "id": "n1",
+    "subject": {
+      "kind": "change",
+      "ref": {
+        "repo": {
+          "account": {
+            "provider": "github",
+            "id": "oversire"
+          },
+          "path": "oversire/oversire",
+          "url": "https://github.com/oversire/oversire"
+        },
+        "number": 42,
+        "url": "https://github.com/oversire/oversire/pull/42"
+      }
+    },
+    "text": "Flag is fine",
+    "at": "2026-10-01T09:00:00Z"
+  },
+  "hlc": "001790000000000-000002-phone-ada",
+  "device": "phone-ada"
+}

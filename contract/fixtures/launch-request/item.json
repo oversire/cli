@@ -1,0 +1,12 @@
+{
+  "repo": "/Users/ada/Projects/towertail-workspace",
+  "item": {
+    "project": { "account": { "provider": "plane", "id": "ocral" }, "id": "b1f0c2d4", "key": "TOWERTAIL" },
+    "id": "9a7e",
+    "key": "TOWERTAIL-2",
+    "url": "https://app.plane.so/ocral/browse/TOWERTAIL-2/"
+  },
+  "agent": "claude",
+  "prompt": "work on https://app.plane.so/ocral/browse/TOWERTAIL-2/ in worktree group .wt/towertail-2",
+  "environment": "mbp"
+}

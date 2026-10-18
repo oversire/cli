@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oversire.dev/contract/refs.json",
+  "title": "OverSire refs",
+  "description": "IDs and refs that name a thing at a vendor.",
+  "x-oversire-schema": 1,
+  "$defs": {
+    "ProviderID": {
+      "description": "Open set: plane, github, github-actions, orca, and later vendors.",
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "AccountID": {
+      "type": "object",
+      "properties": {
+        "provider": { "$ref": "#/$defs/ProviderID" },
+        "id": { "type": "string", "minLength": 1 }
+      },
+      "required": ["provider", "id"],
+      "additionalProperties": false
+    },
+    "PersonRef": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "login": { "type": "string" }
+      },
+      "required": ["id", "name"],
+      "additionalProperties": false
+    },
+    "ProjectRef": {
+      "type": "object",
+      "properties": {
+        "account": { "$ref": "#/$defs/AccountID" },
+        "id": { "type": "string" },
+        "key": { "description": "A label, for example OVERSIRE. Not part of the identity.", "type": "string" }
+      },
+      "required": ["account", "id"],
+      "additionalProperties": false
+    },
+    "ItemRef": {
+      "type": "object",
+      "properties": {
+        "project": { "$ref": "#/$defs/ProjectRef" },
+        "id": { "type": "string" },
+        "key": { "type": "string" },
+        "url": { "type": "string", "format": "uri" }
+      },
+      "required": ["project", "id", "key", "url"],
+      "additionalProperties": false
+    },
+    "RepoRef": {
+      "type": "object",
+      "properties": {
+        "account": { "$ref": "#/$defs/AccountID" },
+        "path": { "description": "org/repo or group/sub/project", "type": "string" },
+        "url": { "type": "string", "format": "uri" }
+      },
+      "required": ["account", "path", "url"],
+      "additionalProperties": false
+    },
+    "ChangeRef": {
+      "description": "A pull request or a merge request.",
+      "type": "object",
+      "properties": {
+        "repo": { "$ref": "#/$defs/RepoRef" },
+        "number": { "type": "integer" },
+        "url": { "type": "string", "format": "uri" }
+      },
+      "required": ["repo", "number", "url"],
+      "additionalProperties": false
+    },
+    "RunRef": {
+      "type": "object",
+      "properties": {
+        "account": { "$ref": "#/$defs/AccountID" },
+        "repo": { "$ref": "#/$defs/RepoRef" },
+        "id": { "type": "string" },
+        "attempt": { "type": "integer", "minimum": 1 }
+      },
+      "required": ["account", "id", "attempt"],
+      "additionalProperties": false
+    },
+    "JobRef": {
+      "type": "object",
+      "properties": {
+        "run": { "$ref": "#/$defs/RunRef" },
+        "id": { "type": "string" }
+      },
+      "required": ["run", "id"],
+      "additionalProperties": false
+    },
+    "WorkspaceRef": {
+      "description": "An agent runtime workspace.",
+      "type": "object",
+      "properties": {
+        "account": { "$ref": "#/$defs/AccountID" },
+        "id": { "type": "string" }
+      },
+      "required": ["account", "id"],
+      "additionalProperties": false
+    },
+    "SessionRef": {
+      "type": "object",
+      "properties": {
+        "workspace": { "$ref": "#/$defs/WorkspaceRef" },
+        "id": { "type": "string" }
+      },
+      "required": ["workspace", "id"],
+      "additionalProperties": false
+    },
+    "SubjectRef": {
+      "description": "Any thing that an event or an AI task names.",
+      "oneOf": [
+        { "$ref": "#/$defs/subject/project" },
+        { "$ref": "#/$defs/subject/item" },
+        { "$ref": "#/$defs/subject/repo" },
+        { "$ref": "#/$defs/subject/change" },
+        { "$ref": "#/$defs/subject/run" },
+        { "$ref": "#/$defs/subject/job" },
+        { "$ref": "#/$defs/subject/workspace" },
+        { "$ref": "#/$defs/subject/session" }
+      ]
+    },
+    "subject": {
+      "project": { "type": "object", "properties": { "kind": { "const": "project" }, "ref": { "$ref": "#/$defs/ProjectRef" } }, "required": ["kind", "ref"], "additionalProperties": false },
+      "item": { "type": "object", "properties": { "kind": { "const": "item" }, "ref": { "$ref": "#/$defs/ItemRef" } }, "required": ["kind", "ref"], "additionalProperties": false },
+      "repo": { "type": "object", "properties": { "kind": { "const": "repo" }, "ref": { "$ref": "#/$defs/RepoRef" } }, "required": ["kind", "ref"], "additionalProperties": false },
+      "change": { "type": "object", "properties": { "kind": { "const": "change" }, "ref": { "$ref": "#/$defs/ChangeRef" } }, "required": ["kind", "ref"], "additionalProperties": false },
+      "run": { "type": "object", "properties": { "kind": { "const": "run" }, "ref": { "$ref": "#/$defs/RunRef" } }, "required": ["kind", "ref"], "additionalProperties": false },
+      "job": { "type": "object", "properties": { "kind": { "const": "job" }, "ref": { "$ref": "#/$defs/JobRef" } }, "required": ["kind", "ref"], "additionalProperties": false },
+      "workspace": { "type": "object", "properties": { "kind": { "const": "workspace" }, "ref": { "$ref": "#/$defs/WorkspaceRef" } }, "required": ["kind", "ref"], "additionalProperties": false },
+      "session": { "type": "object", "properties": { "kind": { "const": "session" }, "ref": { "$ref": "#/$defs/SessionRef" } }, "required": ["kind", "ref"], "additionalProperties": false }
+    }
+  }
+}

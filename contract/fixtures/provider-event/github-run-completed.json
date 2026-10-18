@@ -1,0 +1,23 @@
+{
+  "id": "6f1c2a60-8a9e-11f0-9b7a-1d2c3e4f5a6b",
+  "schema": 1,
+  "provider": "github-actions",
+  "account": { "provider": "github-actions", "id": "oversire" },
+  "kind": "run",
+  "action": "completed",
+  "subject": {
+    "kind": "run",
+    "ref": {
+      "account": { "provider": "github-actions", "id": "oversire" },
+      "repo": {
+        "account": { "provider": "github", "id": "oversire" },
+        "path": "oversire/oversire",
+        "url": "https://github.com/oversire/oversire"
+      },
+      "id": "17320011223",
+      "attempt": 1
+    }
+  },
+  "at": "2026-10-16T12:00:00Z",
+  "summary": { "title": "CI", "status": "completed", "conclusion": "failure", "actor": "flarco" }
+}

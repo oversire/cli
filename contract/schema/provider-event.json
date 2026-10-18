@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oversire.dev/contract/provider-event.json",
+  "title": "ProviderEvent",
+  "description": "A hint that a subject changed. The app gets the full data from the adapter.",
+  "x-oversire-schema": 1,
+  "type": "object",
+  "properties": {
+    "id": { "description": "Delivery id. The merge step drops repeats.", "type": "string", "minLength": 1 },
+    "schema": { "const": 1 },
+    "provider": { "$ref": "refs.json#/$defs/ProviderID" },
+    "account": { "$ref": "refs.json#/$defs/AccountID" },
+    "kind": {
+      "description": "Open set: item, comment, intake, change, run, job, push, session.",
+      "type": "string"
+    },
+    "action": { "description": "created, updated, completed, deleted, and vendor words.", "type": "string" },
+    "subject": { "$ref": "refs.json#/$defs/SubjectRef" },
+    "at": { "type": "string", "format": "date-time" },
+    "summary": { "$ref": "#/$defs/EventSummary" }
+  },
+  "required": ["id", "schema", "provider", "account", "kind", "action", "subject", "at"],
+  "additionalProperties": false,
+  "$defs": {
+    "EventSummary": {
+      "description": "Enough for a notice without a fetch.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "status": { "type": "string" },
+        "conclusion": { "type": "string" },
+        "actor": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

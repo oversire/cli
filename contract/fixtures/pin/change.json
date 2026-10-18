@@ -1,0 +1,12 @@
+{
+  "id": "p1",
+  "subject": {
+    "kind": "change",
+    "ref": {
+      "repo": { "account": { "provider": "github", "id": "acme" }, "path": "acme/web", "url": "https://github.com/acme/web" },
+      "number": 42,
+      "url": "https://github.com/acme/web/pull/42"
+    }
+  },
+  "at": "2026-10-04T10:00:00Z"
+}

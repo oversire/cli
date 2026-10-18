@@ -1,0 +1,7 @@
+{
+  "type": "refused",
+  "reason": "This runner knows work-order schema 0. Update the runner.",
+  "contracts": [
+    1
+  ]
+}

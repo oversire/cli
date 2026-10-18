@@ -1,0 +1,14 @@
+{
+  "plan": "cloud",
+  "periodStart": "2026-10-01T00:00:00Z",
+  "periodEnd": "2026-11-01T00:00:00Z",
+  "grantMicroUSD": 2000000,
+  "grantUsedMicroUSD": 1650000,
+  "balanceMicroUSD": 4998288,
+  "dailyCapMicroUSD": 500000,
+  "autoTopUp": {
+    "amountMicroUSD": 5000000,
+    "thresholdMicroUSD": 1000000
+  },
+  "notice80Sent": true
+}

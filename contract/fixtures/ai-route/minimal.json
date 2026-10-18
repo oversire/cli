@@ -1,0 +1,13 @@
+{
+  "taskKind": "digest",
+  "endpoint": "deepseek",
+  "model": "deepseek-chat",
+  "maxTurns": 1,
+  "maxInputTokens": 8000,
+  "maxOutputTokens": 400,
+  "price": {
+    "inputPerMTok": 270000,
+    "outputPerMTok": 1100000,
+    "cachedPerMTok": 70000
+  }
+}

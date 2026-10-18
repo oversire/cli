@@ -1,0 +1,23 @@
+{
+  "id": "m3",
+  "scope": "subject",
+  "scopeRef": {
+    "kind": "item",
+    "ref": {
+      "project": {
+        "account": {
+          "provider": "plane",
+          "id": "ocral"
+        },
+        "id": "b1f0c2d4",
+        "key": "TOWERTAIL"
+      },
+      "id": "9a7e",
+      "key": "TOWERTAIL-2",
+      "url": "https://app.plane.so/ocral/browse/TOWERTAIL-2/"
+    }
+  },
+  "text": "The login page waits for the design.",
+  "source": "user",
+  "updatedAt": "2026-10-01T09:00:00Z"
+}

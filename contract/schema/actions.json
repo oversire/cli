@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oversire.dev/contract/actions.json",
+  "title": "OverSire actions",
+  "description": "Typed writes that the app or the cloud sends to an adapter.",
+  "x-oversire-schema": 1,
+  "$defs": {
+    "ItemPatch": {
+      "description": "A write to a tracker item. A missing field stays as it is.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "status": { "description": "Status option id.", "type": "string" },
+        "priority": { "description": "Priority option id.", "type": "string" },
+        "assignees": { "description": "Person ids.", "type": "array", "items": { "type": "string" } },
+        "labels": { "description": "Label ids.", "type": "array", "items": { "type": "string" } },
+        "parent": { "description": "Item id.", "type": "string" },
+        "bodyMarkdown": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "MergeMethod": { "enum": ["merge", "rebase", "squash"] },
+    "ChangeAction": {
+      "oneOf": [
+        { "type": "object", "properties": { "type": { "const": "approve" }, "body": { "type": "string" } }, "required": ["type"], "additionalProperties": false },
+        { "type": "object", "properties": { "type": { "const": "request-changes" }, "body": { "type": "string" } }, "required": ["type", "body"], "additionalProperties": false },
+        { "type": "object", "properties": { "type": { "const": "comment" }, "body": { "type": "string" } }, "required": ["type", "body"], "additionalProperties": false },
+        { "type": "object", "properties": { "type": { "const": "merge" }, "method": { "$ref": "#/$defs/MergeMethod" } }, "required": ["type", "method"], "additionalProperties": false },
+        { "type": "object", "properties": { "type": { "const": "close" } }, "required": ["type"], "additionalProperties": false }
+      ]
+    },
+    "RunAction": { "enum": ["rerun", "rerunFailed", "cancel"] },
+    "LaunchRequest": {
+      "description": "Start an agent in a runtime workspace.",
+      "type": "object",
+      "properties": {
+        "repo": { "description": "Repo path or remote URL in the runtime.", "type": "string" },
+        "item": { "$ref": "refs.json#/$defs/ItemRef" },
+        "name": { "description": "The workspace name. Default: the item key.", "type": "string" },
+        "note": { "description": "The workspace note. Default: the item URL.", "type": "string" },
+        "branch": { "type": "string" },
+        "agent": { "description": "Same raw values as the AgentBinder Harness: claude, codex, opencode, cursor.", "type": "string" },
+        "prompt": { "type": "string" },
+        "environment": { "description": "Runtime environment id.", "type": "string" }
+      },
+      "required": ["repo", "agent", "prompt"],
+      "additionalProperties": false
+    }
+  }
+}

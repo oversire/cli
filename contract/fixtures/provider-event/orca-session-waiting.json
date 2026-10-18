@@ -1,0 +1,13 @@
+{
+  "id": "orca-local-card-7-t1-waiting-1760616200",
+  "schema": 1,
+  "provider": "orca",
+  "account": { "provider": "orca", "id": "local" },
+  "kind": "session",
+  "action": "waiting",
+  "subject": {
+    "kind": "session",
+    "ref": { "workspace": { "account": { "provider": "orca", "id": "local" }, "id": "card-7" }, "id": "t1:l1" }
+  },
+  "at": "2026-10-16T12:03:20Z"
+}

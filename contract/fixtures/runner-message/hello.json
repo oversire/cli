@@ -1,0 +1,19 @@
+{
+  "type": "hello",
+  "version": "0.1.0",
+  "contract": 1,
+  "runtimes": [
+    "orca"
+  ],
+  "os": "darwin/arm64",
+  "allow": {
+    "runtimes": [
+      "orca"
+    ],
+    "repos": 2,
+    "agents": [
+      "claude",
+      "codex"
+    ]
+  }
+}

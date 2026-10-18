@@ -1,0 +1,12 @@
+{
+  "id": "u3",
+  "at": "2026-10-01T09:00:03Z",
+  "jobRun": "run-failed",
+  "taskKind": "triage",
+  "endpoint": "deepseek",
+  "model": "deepseek-chat",
+  "inputTokens": 0,
+  "outputTokens": 0,
+  "cachedTokens": 0,
+  "costMicroUSD": 0
+}
