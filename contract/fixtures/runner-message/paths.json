@@ -1,0 +1,28 @@
+{
+  "type": "paths",
+  "order": "o1",
+  "paths": {
+    "id": "ocral/b1f0c2d4/7c21",
+    "subject": {
+      "kind": "item",
+      "ref": {
+        "project": {
+          "account": {
+            "provider": "plane",
+            "id": "ocral"
+          },
+          "id": "b1f0c2d4",
+          "key": "TOWERTAIL"
+        },
+        "id": "7c21",
+        "key": "TOWERTAIL-1",
+        "url": "https://app.plane.so/ocral/browse/TOWERTAIL-1/"
+      }
+    },
+    "paths": [
+      "Contract/schema/store.json",
+      "Sources/OverSireCore/Store.swift"
+    ],
+    "at": "2026-10-18T09:10:00Z"
+  }
+}

@@ -121,6 +121,119 @@
       "required": ["id", "item", "areas", "source", "updatedAt"],
       "additionalProperties": false
     },
+    "PlannerSettings": {
+      "description": "Collection planner-settings. The Planner settings of one project. The id is the project.",
+      "type": "object",
+      "properties": {
+        "project": { "description": "The store key of the project, the same as QueueLane.project.", "type": "string", "minLength": 1 },
+        "mode": { "description": "off: no plan job; the gate still holds orders. hourly: at most one plan change each hour. live: a plan change about 2 minutes after a change. Open set: an unknown mode acts as hourly.", "type": "string", "minLength": 1 },
+        "holdLimit": { "description": "Seconds. A held order older than this is a heldLong trigger.", "type": "integer", "minimum": 60 },
+        "triggers": { "description": "The PlannerTrigger kinds that wake the Planner. Missing: all.", "type": "array", "items": { "type": "string" } },
+        "sharedFeature": { "description": "serial: two items do not hold the same feature area at the same time. parallel: they can. Core areas are always serial.", "enum": ["serial", "parallel"] },
+        "slots": { "description": "The number of items that run at the same time.", "type": "integer", "minimum": 1, "maximum": 10 },
+        "updatedAt": { "$ref": "#/$defs/Date" }
+      },
+      "required": ["project", "mode", "holdLimit", "sharedFeature", "slots", "updatedAt"],
+      "additionalProperties": false
+    },
+    "AreaRule": {
+      "description": "A path rule of an area. The glob matches a path relative to the repo root: * is one path part, ** is any number of parts.",
+      "type": "object",
+      "properties": {
+        "glob": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "source": { "description": "user wins over learned and graph.", "enum": ["user", "learned", "graph"] }
+      },
+      "required": ["glob", "source"],
+      "additionalProperties": false
+    },
+    "AreaDef": {
+      "type": "object",
+      "properties": {
+        "name": { "$ref": "suggestion.json#/$defs/Area" },
+        "kind": { "$ref": "suggestion.json#/$defs/AreaKind" },
+        "rules": { "type": "array", "items": { "$ref": "#/$defs/AreaRule" } },
+        "proposed": { "description": "True: the hub proposes the area from the import graph. The user accepts it in Settings. Missing: false.", "type": "boolean" }
+      },
+      "required": ["name", "kind", "rules"],
+      "additionalProperties": false
+    },
+    "AreaCatalog": {
+      "description": "Collection area-catalog. The code areas of one project. The id is the project.",
+      "type": "object",
+      "properties": {
+        "project": { "description": "The store key of the project.", "type": "string", "minLength": 1 },
+        "areas": { "type": "array", "items": { "$ref": "#/$defs/AreaDef" } },
+        "updatedAt": { "$ref": "#/$defs/Date" }
+      },
+      "required": ["project", "areas", "updatedAt"],
+      "additionalProperties": false
+    },
+    "AreaClaim": {
+      "description": "Collection area-claims. The areas that a running item holds. The id is the ItemAreas id of the item. Only the gate writes it.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "item": { "$ref": "refs.json#/$defs/ItemRef" },
+        "areas": { "type": "array", "items": { "$ref": "suggestion.json#/$defs/Area" } },
+        "at": { "$ref": "#/$defs/Date" },
+        "grown": { "description": "The areas that the claim got after the start, from the changed paths.", "type": "array", "items": { "$ref": "#/$defs/ClaimArea" } },
+        "blocked": { "description": "Areas outside the claim that an other claim holds. The next order of the item waits.", "type": "array", "items": { "$ref": "#/$defs/ClaimArea" } }
+      },
+      "required": ["id", "item", "areas", "at", "grown"],
+      "additionalProperties": false
+    },
+    "ClaimArea": {
+      "type": "object",
+      "properties": {
+        "area": { "$ref": "suggestion.json#/$defs/Area" },
+        "at": { "$ref": "#/$defs/Date" },
+        "by": { "description": "For a blocked area: the item that holds it.", "$ref": "refs.json#/$defs/ItemRef" }
+      },
+      "required": ["area", "at"],
+      "additionalProperties": false
+    },
+    "AreaCandidates": {
+      "description": "Collection area-candidates. Area candidates from the import graph of the repos of one project, made on the Mac. The id is the project. Only paths, no code.",
+      "type": "object",
+      "properties": {
+        "project": { "type": "string", "minLength": 1 },
+        "at": { "$ref": "#/$defs/Date" },
+        "hubs": { "description": "Files or folders that many files import. Core area candidates.", "type": "array", "items": { "$ref": "#/$defs/GraphHub" }, "maxItems": 50 },
+        "clusters": { "description": "Groups of files that import each other. Feature area candidates.", "type": "array", "items": { "$ref": "#/$defs/GraphCluster" }, "maxItems": 50 }
+      },
+      "required": ["project", "at", "hubs", "clusters"],
+      "additionalProperties": false
+    },
+    "GraphHub": {
+      "type": "object",
+      "properties": {
+        "glob": { "type": "string", "minLength": 1 },
+        "importers": { "description": "The number of files that import it.", "type": "integer", "minimum": 0 }
+      },
+      "required": ["glob", "importers"],
+      "additionalProperties": false
+    },
+    "GraphCluster": {
+      "type": "object",
+      "properties": {
+        "name": { "$ref": "suggestion.json#/$defs/Area" },
+        "globs": { "type": "array", "items": { "type": "string", "minLength": 1 }, "maxItems": 20 }
+      },
+      "required": ["name", "globs"],
+      "additionalProperties": false
+    },
+    "ChangedPaths": {
+      "description": "Collection changed-paths. The paths that the running work of one subject changed: git diff against the base plus untracked files. Only paths, never file text. The id is the ItemAreas id of the item, or the session key.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "subject": { "$ref": "refs.json#/$defs/SubjectRef" },
+        "paths": { "type": "array", "items": { "type": "string", "minLength": 1 }, "maxItems": 500 },
+        "at": { "$ref": "#/$defs/Date" }
+      },
+      "required": ["id", "subject", "paths", "at"],
+      "additionalProperties": false
+    },
     "StoreOp": {
       "description": "One write to a synced collection. The hub keeps an op log of them. Last write wins for each collection and id, by hlc.",
       "type": "object",

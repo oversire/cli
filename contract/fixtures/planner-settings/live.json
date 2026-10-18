@@ -1,0 +1,14 @@
+{
+  "project": "ocral/b1f0c2d4",
+  "mode": "live",
+  "holdLimit": 3600,
+  "triggers": [
+    "itemDone",
+    "prMerged",
+    "pathsChanged",
+    "claimBlocked"
+  ],
+  "sharedFeature": "parallel",
+  "slots": 2,
+  "updatedAt": "2026-10-18T08:00:00Z"
+}

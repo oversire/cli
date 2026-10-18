@@ -13,11 +13,42 @@ type sessionBox struct {
 	mu     sync.Mutex
 	latest map[string]wire.RunnerSession
 	dirty  map[string]bool
-	kick   chan struct{}
+	// paths keeps the latest changed paths of each order until a send.
+	paths map[string]wire.Paths
+	kick  chan struct{}
 }
 
 func newSessionBox() *sessionBox {
-	return &sessionBox{latest: map[string]wire.RunnerSession{}, dirty: map[string]bool{}, kick: make(chan struct{}, 1)}
+	return &sessionBox{latest: map[string]wire.RunnerSession{}, dirty: map[string]bool{}, paths: map[string]wire.Paths{}, kick: make(chan struct{}, 1)}
+}
+
+func (b *sessionBox) putPaths(p wire.Paths) {
+	b.mu.Lock()
+	b.paths[p.Order] = p
+	b.mu.Unlock()
+	b.wake()
+}
+
+// takePaths gives the paths to send, oldest first.
+func (b *sessionBox) takePaths() []wire.Paths {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	out := make([]wire.Paths, 0, len(b.paths))
+	for _, p := range b.paths {
+		out = append(out, p)
+	}
+	clear(b.paths)
+	slices.SortFunc(out, func(x, y wire.Paths) int { return x.Paths.At.Compare(y.Paths.At) })
+	return out
+}
+
+// pathsFailed keeps p for the next send, unless a newer report replaced it.
+func (b *sessionBox) pathsFailed(p wire.Paths) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if _, ok := b.paths[p.Order]; !ok {
+		b.paths[p.Order] = p
+	}
 }
 
 func (b *sessionBox) put(s wire.RunnerSession) {

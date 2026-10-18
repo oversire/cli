@@ -58,7 +58,7 @@ func (c *cli) run(ctx context.Context) error {
 	_ = agents.Reconcile()
 	var client *hub.Client
 	ov := oversire.New(oversire.Options{Runner: cfg.Device, DataDir: data, Slots: cfg.Sessions()}, agents, proc.Local{},
-		oversire.ReportFunc(func(s wire.RunnerSession) { client.Report(s) }))
+		lateReporter{&client})
 	defer func() {
 		ctx, done := context.WithTimeout(context.Background(), 30*time.Second)
 		defer done()
@@ -132,3 +132,10 @@ func (c *cli) updateLoop(ctx context.Context, hints <-chan struct{}, updated cha
 		}
 	}
 }
+
+// lateReporter passes the reports to the client, which the runner makes after the runtime.
+type lateReporter struct{ c **hub.Client }
+
+func (r lateReporter) Report(s wire.RunnerSession) { (*r.c).Report(s) }
+
+func (r lateReporter) ReportPaths(order string, p wire.ChangedPaths) { (*r.c).ReportPaths(order, p) }

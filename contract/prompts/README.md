@@ -5,9 +5,9 @@ The caller builds the `AIInput`. The file turns the input into the system text a
 
 `jobs/<kind>.md` holds the prompts of the cloud jobs, one for each `Job` kind. Only the cloud renders them. The app does not embed them.
 Each job prompt replies `{"suggest":false}` or `{"suggest":true,"title","body","proposal"?}`. The cloud makes a `Suggestion` from the reply.
-`jobs/sequence.md` (paid) proposes relations and area tags. Its reply names items by key (`"item":"KEY-1"`). The hub maps each key to an `ItemRef`.
+`jobs/plan.md` (paid) is the Planner. It proposes a plan change for one queue lane: order moves, relations and area tags. Its reply names items by key (`"item":"KEY-1"`). The hub maps each key to an `ItemRef`. Schema 1 named it `sequence`.
 
-The input `vision` is the project vision: the memory entry with kind `vision`, max 500 characters. The job prompts `triage` and `sequence` use it in an `{{#if vision}}` block. Thus a project without a vision gives the same text as before.
+The input `vision` is the project vision: the memory entry with kind `vision`, max 500 characters. The job prompts `triage` and `plan` use it in an `{{#if vision}}` block. Thus a project without a vision gives the same text as before.
 In the app, the vision goes into the intake prompt (`AgentPrompts`) and into the `text` of the queue order task.
 
 ## File format

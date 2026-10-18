@@ -1,0 +1,8 @@
+{
+  "project": "ocral/b1f0c2d4",
+  "mode": "hourly",
+  "holdLimit": 7200,
+  "sharedFeature": "serial",
+  "slots": 3,
+  "updatedAt": "2026-10-18T08:00:00Z"
+}

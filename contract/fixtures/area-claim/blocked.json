@@ -1,0 +1,40 @@
+{
+  "id": "ocral/b1f0c2d4/3b88",
+  "item": {
+    "project": {
+      "account": {
+        "provider": "plane",
+        "id": "ocral"
+      },
+      "id": "b1f0c2d4",
+      "key": "TOWERTAIL"
+    },
+    "id": "3b88",
+    "key": "TOWERTAIL-5",
+    "url": "https://app.plane.so/ocral/browse/TOWERTAIL-5/"
+  },
+  "areas": [
+    "queue-page"
+  ],
+  "at": "2026-10-18T08:40:00Z",
+  "grown": [],
+  "blocked": [
+    {
+      "area": "contract",
+      "at": "2026-10-18T09:20:00Z",
+      "by": {
+        "project": {
+          "account": {
+            "provider": "plane",
+            "id": "ocral"
+          },
+          "id": "b1f0c2d4",
+          "key": "TOWERTAIL"
+        },
+        "id": "7c21",
+        "key": "TOWERTAIL-1",
+        "url": "https://app.plane.so/ocral/browse/TOWERTAIL-1/"
+      }
+    }
+  ]
+}

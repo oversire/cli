@@ -75,6 +75,17 @@
           "additionalProperties": false
         },
         {
+          "description": "Runner to hub: the changed paths of the worktree of a sessionStart order, after each turn. Only when the set changes. Only paths, never file text.",
+          "type": "object",
+          "properties": {
+            "type": { "const": "paths" },
+            "order": { "description": "The sessionStart order.", "type": "string", "minLength": 1 },
+            "paths": { "$ref": "store.json#/$defs/ChangedPaths" }
+          },
+          "required": ["type", "order", "paths"],
+          "additionalProperties": false
+        },
+        {
           "description": "Hub to runner: the hello is accepted.",
           "type": "object",
           "properties": {

@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -45,6 +46,12 @@ type Reporter interface {
 type ReportFunc func(s wire.RunnerSession)
 
 func (f ReportFunc) Report(s wire.RunnerSession) { f(s) }
+
+// PathsReporter receives the changed paths of the worktree of an item session after each turn.
+// A Reporter can also be a PathsReporter. ReportPaths must not block.
+type PathsReporter interface {
+	ReportPaths(order string, p wire.ChangedPaths)
+}
 
 // Harnesses starts agent-wire sessions. *agentwire.Runtime is the real one.
 type Harnesses interface {
@@ -257,6 +264,10 @@ type session struct {
 	failure     string
 	stopped     bool
 	permissions []*openPermission
+
+	// scan keeps one paths scan at a time. lastPaths is the set of the last report.
+	scan      sync.Mutex
+	lastPaths []string
 }
 
 func (s *session) run(ctx context.Context, expires time.Time) {
@@ -350,6 +361,7 @@ func (s *session) handle(ev agentwire.Event) {
 		}
 		s.last = ""
 		s.publish()
+		go s.reportPaths()
 	case agentwire.EventError:
 		s.lastErr = ev.Error
 		if s.lastErr == "" {
@@ -468,6 +480,29 @@ func (s *session) finish(reason string) {
 	s.log.close()
 	s.cancel()
 	close(s.ended)
+	go s.reportPaths()
+}
+
+// reportPaths sends the changed paths of an item session, only when the set changed since the last report.
+func (s *session) reportPaths() {
+	pr, ok := s.rt.report.(PathsReporter)
+	if !ok || s.req.Item == nil {
+		return
+	}
+	s.scan.Lock()
+	defer s.scan.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	paths, err := s.rt.worktrees.Changed(ctx, filepath.Clean(s.req.Repo), s.dir)
+	if err != nil {
+		return
+	}
+	p := wire.NewItemPaths(*s.req.Item, paths, s.rt.now())
+	if slices.Equal(p.Paths, s.lastPaths) {
+		return
+	}
+	s.lastPaths = p.Paths
+	pr.ReportPaths(s.info.Order, p)
 }
 
 // change sets the state and reports it. Call it with s.mu held.

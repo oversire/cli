@@ -3,7 +3,7 @@
   "$id": "https://oversire.dev/contract/suggestion.json",
   "title": "OverSire suggestion",
   "description": "The only output of an AI job. The user accepts or dismisses it. An accepted proposal becomes a vendor write, a work order or a memory entry. Dates are ISO 8601 UTC.",
-  "x-oversire-schema": 1,
+  "x-oversire-schema": 2,
   "$defs": {
     "Date": { "type": "string", "format": "date-time" },
     "Proposal": {
@@ -41,8 +41,8 @@
         },
         {
           "type": "object",
-          "properties": { "type": { "const": "sequence" }, "sequence": { "$ref": "#/$defs/SequenceDraft" } },
-          "required": ["type", "sequence"],
+          "properties": { "type": { "const": "plan" }, "plan": { "$ref": "#/$defs/PlanDraft" } },
+          "required": ["type", "plan"],
           "additionalProperties": false
         }
       ]
@@ -52,18 +52,82 @@
       "type": "string",
       "pattern": "^[a-z0-9-]{1,32}$"
     },
-    "SequenceDraft": {
-      "description": "The proposal of a sequence job: relations of the subject item and its code areas. The lines of the proposal, for SuggestionEdit.drop, are in this order: each relations.add entry, each relations.remove entry, then one line for all areas when areas is not empty.",
+    "AreaKind": {
+      "description": "Open set: core (shared code that many items use, for example the contract or a protocol) and feature (one UI page, the docs). A reader that does not know a kind acts as core.",
+      "type": "string",
+      "minLength": 1
+    },
+    "Reason": { "description": "One sentence: why the line helps.", "type": "string", "maxLength": 200 },
+    "OrderLine": {
+      "description": "Move one entry of a queue lane. The hub applies it to the queue-lanes record.",
       "type": "object",
       "properties": {
-        "relations": { "$ref": "actions.json#/$defs/RelationPatch" },
-        "areas": { "description": "The areas of the subject item. Empty: no change to the areas.", "type": "array", "items": { "$ref": "#/$defs/Area" }, "maxItems": 6 }
+        "item": { "$ref": "refs.json#/$defs/ItemRef" },
+        "lane": { "description": "The queue lane id: the store key of the project.", "type": "string", "minLength": 1 },
+        "after": { "description": "The entry to move behind. null: the top of the lane.", "oneOf": [{ "$ref": "refs.json#/$defs/ItemRef" }, { "type": "null" }] },
+        "reason": { "$ref": "#/$defs/Reason" }
       },
-      "required": ["relations", "areas"],
+      "required": ["item", "lane", "after", "reason"],
+      "additionalProperties": false
+    },
+    "RelationLine": {
+      "description": "A RelationPatch of one item.",
+      "type": "object",
+      "properties": {
+        "item": { "$ref": "refs.json#/$defs/ItemRef" },
+        "add": { "type": "array", "items": { "$ref": "actions.json#/$defs/ItemRelation" } },
+        "remove": { "type": "array", "items": { "$ref": "actions.json#/$defs/ItemRelation" } },
+        "reason": { "$ref": "#/$defs/Reason" }
+      },
+      "required": ["item", "add", "remove", "reason"],
+      "additionalProperties": false
+    },
+    "AreaLine": {
+      "description": "A change to the areas of one item. A line from the real diff names the paths in its reason.",
+      "type": "object",
+      "properties": {
+        "item": { "$ref": "refs.json#/$defs/ItemRef" },
+        "add": { "type": "array", "items": { "$ref": "#/$defs/Area" }, "maxItems": 6 },
+        "remove": { "type": "array", "items": { "$ref": "#/$defs/Area" }, "maxItems": 6 },
+        "reason": { "$ref": "#/$defs/Reason" }
+      },
+      "required": ["item", "add", "remove", "reason"],
+      "additionalProperties": false
+    },
+    "PlannerTrigger": {
+      "description": "A change that made the Planner look again.",
+      "type": "object",
+      "properties": {
+        "kind": { "description": "Open set: itemCreated, queued, itemDone, prMerged, ciFailed, reopened, pathsChanged, heldLong, visionChanged, claimGrown, claimBlocked.", "type": "string", "minLength": 1 },
+        "subject": { "$ref": "refs.json#/$defs/SubjectRef" },
+        "at": { "$ref": "#/$defs/Date" }
+      },
+      "required": ["kind", "subject", "at"],
+      "additionalProperties": false
+    },
+    "Overlaps": {
+      "description": "The overlap count of the lane: now, and with all lines of the plan change.",
+      "type": "object",
+      "properties": { "before": { "type": "integer", "minimum": 0 }, "after": { "type": "integer", "minimum": 0 } },
+      "required": ["before", "after"],
+      "additionalProperties": false
+    },
+    "PlanDraft": {
+      "description": "A plan change: the proposal of the Planner for one queue lane. The subject of the suggestion is the project. The lines of the proposal, for SuggestionEdit.drop, are in this order: each order line, each relations line, then each areas line.",
+      "type": "object",
+      "properties": {
+        "order": { "type": "array", "items": { "$ref": "#/$defs/OrderLine" } },
+        "relations": { "type": "array", "items": { "$ref": "#/$defs/RelationLine" } },
+        "areas": { "type": "array", "items": { "$ref": "#/$defs/AreaLine" } },
+        "triggers": { "type": "array", "items": { "$ref": "#/$defs/PlannerTrigger" } },
+        "overlaps": { "$ref": "#/$defs/Overlaps" },
+        "kinds": { "description": "The kind of each area in the areas lines that the area catalog does not have. On accept, the hub adds these areas to the catalog.", "type": "object", "additionalProperties": { "$ref": "#/$defs/AreaKind" } }
+      },
+      "required": ["order", "relations", "areas", "triggers"],
       "additionalProperties": false
     },
     "SuggestionEdit": {
-      "description": "What the user removed before Accept. The user can only remove lines, never add text.",
+      "description": "What the user removed before Accept. The user can only remove lines, never add text. Only a plan proposal takes an edit.",
       "type": "object",
       "properties": {
         "drop": { "description": "The indexes of the proposal lines to drop.", "type": "array", "items": { "type": "integer", "minimum": 0 } }
@@ -78,14 +142,14 @@
       "properties": {
         "id": { "type": "string", "minLength": 1 },
         "subject": { "$ref": "refs.json#/$defs/SubjectRef" },
-        "kind": { "description": "The Job kind. Open set: triage, failureReason, digest, changeSummary, tidy, memoryUpkeep.", "type": "string" },
+        "kind": { "description": "The Job kind. Open set: triage, failureReason, digest, changeSummary, tidy, memoryUpkeep, plan.", "type": "string" },
         "title": { "type": "string" },
         "body": { "description": "Markdown.", "type": "string" },
-        "proposal": { "description": "Missing: the suggestion only informs. Accept then sets it to done. A reader that does not know the proposal type keeps it as it is.", "$ref": "#/$defs/Proposal" },
+        "proposal": { "description": "Missing: the suggestion only informs. Accept then sets it to done. A reader that does not know the proposal type keeps it as it is. Schema 1 had the type sequence. A schema 2 reader keeps it as an unknown type. The hub does not write it.", "$ref": "#/$defs/Proposal" },
         "edit": { "description": "Set with state accepted. On accept, the hub drops these lines from the proposal, saves the edited proposal and removes the edit.", "$ref": "#/$defs/SuggestionEdit" },
         "state": { "$ref": "#/$defs/SuggestionState" },
         "dedupeKey": { "description": "Subject, kind and subject version. A job does not write a second open suggestion with the same key.", "type": "string", "minLength": 1 },
-        "subjectVersion": { "description": "The vendor version of the subject, for example its updatedAt or head SHA.", "type": "string" },
+        "subjectVersion": { "description": "The vendor version of the subject, for example its updatedAt or head SHA. An open plan change keeps its id and gets a new subjectVersion when a new trigger updates it.", "type": "string" },
         "createdAt": { "$ref": "#/$defs/Date" },
         "expiresAt": { "$ref": "#/$defs/Date" },
         "decidedAt": { "$ref": "#/$defs/Date" },

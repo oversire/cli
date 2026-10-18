@@ -63,3 +63,31 @@ func (w *Worktrees) run(ctx context.Context, dir string, args ...string) (string
 	}
 	return strings.TrimSpace(string(out)), nil
 }
+
+// Changed gives the paths that the worktree dir changed since it left the HEAD of repo:
+// the diff from the merge base to the work tree (deletes and both names of a rename included), plus untracked files.
+func (w *Worktrees) Changed(ctx context.Context, repo, dir string) ([]string, error) {
+	head, err := w.run(ctx, repo, "rev-parse", "HEAD")
+	if err != nil {
+		return nil, err
+	}
+	base, err := w.run(ctx, dir, "merge-base", head, "HEAD")
+	if err != nil {
+		return nil, err
+	}
+	diff, err := w.run(ctx, dir, "diff", "--name-only", "--no-renames", base)
+	if err != nil {
+		return nil, err
+	}
+	untracked, err := w.run(ctx, dir, "ls-files", "--others", "--exclude-standard")
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, l := range strings.Split(diff+"\n"+untracked, "\n") {
+		if l = strings.TrimSpace(l); l != "" {
+			out = append(out, l)
+		}
+	}
+	return out, nil
+}

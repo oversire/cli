@@ -3,7 +3,7 @@
   "$id": "https://oversire.dev/contract/jobs.json",
   "title": "OverSire jobs",
   "description": "AI jobs that the cloud hub runs for an account. A job only writes suggestions. Dates are ISO 8601 UTC.",
-  "x-oversire-schema": 1,
+  "x-oversire-schema": 2,
   "$defs": {
     "Date": { "type": "string", "format": "date-time" },
     "JobTrigger": {
@@ -50,7 +50,7 @@
       "type": "object",
       "properties": {
         "id": { "type": "string", "minLength": 1 },
-        "kind": { "description": "Open set: triage, failureReason, digest, changeSummary, tidy, memoryUpkeep, sequence. A sequence job proposes the relations and the code areas of one item. It needs a paid plan.", "type": "string" },
+        "kind": { "description": "Open set: triage, failureReason, digest, changeSummary, tidy, memoryUpkeep, plan. The plan job (the Planner) orders the entries of one queue lane and proposes relations and code areas. It needs a paid plan. Schema 1 named it sequence.", "type": "string" },
         "trigger": { "$ref": "#/$defs/JobTrigger" },
         "scope": { "description": "The subjects that the job looks at. Empty: all subjects of the account.", "type": "array", "items": { "$ref": "refs.json#/$defs/SubjectRef" } },
         "enabled": { "type": "boolean" },

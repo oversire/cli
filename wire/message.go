@@ -125,6 +125,8 @@ func DecodeMessage(data []byte) (Message, error) {
 		return decodeAs[Order](body)
 	case "update":
 		return decodeAs[Update](body)
+	case "paths":
+		return decodeAs[Paths](body)
 	}
 	return Unknown{Kind: kind}, nil
 }

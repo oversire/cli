@@ -2,11 +2,13 @@ package wire
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func fixtures(t *testing.T, kind string) map[string][]byte {
@@ -164,5 +166,40 @@ func TestWorkspaceNameDefaults(t *testing.T) {
 	r.Name, r.Note = "n", "m"
 	if r.WorkspaceName() != "n" || r.WorkspaceNote() != "m" {
 		t.Fatal("explicit values lost")
+	}
+}
+
+func TestChangedPathsFixtures(t *testing.T) {
+	for name, data := range fixtures(t, "changed-paths") {
+		var p ChangedPaths
+		if err := Decode(data, &p); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		out, _ := json.Marshal(p)
+		sameJSON(t, name, data, out)
+	}
+}
+
+func TestNewItemPaths(t *testing.T) {
+	var item ItemRef
+	if err := json.Unmarshal(fixtures(t, "changed-paths")["item.json"], &struct {
+		Subject *struct {
+			Ref *ItemRef `json:"ref"`
+		} `json:"subject"`
+	}{Subject: &struct {
+		Ref *ItemRef `json:"ref"`
+	}{Ref: &item}}); err != nil {
+		t.Fatal(err)
+	}
+	many := make([]string, 0, 600)
+	for i := range 600 {
+		many = append(many, fmt.Sprintf("f%03d", i))
+	}
+	p := NewItemPaths(item, append([]string{"b", "a", "b"}, many...), time.Unix(0, 0))
+	if p.ID != "ocral/b1f0c2d4/7c21" {
+		t.Errorf("id %q", p.ID)
+	}
+	if len(p.Paths) != MaxChangedPaths || p.Paths[0] != "a" || p.Paths[1] != "b" {
+		t.Errorf("paths %v", p.Paths[:3])
 	}
 }

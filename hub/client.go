@@ -93,6 +93,11 @@ func NewClient(hub, token, version string, runtimes Runtimes, allow Allow, journ
 // Report does not block.
 func (c *Client) Report(s wire.RunnerSession) { c.sessions.put(s) }
 
+// ReportPaths sends the changed paths of an order to the hub. Only the latest paths of each order wait for a connection.
+func (c *Client) ReportPaths(order string, p wire.ChangedPaths) {
+	c.sessions.putPaths(wire.Paths{Order: order, Paths: p})
+}
+
 // ConnectURL is the WebSocket URL of a hub base URL.
 func ConnectURL(hub string) string {
 	u := strings.TrimRight(hub, "/") + "/v1/connect"
@@ -320,6 +325,12 @@ func (c *Client) pushSessions(ctx context.Context, conn *websocket.Conn) {
 			err := c.write(ctx, conn, wire.Session{Session: s})
 			c.sessions.sent(s, err == nil)
 			if err != nil {
+				return
+			}
+		}
+		for _, p := range c.sessions.takePaths() {
+			if err := c.write(ctx, conn, p); err != nil {
+				c.sessions.pathsFailed(p)
 				return
 			}
 		}

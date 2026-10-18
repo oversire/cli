@@ -1,0 +1,25 @@
+{
+  "project": "ocral/b1f0c2d4",
+  "at": "2026-10-18T07:00:00Z",
+  "hubs": [
+    {
+      "glob": "Sources/OverSireCore/Refs.swift",
+      "importers": 41
+    }
+  ],
+  "clusters": [
+    {
+      "name": "queue-page",
+      "globs": [
+        "Sources/OverSireApp/queue.swift",
+        "Sources/OverSireApp/queue_page.swift"
+      ]
+    },
+    {
+      "name": "inbox-page",
+      "globs": [
+        "Sources/OverSireApp/inbox_page.swift"
+      ]
+    }
+  ]
+}

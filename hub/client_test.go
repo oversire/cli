@@ -523,3 +523,28 @@ func TestSessionReportsAndResendAfterWelcome(t *testing.T) {
 	default:
 	}
 }
+
+func TestPathsReportWaitsForWelcomeAndKeepsTheLatest(t *testing.T) {
+	got := make(chan wire.Message, 4)
+	item := wire.ItemRef{Project: wire.ProjectRef{Account: wire.AccountID{Provider: "plane", ID: "ocral"}, ID: "p1"}, ID: "i1", Key: "ENG-1", URL: "u"}
+	at := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+	h := newFakeHub(t, 0, func(ctx context.Context, conn *websocket.Conn, n int) {
+		welcome(t, ctx, conn)
+		got <- next(t, ctx, conn)
+		<-ctx.Done()
+	})
+	c := client(t, h, &fakeRuntimes{}, fakeAllow{})
+	c.ReportPaths("o1", wire.NewItemPaths(item, []string{"a.go"}, at))
+	c.ReportPaths("o1", wire.NewItemPaths(item, []string{"a.go", "b.go"}, at.Add(time.Second)))
+	stop := start(t, c)
+	defer stop()
+	select {
+	case m := <-got:
+		p, ok := m.(wire.Paths)
+		if !ok || p.Order != "o1" || !slices.Equal(p.Paths.Paths, []string{"a.go", "b.go"}) {
+			t.Fatalf("got %#v", m)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("no paths frame")
+	}
+}

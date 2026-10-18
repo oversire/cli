@@ -1,0 +1,47 @@
+{
+  "project": "ocral/b1f0c2d4",
+  "areas": [
+    {
+      "name": "contract",
+      "kind": "core",
+      "rules": [
+        {
+          "glob": "Contract/**",
+          "source": "user"
+        }
+      ]
+    },
+    {
+      "name": "store",
+      "kind": "core",
+      "rules": [
+        {
+          "glob": "Sources/OverSireCore/Store*.swift",
+          "source": "learned"
+        }
+      ]
+    },
+    {
+      "name": "queue-page",
+      "kind": "feature",
+      "rules": [
+        {
+          "glob": "Sources/OverSireApp/queue_*.swift",
+          "source": "graph"
+        }
+      ]
+    },
+    {
+      "name": "refs",
+      "kind": "core",
+      "rules": [
+        {
+          "glob": "Sources/OverSireCore/Refs.swift",
+          "source": "graph"
+        }
+      ],
+      "proposed": true
+    }
+  ],
+  "updatedAt": "2026-10-18T08:00:00Z"
+}
