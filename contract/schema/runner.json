@@ -68,6 +68,13 @@
           "additionalProperties": false
         },
         {
+          "description": "Runner to hub: the new state of a session of the oversire runtime. The runner sends it on each change of state, summary or permission prompt.",
+          "type": "object",
+          "properties": { "type": { "const": "session" }, "session": { "$ref": "work-order.json#/$defs/RunnerSession" } },
+          "required": ["type", "session"],
+          "additionalProperties": false
+        },
+        {
           "description": "Hub to runner: the hello is accepted.",
           "type": "object",
           "properties": {

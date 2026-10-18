@@ -50,9 +50,55 @@
       "type": "object",
       "properties": {
         "session": { "$ref": "refs.json#/$defs/SessionRef" },
-        "text": { "type": "string" }
+        "text": { "description": "A user message. Empty with a permission answer.", "type": "string" },
+        "permission": { "$ref": "#/$defs/PermissionAnswer" }
       },
       "required": ["session", "text"],
+      "additionalProperties": false
+    },
+    "PermissionAnswer": {
+      "description": "The answer to the PermissionPrompt of a session.",
+      "type": "object",
+      "properties": {
+        "id": { "description": "The PermissionPrompt id.", "type": "string", "minLength": 1 },
+        "allow": { "type": "boolean" }
+      },
+      "required": ["id", "allow"],
+      "additionalProperties": false
+    },
+    "PermissionPrompt": {
+      "description": "An agent asks for a permission. No answer before expiresAt is a deny.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "tool": { "description": "The tool or the kind of the request, for example Bash or edit.", "type": "string" },
+        "text": { "description": "A short summary of the request.", "type": "string", "maxLength": 500 },
+        "expiresAt": { "$ref": "#/$defs/Date" }
+      },
+      "required": ["id", "tool", "text", "expiresAt"],
+      "additionalProperties": false
+    },
+    "RunnerSessionState": { "enum": ["queued", "starting", "working", "waitingInput", "waitingPermission", "done", "failed"] },
+    "RunnerSession": {
+      "description": "Collection runner-sessions: a session of the oversire runtime on a runner (id = session.id). Only the hub writes it, from the session messages of the runner. The full transcript stays on the runner.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "runner": { "description": "The runner device id.", "type": "string", "minLength": 1 },
+        "session": { "$ref": "refs.json#/$defs/SessionRef" },
+        "order": { "description": "The sessionStart order.", "type": "string", "minLength": 1 },
+        "agent": { "description": "The harness, for example claude.", "type": "string" },
+        "repo": { "type": "string" },
+        "branch": { "type": "string" },
+        "item": { "$ref": "refs.json#/$defs/ItemRef" },
+        "state": { "$ref": "#/$defs/RunnerSessionState" },
+        "summary": { "description": "The last short summary of the transcript.", "type": "string", "maxLength": 500 },
+        "permission": { "$ref": "#/$defs/PermissionPrompt" },
+        "error": { "type": "string" },
+        "startedAt": { "$ref": "#/$defs/Date" },
+        "updatedAt": { "$ref": "#/$defs/Date" }
+      },
+      "required": ["id", "runner", "session", "order", "agent", "repo", "state", "startedAt", "updatedAt"],
       "additionalProperties": false
     },
     "WorkOrderDraft": {

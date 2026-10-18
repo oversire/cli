@@ -1,0 +1,44 @@
+{
+  "type": "session",
+  "session": {
+    "id": "s-7f3a",
+    "runner": "runner-mini",
+    "session": {
+      "workspace": {
+        "account": {
+          "provider": "oversire",
+          "id": "local"
+        },
+        "id": "towertail-workspace/TOWERTAIL-2"
+      },
+      "id": "s-7f3a"
+    },
+    "order": "o1",
+    "agent": "claude",
+    "repo": "/home/ada/src/towertail-workspace",
+    "branch": "towertail-2",
+    "item": {
+      "project": {
+        "account": {
+          "provider": "plane",
+          "id": "ocral"
+        },
+        "id": "b1f0c2d4",
+        "key": "TOWERTAIL"
+      },
+      "id": "9a7e",
+      "key": "TOWERTAIL-2",
+      "url": "https://app.plane.so/ocral/browse/TOWERTAIL-2/"
+    },
+    "state": "waitingPermission",
+    "summary": "Added the retry to the sync client. Wants to run the tests.",
+    "permission": {
+      "id": "p-1",
+      "tool": "Bash",
+      "text": "npm test",
+      "expiresAt": "2026-10-01T10:10:00Z"
+    },
+    "startedAt": "2026-10-01T09:12:00Z",
+    "updatedAt": "2026-10-01T09:40:00Z"
+  }
+}

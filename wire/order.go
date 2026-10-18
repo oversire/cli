@@ -41,9 +41,17 @@ type ReadPayload struct {
 	Lines   int        `json:"lines"`
 }
 
+// SendPayload carries a user message or a permission answer. With a permission, Text is "".
 type SendPayload struct {
-	Session SessionRef `json:"session"`
-	Text    string     `json:"text"`
+	Session    SessionRef        `json:"session"`
+	Text       string            `json:"text"`
+	Permission *PermissionAnswer `json:"permission,omitempty"`
+}
+
+// PermissionAnswer answers the PermissionPrompt with the same id.
+type PermissionAnswer struct {
+	ID    string `json:"id"`
+	Allow bool   `json:"allow"`
 }
 
 func (LaunchRequest) Op() Op { return OpSessionStart }

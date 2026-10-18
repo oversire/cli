@@ -82,6 +82,42 @@ func TestRunnerMessageFixtures(t *testing.T) {
 	}
 }
 
+func TestRunnerSessionFixtures(t *testing.T) {
+	for name, data := range fixtures(t, "runner-session") {
+		var s RunnerSession
+		if err := Decode(data, &s); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if s.ID != s.Session.ID {
+			t.Errorf("%s: id %s is not the session id %s", name, s.ID, s.Session.ID)
+		}
+		out, _ := json.Marshal(s)
+		sameJSON(t, name, data, out)
+	}
+}
+
+func TestSendPermissionFixture(t *testing.T) {
+	var o WorkOrder
+	if err := Decode(fixtures(t, "work-order")["send-permission.json"], &o); err != nil {
+		t.Fatal(err)
+	}
+	p, ok := o.Payload.(SendPayload)
+	if !ok || p.Text != "" || p.Permission == nil || *p.Permission != (PermissionAnswer{ID: "p-1", Allow: true}) {
+		t.Fatalf("%#v", o.Payload)
+	}
+}
+
+func TestSessionMessageFixture(t *testing.T) {
+	m, err := DecodeMessage(fixtures(t, "runner-message")["session.json"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, ok := m.(Session)
+	if !ok || s.Session.State != SessionWaitingPermission || s.Session.Permission.Tool != "Bash" || s.Session.State.Ended() {
+		t.Fatalf("%#v", m)
+	}
+}
+
 func TestUnknownFieldsFail(t *testing.T) {
 	cases := map[string]string{
 		"order field":   `{"id":"o","runner":"r","runtime":"orca","op":"sessionStop","payload":{"session":{"workspace":{"account":{"provider":"orca","id":"local"},"id":"w"},"id":"s"}},"suggestion":"s","createdAt":"2026-10-01T09:10:00Z","expiresAt":"2026-10-01T21:10:00Z","state":"sent","shell":"rm -rf /"}`,
@@ -97,6 +133,9 @@ func TestUnknownFieldsFail(t *testing.T) {
 	}
 	if _, err := DecodeMessage([]byte(`{"type":"welcome","device":"d","contract":1,"extra":true}`)); err == nil {
 		t.Error("welcome with an extra field passed")
+	}
+	if _, err := DecodeMessage([]byte(`{"type":"session","session":{"id":"s","runner":"r","session":{"workspace":{"account":{"provider":"oversire","id":"local"},"id":"w"},"id":"s"},"order":"o","agent":"fake","repo":"/r","state":"done","startedAt":"2026-10-01T09:10:00Z","updatedAt":"2026-10-01T09:10:00Z","pid":4}}`)); err == nil {
+		t.Error("session with an extra field passed")
 	}
 	var r LaunchRequest
 	if err := Decode([]byte(`{"repo":"/w","agent":"claude","prompt":"go","shell":"x"}`), &r); err == nil {

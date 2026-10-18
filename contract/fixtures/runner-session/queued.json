@@ -1,0 +1,14 @@
+{
+  "id": "s-8b21",
+  "runner": "runner-mini",
+  "session": {
+    "workspace": { "account": { "provider": "oversire", "id": "local" }, "id": "app/APP-9" },
+    "id": "s-8b21"
+  },
+  "order": "o9",
+  "agent": "codex",
+  "repo": "/home/ada/src/app",
+  "state": "queued",
+  "startedAt": "2026-10-01T09:50:00Z",
+  "updatedAt": "2026-10-01T09:50:00Z"
+}

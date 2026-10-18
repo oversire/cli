@@ -40,6 +40,11 @@ type Result struct {
 	Result *WorkOrderResult `json:"result,omitempty"`
 }
 
+// Session is the new state of one session of the oversire runtime.
+type Session struct {
+	Session RunnerSession `json:"session"`
+}
+
 type Welcome struct {
 	Device   string `json:"device"`
 	Contract int    `json:"contract"`
@@ -64,6 +69,7 @@ type Unknown struct{ Kind string }
 func (Hello) Type() string     { return "hello" }
 func (Ack) Type() string       { return "ack" }
 func (Result) Type() string    { return "result" }
+func (Session) Type() string   { return "session" }
 func (Welcome) Type() string   { return "welcome" }
 func (Refused) Type() string   { return "refused" }
 func (Order) Type() string     { return "order" }
@@ -109,6 +115,8 @@ func DecodeMessage(data []byte) (Message, error) {
 		return decodeAs[Ack](body)
 	case "result":
 		return decodeAs[Result](body)
+	case "session":
+		return decodeAs[Session](body)
 	case "welcome":
 		return decodeAs[Welcome](body)
 	case "refused":

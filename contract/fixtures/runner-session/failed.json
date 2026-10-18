@@ -1,0 +1,15 @@
+{
+  "id": "s-0c44",
+  "runner": "runner-mini",
+  "session": {
+    "workspace": { "account": { "provider": "oversire", "id": "local" }, "id": "app/APP-3" },
+    "id": "s-0c44"
+  },
+  "order": "o3",
+  "agent": "gemini",
+  "repo": "/home/ada/src/app",
+  "state": "failed",
+  "error": "gemini is not installed.",
+  "startedAt": "2026-10-01T08:00:00Z",
+  "updatedAt": "2026-10-01T08:00:02Z"
+}
