@@ -1,0 +1,74 @@
+{
+  "id": "s-seq",
+  "subject": {
+    "kind": "item",
+    "ref": {
+      "project": {
+        "account": {
+          "provider": "plane",
+          "id": "ocral"
+        },
+        "id": "b1f0c2d4",
+        "key": "TOWERTAIL"
+      },
+      "id": "9a7e",
+      "key": "TOWERTAIL-2",
+      "url": "https://app.plane.so/ocral/browse/TOWERTAIL-2/"
+    }
+  },
+  "kind": "sequence",
+  "title": "Order TOWERTAIL-2 after TOWERTAIL-1",
+  "body": "TOWERTAIL-2 reads the API that TOWERTAIL-1 adds. TOWERTAIL-4 changes the same page.",
+  "proposal": {
+    "type": "sequence",
+    "sequence": {
+      "relations": {
+        "add": [
+          {
+            "kind": "blockedBy",
+            "item": {
+              "project": {
+                "account": {
+                  "provider": "plane",
+                  "id": "ocral"
+                },
+                "id": "b1f0c2d4",
+                "key": "TOWERTAIL"
+              },
+              "id": "7c21",
+              "key": "TOWERTAIL-1",
+              "url": "https://app.plane.so/ocral/browse/TOWERTAIL-1/"
+            }
+          },
+          {
+            "kind": "relatesTo",
+            "item": {
+              "project": {
+                "account": {
+                  "provider": "plane",
+                  "id": "ocral"
+                },
+                "id": "b1f0c2d4",
+                "key": "TOWERTAIL"
+              },
+              "id": "5d03",
+              "key": "TOWERTAIL-4",
+              "url": "https://app.plane.so/ocral/browse/TOWERTAIL-4/"
+            }
+          }
+        ],
+        "remove": []
+      },
+      "areas": [
+        "status-page",
+        "api"
+      ]
+    }
+  },
+  "state": "open",
+  "dedupeKey": "item:9a7e|sequence|2026-10-03T10:00:00Z/4f1c",
+  "subjectVersion": "2026-10-03T10:00:00Z/4f1c",
+  "createdAt": "2026-10-03T10:00:05Z",
+  "expiresAt": "2026-10-06T10:00:05Z",
+  "jobRun": "r-seq"
+}

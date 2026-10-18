@@ -1,0 +1,16 @@
+{
+  "kind": "relatesTo",
+  "item": {
+    "project": {
+      "account": {
+        "provider": "plane",
+        "id": "ocral"
+      },
+      "id": "b1f0c2d4",
+      "key": "TOWERTAIL"
+    },
+    "id": "5d03",
+    "key": "TOWERTAIL-4",
+    "url": "https://app.plane.so/ocral/browse/TOWERTAIL-4/"
+  }
+}

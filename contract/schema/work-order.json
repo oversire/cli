@@ -114,7 +114,21 @@
       "required": ["runtime", "op", "payload"],
       "additionalProperties": false
     },
-    "WorkOrderState": { "enum": ["queued", "sent", "acked", "done", "failed", "expired"] },
+    "WorkOrderState": {
+      "description": "held: the hub keeps a sessionStart order while its item has an open blocker or a busy area. The hub never sends a held order to a runner. A reader that does not know a state keeps it as it is.",
+      "enum": ["held", "queued", "sent", "acked", "done", "failed", "expired"]
+    },
+    "WorkOrderHold": {
+      "description": "Why the hub holds the order.",
+      "type": "object",
+      "properties": {
+        "blockers": { "description": "The open items that block the item of the order.", "type": "array", "items": { "$ref": "refs.json#/$defs/ItemRef" } },
+        "areas": { "description": "The areas of the item that an other session holds.", "type": "array", "items": { "$ref": "suggestion.json#/$defs/Area" } },
+        "since": { "$ref": "#/$defs/Date" }
+      },
+      "required": ["blockers", "areas", "since"],
+      "additionalProperties": false
+    },
     "WorkOrderResult": {
       "type": "object",
       "properties": {
@@ -137,6 +151,7 @@
         "createdAt": { "$ref": "#/$defs/Date" },
         "expiresAt": { "$ref": "#/$defs/Date" },
         "state": { "$ref": "#/$defs/WorkOrderState" },
+        "hold": { "description": "Set while the state is held.", "$ref": "#/$defs/WorkOrderHold" },
         "result": { "$ref": "#/$defs/WorkOrderResult" }
       },
       "allOf": [{ "$ref": "#/$defs/SessionOrder" }],

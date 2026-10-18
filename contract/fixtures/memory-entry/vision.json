@@ -1,0 +1,19 @@
+{
+  "id": "vision-ocral/b1f0c2d4",
+  "scope": "project",
+  "scopeRef": {
+    "kind": "project",
+    "ref": {
+      "account": {
+        "provider": "plane",
+        "id": "ocral"
+      },
+      "id": "b1f0c2d4",
+      "key": "TOWERTAIL"
+    }
+  },
+  "text": "Towertail is a small, fast status page for one team. It stays one binary with no database.",
+  "kind": "vision",
+  "source": "user",
+  "updatedAt": "2026-10-02T08:00:00Z"
+}

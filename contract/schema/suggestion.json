@@ -38,8 +38,38 @@
           "properties": { "type": { "const": "memory" }, "memory": { "$ref": "memory.json#/$defs/MemoryDraft" } },
           "required": ["type", "memory"],
           "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": { "type": { "const": "sequence" }, "sequence": { "$ref": "#/$defs/SequenceDraft" } },
+          "required": ["type", "sequence"],
+          "additionalProperties": false
         }
       ]
+    },
+    "Area": {
+      "description": "A code area tag, for example queue-ui. Lower case.",
+      "type": "string",
+      "pattern": "^[a-z0-9-]{1,32}$"
+    },
+    "SequenceDraft": {
+      "description": "The proposal of a sequence job: relations of the subject item and its code areas. The lines of the proposal, for SuggestionEdit.drop, are in this order: each relations.add entry, each relations.remove entry, then one line for all areas when areas is not empty.",
+      "type": "object",
+      "properties": {
+        "relations": { "$ref": "actions.json#/$defs/RelationPatch" },
+        "areas": { "description": "The areas of the subject item. Empty: no change to the areas.", "type": "array", "items": { "$ref": "#/$defs/Area" }, "maxItems": 6 }
+      },
+      "required": ["relations", "areas"],
+      "additionalProperties": false
+    },
+    "SuggestionEdit": {
+      "description": "What the user removed before Accept. The user can only remove lines, never add text.",
+      "type": "object",
+      "properties": {
+        "drop": { "description": "The indexes of the proposal lines to drop.", "type": "array", "items": { "type": "integer", "minimum": 0 } }
+      },
+      "required": ["drop"],
+      "additionalProperties": false
     },
     "SuggestionState": { "enum": ["open", "accepted", "dismissed", "expired", "done", "failed"] },
     "Suggestion": {
@@ -51,7 +81,8 @@
         "kind": { "description": "The Job kind. Open set: triage, failureReason, digest, changeSummary, tidy, memoryUpkeep.", "type": "string" },
         "title": { "type": "string" },
         "body": { "description": "Markdown.", "type": "string" },
-        "proposal": { "description": "Missing: the suggestion only informs. Accept then sets it to done.", "$ref": "#/$defs/Proposal" },
+        "proposal": { "description": "Missing: the suggestion only informs. Accept then sets it to done. A reader that does not know the proposal type keeps it as it is.", "$ref": "#/$defs/Proposal" },
+        "edit": { "description": "Set with state accepted. On accept, the hub drops these lines from the proposal, saves the edited proposal and removes the edit.", "$ref": "#/$defs/SuggestionEdit" },
         "state": { "$ref": "#/$defs/SuggestionState" },
         "dedupeKey": { "description": "Subject, kind and subject version. A job does not write a second open suggestion with the same key.", "type": "string", "minLength": 1 },
         "subjectVersion": { "description": "The vendor version of the subject, for example its updatedAt or head SHA.", "type": "string" },

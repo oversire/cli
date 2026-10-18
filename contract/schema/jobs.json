@@ -50,7 +50,7 @@
       "type": "object",
       "properties": {
         "id": { "type": "string", "minLength": 1 },
-        "kind": { "description": "Open set: triage, failureReason, digest, changeSummary, tidy, memoryUpkeep.", "type": "string" },
+        "kind": { "description": "Open set: triage, failureReason, digest, changeSummary, tidy, memoryUpkeep, sequence. A sequence job proposes the relations and the code areas of one item. It needs a paid plan.", "type": "string" },
         "trigger": { "$ref": "#/$defs/JobTrigger" },
         "scope": { "description": "The subjects that the job looks at. Empty: all subjects of the account.", "type": "array", "items": { "$ref": "refs.json#/$defs/SubjectRef" } },
         "enabled": { "type": "boolean" },

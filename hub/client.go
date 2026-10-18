@@ -239,6 +239,11 @@ func (c *Client) badMessage(ctx context.Context, data []byte, err error) {
 
 // handle runs one order at most one time. A finished order only sends its result again.
 func (c *Client) handle(ctx context.Context, o wire.WorkOrder) {
+	// The hub sends an order again when it releases it. A failed result would end it.
+	if o.State == wire.StateHeld {
+		c.Log.Warn("held order ignored", "order", o.ID)
+		return
+	}
 	c.mu.Lock()
 	// The journal first: a finished order is in it before it leaves running.
 	if r, ok := c.journal.Get(o.ID); ok {

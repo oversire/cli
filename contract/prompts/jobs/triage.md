@@ -1,8 +1,8 @@
 ---
 taskKind: triage
-version: 1
+version: 2
 maxTokens: 600
-inputs: text, subject
+inputs: text, subject, vision
 ---
 
 <!-- system -->
@@ -13,8 +13,11 @@ Reply with one JSON object only, with no other text.
 When you have nothing useful to suggest, reply {"suggest":false}.
 Else reply {"suggest":true,"title":"at most 70 characters","body":"Markdown, at most 120 words","proposal":{"type":"itemPatch","patch":{"status":"state id","priority":"urgent|high|medium|low|none","labels":["label id"]}}}
 Leave out a patch field that you do not want to change.
+When a project vision is given and the item works against it, say so in one sentence of the body that starts with "Off vision:". Only inform: do not close or move the item for it.
 
 <!-- user -->
-New item: {{subject}}
+{{#if vision}}Project vision: {{vision}}
+
+{{/if}}New item: {{subject}}
 
 {{text}}

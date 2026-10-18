@@ -107,6 +107,20 @@
       "required": ["key", "workspace", "at"],
       "additionalProperties": false
     },
+    "ItemAreas": {
+      "description": "Collection item-areas. The code areas of one item. The id is the store key of the item: <ProjectRef.storeKey>/<item id>. Area tags live only here, not as tracker labels.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "item": { "$ref": "refs.json#/$defs/ItemRef" },
+        "areas": { "type": "array", "items": { "$ref": "suggestion.json#/$defs/Area" }, "maxItems": 6 },
+        "source": { "description": "Who wrote the areas.", "enum": ["user", "suggestion"] },
+        "suggestion": { "description": "The Suggestion id when the source is suggestion.", "type": "string" },
+        "updatedAt": { "$ref": "#/$defs/Date" }
+      },
+      "required": ["id", "item", "areas", "source", "updatedAt"],
+      "additionalProperties": false
+    },
     "StoreOp": {
       "description": "One write to a synced collection. The hub keeps an op log of them. Last write wins for each collection and id, by hlc.",
       "type": "object",

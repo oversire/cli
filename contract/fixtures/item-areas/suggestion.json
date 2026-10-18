@@ -1,0 +1,23 @@
+{
+  "id": "ocral/b1f0c2d4/5d03",
+  "item": {
+    "project": {
+      "account": {
+        "provider": "plane",
+        "id": "ocral"
+      },
+      "id": "b1f0c2d4",
+      "key": "TOWERTAIL"
+    },
+    "id": "5d03",
+    "key": "TOWERTAIL-4",
+    "url": "https://app.plane.so/ocral/browse/TOWERTAIL-4/"
+  },
+  "areas": [
+    "status-page",
+    "api"
+  ],
+  "source": "suggestion",
+  "suggestion": "s-seq",
+  "updatedAt": "2026-10-03T11:00:01Z"
+}

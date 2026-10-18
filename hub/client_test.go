@@ -248,6 +248,29 @@ func TestExpiredOrderNeverRuns(t *testing.T) {
 	}
 }
 
+func TestHeldOrderNeverRuns(t *testing.T) {
+	rt := &fakeRuntimes{}
+	got := make(chan wire.Message, 1)
+	h := newFakeHub(t, 0, func(ctx context.Context, c *websocket.Conn, n int) {
+		welcome(t, ctx, c)
+		held := order("o5", time.Now().Add(time.Hour))
+		held.Order.State = wire.StateHeld
+		send(ctx, c, held)
+		send(ctx, c, order("o6", time.Now().Add(-time.Second)))
+		got <- next(t, ctx, c)
+		<-ctx.Done()
+	})
+	stop := start(t, client(t, h, rt, fakeAllow{}))
+	m := <-got
+	stop()
+	if r, ok := m.(wire.Result); !ok || r.Order != "o6" {
+		t.Fatalf("the held order sent a message: %#v", m)
+	}
+	if rt.count() != 0 {
+		t.Fatal("a held order ran")
+	}
+}
+
 func TestAllowListRefusalStartsNothing(t *testing.T) {
 	rt := &fakeRuntimes{}
 	got := make(chan wire.Message, 2)

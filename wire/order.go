@@ -20,7 +20,9 @@ const (
 
 type State string
 
+// A state that the runner does not know keeps its raw value. The hub never sends a held order.
 const (
+	StateHeld    State = "held"
 	StateQueued  State = "queued"
 	StateSent    State = "sent"
 	StateAcked   State = "acked"
@@ -65,6 +67,13 @@ type WorkOrderResult struct {
 	Error   string      `json:"error,omitempty"`
 }
 
+// WorkOrderHold says why the hub holds an order.
+type WorkOrderHold struct {
+	Blockers []ItemRef `json:"blockers"`
+	Areas    []string  `json:"areas"`
+	Since    time.Time `json:"since"`
+}
+
 // WorkOrder is a typed order from the hub. The op comes from the payload type.
 type WorkOrder struct {
 	ID         string
@@ -75,6 +84,7 @@ type WorkOrder struct {
 	CreatedAt  time.Time
 	ExpiresAt  time.Time
 	State      State
+	Hold       *WorkOrderHold
 	Result     *WorkOrderResult
 }
 
@@ -88,6 +98,7 @@ type orderJSON struct {
 	CreatedAt  time.Time        `json:"createdAt"`
 	ExpiresAt  time.Time        `json:"expiresAt"`
 	State      State            `json:"state"`
+	Hold       *WorkOrderHold   `json:"hold,omitempty"`
 	Result     *WorkOrderResult `json:"result,omitempty"`
 }
 
@@ -101,7 +112,7 @@ func (o WorkOrder) MarshalJSON() ([]byte, error) {
 	}
 	return json.Marshal(orderJSON{
 		ID: o.ID, Runner: o.Runner, Runtime: o.Runtime, Op: o.Payload.Op(), Payload: p,
-		Suggestion: o.Suggestion, CreatedAt: o.CreatedAt, ExpiresAt: o.ExpiresAt, State: o.State, Result: o.Result,
+		Suggestion: o.Suggestion, CreatedAt: o.CreatedAt, ExpiresAt: o.ExpiresAt, State: o.State, Hold: o.Hold, Result: o.Result,
 	})
 }
 
@@ -140,7 +151,7 @@ func (o *WorkOrder) UnmarshalJSON(data []byte) error {
 	}
 	*o = WorkOrder{
 		ID: j.ID, Runner: j.Runner, Runtime: j.Runtime, Payload: p, Suggestion: j.Suggestion,
-		CreatedAt: j.CreatedAt, ExpiresAt: j.ExpiresAt, State: j.State, Result: j.Result,
+		CreatedAt: j.CreatedAt, ExpiresAt: j.ExpiresAt, State: j.State, Hold: j.Hold, Result: j.Result,
 	}
 	return nil
 }

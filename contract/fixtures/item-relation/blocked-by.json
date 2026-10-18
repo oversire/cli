@@ -1,0 +1,16 @@
+{
+  "kind": "blockedBy",
+  "item": {
+    "project": {
+      "account": {
+        "provider": "plane",
+        "id": "ocral"
+      },
+      "id": "b1f0c2d4",
+      "key": "TOWERTAIL"
+    },
+    "id": "7c21",
+    "key": "TOWERTAIL-1",
+    "url": "https://app.plane.so/ocral/browse/TOWERTAIL-1/"
+  }
+}

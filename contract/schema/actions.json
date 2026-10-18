@@ -45,6 +45,29 @@
       },
       "required": ["repo", "agent", "prompt"],
       "additionalProperties": false
+    },
+    "RelationKind": {
+      "description": "The kind of a relation, seen from the item that holds it. A blocks B is the same relation as B blockedBy A. The tracker keeps the relations: OverSire keeps no second graph. Duplicates are not a relation here: the intake verdict covers them.",
+      "enum": ["blockedBy", "blocks", "relatesTo"]
+    },
+    "ItemRelation": {
+      "type": "object",
+      "properties": {
+        "kind": { "$ref": "#/$defs/RelationKind" },
+        "item": { "description": "The other item.", "$ref": "refs.json#/$defs/ItemRef" }
+      },
+      "required": ["kind", "item"],
+      "additionalProperties": false
+    },
+    "RelationPatch": {
+      "description": "A write to the relations of one item. The adapter adds before it removes.",
+      "type": "object",
+      "properties": {
+        "add": { "type": "array", "items": { "$ref": "#/$defs/ItemRelation" } },
+        "remove": { "type": "array", "items": { "$ref": "#/$defs/ItemRelation" } }
+      },
+      "required": ["add", "remove"],
+      "additionalProperties": false
     }
   }
 }
