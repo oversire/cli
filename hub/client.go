@@ -76,6 +76,7 @@ type Client struct {
 	mu      sync.Mutex
 	conn    *websocket.Conn
 	running map[string]bool
+	orders  sync.WaitGroup
 }
 
 func NewClient(hub, token, version string, runtimes Runtimes, allow Allow, journal *Journal, status Status) *Client {
@@ -105,8 +106,9 @@ func ConnectURL(hub string) string {
 }
 
 // Run connects and reconnects with backoff until ctx ends, the token is refused or the hello is refused.
-// Orders keep ctx, so a lost socket does not stop a launch.
+// Orders keep ctx, so a lost socket does not stop a launch. Run returns after the orders end.
 func (c *Client) Run(ctx context.Context) error {
+	defer c.orders.Wait()
 	wait := c.MinBackoff
 	for {
 		start := c.Now()
@@ -191,7 +193,7 @@ func (c *Client) session(ctx context.Context) error {
 			conn.Close(websocket.StatusNormalClosure, "refused")
 			return &RefusedError{Reason: m.Reason, Contracts: m.Contracts}
 		case wire.Order:
-			go c.handle(ctx, m.Order)
+			c.orders.Go(func() { c.handle(ctx, m.Order) })
 		case wire.Update:
 			if c.OnUpdate != nil {
 				c.OnUpdate(m.Version)
