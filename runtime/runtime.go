@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/oversire/runner/wire"
 )
@@ -12,13 +13,21 @@ import (
 // MaxReadLines caps the lines of one sessionRead.
 const MaxReadLines = 200
 
+// Order names the sessionStart order. A runtime that queues a session fails it at ExpiresAt.
+// A zero ExpiresAt has no limit.
+type Order struct {
+	ID        string
+	ExpiresAt time.Time
+}
+
 // Runtime drives the sessions of one agent runtime.
 type Runtime interface {
 	ID() string
-	Start(ctx context.Context, r wire.LaunchRequest) (wire.SessionRef, error)
+	Start(ctx context.Context, o Order, r wire.LaunchRequest) (wire.SessionRef, error)
 	Stop(ctx context.Context, s wire.SessionRef) error
 	Read(ctx context.Context, s wire.SessionRef, lines int) ([]string, error)
-	Send(ctx context.Context, s wire.SessionRef, text string) error
+	// Send gives the text, or the permission answer, of p to the session p.Session.
+	Send(ctx context.Context, p wire.SendPayload) error
 }
 
 type Registry struct{ byID map[string]Runtime }
@@ -54,7 +63,7 @@ func (r *Registry) Do(ctx context.Context, o wire.WorkOrder) (*wire.WorkOrderRes
 	}
 	switch p := o.Payload.(type) {
 	case wire.LaunchRequest:
-		s, err := rt.Start(ctx, p)
+		s, err := rt.Start(ctx, Order{ID: o.ID, ExpiresAt: o.ExpiresAt}, p)
 		if err != nil {
 			return nil, err
 		}
@@ -71,7 +80,7 @@ func (r *Registry) Do(ctx context.Context, o wire.WorkOrder) (*wire.WorkOrderRes
 		}
 		return &wire.WorkOrderResult{Lines: lines}, nil
 	case wire.SendPayload:
-		return &wire.WorkOrderResult{}, rt.Send(ctx, p.Session, p.Text)
+		return &wire.WorkOrderResult{}, rt.Send(ctx, p)
 	}
 	return nil, fmt.Errorf("This runner does not know the op of order %s.", o.ID)
 }

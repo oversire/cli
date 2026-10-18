@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/oversire/runner/runtime"
 	"github.com/oversire/runner/wire"
 )
 
@@ -73,7 +74,7 @@ func TestStartInANewWorkspaceUsesTheShell(t *testing.T) {
 	r.on("terminal wait", `{"ok":true,"result":{"wait":{"satisfied":false}}}`, `{"ok":true,"result":{"wait":{"satisfied":true}}}`)
 	r.on("terminal send", `{"ok":true,"result":{}}`, `{"ok":true,"result":{"send":{"prompt":{"stages":["typed","turn_started"]}}}}`)
 
-	ref, err := o.Start(context.Background(), wire.LaunchRequest{Repo: "/w", Name: "ENG-4", Note: "https://x/ENG-4", Agent: "claude", Prompt: "go", Environment: "mbp"})
+	ref, err := o.Start(context.Background(), runtime.Order{}, wire.LaunchRequest{Repo: "/w", Name: "ENG-4", Note: "https://x/ENG-4", Agent: "claude", Prompt: "go", Environment: "mbp"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +106,7 @@ func TestStartReusesTheWorkspace(t *testing.T) {
 	r.on("terminal send", `{"ok":true,"result":{}}`)
 
 	item := &wire.ItemRef{Key: "eng-4", URL: "https://x/ENG-4"}
-	ref, err := o.Start(context.Background(), wire.LaunchRequest{Repo: "/Users/ada/Projects/app", Item: item, Agent: "codex", Prompt: "go"})
+	ref, err := o.Start(context.Background(), runtime.Order{}, wire.LaunchRequest{Repo: "/Users/ada/Projects/app", Item: item, Agent: "codex", Prompt: "go"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,10 +130,10 @@ func TestStartReusesTheWorkspace(t *testing.T) {
 func TestStartFailures(t *testing.T) {
 	o, r := setup()
 	ctx := context.Background()
-	if _, err := o.Start(ctx, wire.LaunchRequest{Repo: "/w", Agent: "claude", Prompt: "go"}); err == nil {
+	if _, err := o.Start(ctx, runtime.Order{}, wire.LaunchRequest{Repo: "/w", Agent: "claude", Prompt: "go"}); err == nil {
 		t.Fatal("no name passed")
 	}
-	if _, err := o.Start(ctx, wire.LaunchRequest{Repo: "/w", Name: "A-1", Agent: "codex; rm -rf ~", Prompt: "go"}); err == nil {
+	if _, err := o.Start(ctx, runtime.Order{}, wire.LaunchRequest{Repo: "/w", Name: "A-1", Agent: "codex; rm -rf ~", Prompt: "go"}); err == nil {
 		t.Fatal("a bad agent name passed")
 	}
 	if len(r.calls) != 0 {
@@ -140,7 +141,7 @@ func TestStartFailures(t *testing.T) {
 	}
 	r.on("worktree ps", `{"ok":true,"result":{"worktrees":[]}}`)
 	r.on("worktree create", `{"ok":false,"error":{"code":"repo_not_found","message":"no repo"}}`)
-	_, err := o.Start(ctx, wire.LaunchRequest{Repo: "/nope", Name: "A-1", Agent: "claude", Prompt: "go"})
+	_, err := o.Start(ctx, runtime.Order{}, wire.LaunchRequest{Repo: "/nope", Name: "A-1", Agent: "claude", Prompt: "go"})
 	var e *Error
 	if !errors.As(err, &e) || e.Code != "repo_not_found" || e.Message != "Orca has no workspace at /nope" {
 		t.Fatalf("got %v", err)
@@ -150,7 +151,7 @@ func TestStartFailures(t *testing.T) {
 	r.on("terminal list", `{"ok":true,"result":{"terminals":[{"handle":"h1"}]}}`)
 	r.on("terminal send", `{"ok":true,"result":{}}`)
 	r.on("terminal wait", `{"ok":true,"result":{"wait":{"satisfied":false}}}`)
-	_, err = o.Start(ctx, wire.LaunchRequest{Repo: "/w", Name: "A-1", Agent: "claude", Prompt: "go"})
+	_, err = o.Start(ctx, runtime.Order{}, wire.LaunchRequest{Repo: "/w", Name: "A-1", Agent: "claude", Prompt: "go"})
 	if !errors.As(err, &e) || e.Code != "not_started" {
 		t.Fatalf("got %v", err)
 	}
@@ -178,7 +179,7 @@ func TestSessionIO(t *testing.T) {
 	}
 
 	r.on("terminal send", `{"ok":true,"result":{}}`)
-	if err := o.Send(ctx, s, "continue"); err != nil {
+	if err := o.Send(ctx, wire.SendPayload{Session: s, Text: "continue"}); err != nil {
 		t.Fatal(err)
 	}
 	want := []string{"terminal", "send", "--terminal", "h1", "--text", "continue", "--enter", "--wait-submit", "15", "--json"}
@@ -211,12 +212,17 @@ func TestErrorMapping(t *testing.T) {
 	if _, err := o.Read(ctx, s, 4); err == nil || err.Error() != "orca terminal read: no JSON reply" {
 		t.Fatalf("got %v", err)
 	}
-	if err := o.Send(ctx, s, "x"); err == nil || err.Error() != "orca terminal send: unknown command terminal send" {
+	if err := o.Send(ctx, wire.SendPayload{Session: s, Text: "x"}); err == nil || err.Error() != "orca terminal send: unknown command terminal send" {
 		t.Fatalf("got %v", err)
 	}
 	r.on("terminal send", `{"ok":false}`)
-	if err := o.Send(ctx, s, "x"); !errors.As(err, &e) || e.Message != "orca terminal send failed" {
+	if err := o.Send(ctx, wire.SendPayload{Session: s, Text: "x"}); !errors.As(err, &e) || e.Message != "orca terminal send failed" {
 		t.Fatalf("got %v", err)
+	}
+	n := len(r.calls)
+	err := o.Send(ctx, wire.SendPayload{Session: s, Permission: &wire.PermissionAnswer{ID: "p-1", Allow: true}})
+	if err == nil || !strings.Contains(err.Error(), "no permission prompts") || len(r.calls) != n {
+		t.Fatalf("permission answer: %v", err)
 	}
 }
 

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/oversire/runner/runtime"
 	"github.com/oversire/runner/wire"
 )
 
@@ -59,7 +60,7 @@ func (o *Orca) ID() string { return ID }
 // Start opens an agent session in the workspace with the request name, then sends the prompt once.
 // A workspace with that name at the repo path is used again. A new workspace gets a fallback shell,
 // and the agent command goes into it.
-func (o *Orca) Start(ctx context.Context, r wire.LaunchRequest) (wire.SessionRef, error) {
+func (o *Orca) Start(ctx context.Context, _ runtime.Order, r wire.LaunchRequest) (wire.SessionRef, error) {
 	var none wire.SessionRef
 	name := r.WorkspaceName()
 	if name == "" {
@@ -106,7 +107,7 @@ func (o *Orca) Start(ctx context.Context, r wire.LaunchRequest) (wire.SessionRef
 	if err := o.waitIdle(ctx, env, handle, name); err != nil {
 		return none, err
 	}
-	return ref, o.Send(ctx, ref, r.Prompt)
+	return ref, o.send(ctx, ref, r.Prompt)
 }
 
 func (o *Orca) findWorkspace(ctx context.Context, env, repo, name string) (string, error) {
@@ -211,7 +212,15 @@ func (o *Orca) Stop(ctx context.Context, s wire.SessionRef) error {
 	return err
 }
 
-func (o *Orca) Send(ctx context.Context, s wire.SessionRef, text string) error {
+// Send types the text into the terminal. Orca has no permission prompts, so a permission answer fails.
+func (o *Orca) Send(ctx context.Context, p wire.SendPayload) error {
+	if p.Permission != nil {
+		return errors.New("The orca runtime has no permission prompts. Answer the agent in its terminal.")
+	}
+	return o.send(ctx, p.Session, p.Text)
+}
+
+func (o *Orca) send(ctx context.Context, s wire.SessionRef, text string) error {
 	_, err := o.call(ctx, sessionEnv(s), 30*time.Second, "terminal", "send", "--terminal", s.ID, "--text", text, "--enter", "--wait-submit", "15")
 	return err
 }
