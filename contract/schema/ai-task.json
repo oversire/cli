@@ -9,7 +9,7 @@
     "schema": { "const": 1 },
     "id": { "type": "string", "minLength": 1 },
     "kind": {
-      "description": "Open set: ping, triage, failureReason, digest, changeSummary, draft, tidy, check, order, sessionSummary, question.",
+      "description": "Open set: ping, triage, failureReason, digest, changeSummary, draft, tidy, check, order, sessionSummary, question, itemSummary.",
       "type": "string"
     },
     "subject": { "$ref": "refs.json#/$defs/SubjectRef" },
