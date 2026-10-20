@@ -41,6 +41,8 @@ func (l List) Check(o wire.WorkOrder) error {
 		return l.checkEnvironment(p.Session.Workspace.Account.ID)
 	case wire.SendPayload:
 		return l.checkEnvironment(p.Session.Workspace.Account.ID)
+	case wire.HistoryPayload:
+		return l.checkEnvironment(p.Session.Workspace.Account.ID)
 	}
 	return fmt.Errorf("The allow list does not know this order.")
 }

@@ -32,6 +32,9 @@ Usage:
   oversire-runner status [--json]                         show the state
   oversire-runner install [--keep-awake]                  start run as a service at login
   oversire-runner uninstall                               remove the service
+  oversire-runner digest --harness claude --session <id or file> [--markers]
+                         [--source S] [--earlier N] [--full N] [--max-chars N]
+                                                          print the history digest of a session
   oversire-runner version                                 show the version
 `
 
@@ -42,6 +45,10 @@ type exitError struct {
 }
 
 func (e *exitError) Error() string { return e.err.Error() }
+func (e *exitError) Unwrap() error { return e.err }
+
+// errSilent ends the program without a message. The command printed its own.
+var errSilent = errors.New("")
 
 type cli struct {
 	paths   config.Paths
@@ -51,12 +58,17 @@ type cli struct {
 	secrets *secret.Store
 	service *service.Manager
 	exe     string
+	home    string
 }
 
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Fprint(os.Stderr, usage)
 		os.Exit(2)
+	}
+	if os.Args[1] == "digest" {
+		// digest also runs on hosts without a runner setup, so it makes no config folder.
+		exit(digestCLI().digest(os.Args[2:]))
 	}
 	c, err := newCLI()
 	if err != nil {
@@ -85,14 +97,26 @@ func main() {
 	default:
 		err = &exitError{2, fmt.Errorf("unknown command %q\n\n%s", os.Args[1], usage)}
 	}
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "oversire-runner:", err)
-		var e *exitError
-		if errors.As(err, &e) {
-			os.Exit(e.code)
-		}
-		os.Exit(1)
+	exit(err)
+}
+
+func exit(err error) {
+	if err == nil {
+		os.Exit(0)
 	}
+	if !errors.Is(err, errSilent) {
+		fmt.Fprintln(os.Stderr, "oversire-runner:", err)
+	}
+	var e *exitError
+	if errors.As(err, &e) {
+		os.Exit(e.code)
+	}
+	os.Exit(1)
+}
+
+func digestCLI() *cli {
+	home, _ := os.UserHomeDir()
+	return &cli{out: os.Stdout, home: home}
 }
 
 func newCLI() (*cli, error) {
@@ -124,6 +148,7 @@ func newCLI() (*cli, error) {
 		secrets: secret.New(run, goruntime.GOOS, paths.Token(), exec.LookPath),
 		service: service.NewManager(goruntime.GOOS, home, os.Getuid(), exe, run),
 		exe:     exe,
+		home:    home,
 	}, nil
 }
 

@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -21,6 +22,7 @@ import (
 
 	agentwire "github.com/trebi-ai/agent-wire"
 
+	"github.com/oversire/runner/digest"
 	"github.com/oversire/runner/runtime"
 	"github.com/oversire/runner/wire"
 )
@@ -79,6 +81,8 @@ type Runtime struct {
 	slots     *Slots
 	report    Reporter
 	now       func() time.Time
+	// digests gives the transcript reader of a harness.
+	digests func(harness string) (digest.Reader, error)
 
 	mu       sync.Mutex
 	sessions map[string]*session
@@ -92,7 +96,7 @@ func New(opts Options, agents Harnesses, git Runner, report Reporter) *Runtime {
 		opts.PermissionTimeout = DefaultPermissionTimeout
 	}
 	return &Runtime{
-		opts: opts, agents: agents, report: report, now: time.Now,
+		opts: opts, agents: agents, report: report, now: time.Now, digests: digest.ForUser,
 		worktrees: NewWorktrees(filepath.Join(opts.DataDir, "worktrees"), git),
 		slots:     NewSlots(opts.Slots),
 		sessions:  map[string]*session{},
@@ -203,6 +207,33 @@ func (rt *Runtime) Send(ctx context.Context, p wire.SendPayload) error {
 	return s.say(ctx, p.Text)
 }
 
+// History reads the transcript of the harness session. After a restart of the runner it reads the session file.
+func (rt *Runtime) History(_ context.Context, ref wire.SessionRef, b wire.HistoryBudget) (wire.SessionDigest, error) {
+	var m sessionMeta
+	s, err := rt.session(ref)
+	if err == nil {
+		s.mu.Lock()
+		m = sessionMeta{Agent: s.req.Agent, HarnessSession: s.harnessID}
+		s.mu.Unlock()
+	} else if !sessionID.MatchString(ref.ID) {
+		return wire.SessionDigest{}, err
+	} else if data, rerr := os.ReadFile(rt.metaPath(ref.ID)); rerr != nil || json.Unmarshal(data, &m) != nil {
+		return wire.SessionDigest{}, err
+	}
+	if m.HarnessSession == "" {
+		return wire.SessionDigest{}, fmt.Errorf("The session %s has no %s session id yet.", ref.ID, m.Agent)
+	}
+	r, err := rt.digests(m.Agent)
+	if err != nil {
+		return wire.SessionDigest{}, err
+	}
+	d, err := r.Digest(m.HarnessSession, &b, wire.DigestFromRunner)
+	if errors.Is(err, digest.ErrNoSession) {
+		return d, fmt.Errorf("The runner found no %s transcript for the session %s (%s).", m.Agent, ref.ID, m.HarnessSession)
+	}
+	return d, err
+}
+
 // Close stops all sessions. The worktrees stay.
 func (rt *Runtime) Close(ctx context.Context) {
 	rt.mu.Lock()
@@ -244,6 +275,16 @@ func (rt *Runtime) logPath(id string) string {
 	return filepath.Join(rt.opts.DataDir, "sessions", id+".log")
 }
 
+func (rt *Runtime) metaPath(id string) string {
+	return filepath.Join(rt.opts.DataDir, "sessions", id+".json")
+}
+
+// sessionMeta lets History find the harness session after a restart of the runner.
+type sessionMeta struct {
+	Agent          string `json:"agent"`
+	HarnessSession string `json:"harnessSession"`
+}
+
 type session struct {
 	id     string
 	rt     *Runtime
@@ -264,6 +305,8 @@ type session struct {
 	failure     string
 	stopped     bool
 	permissions []*openPermission
+	// harnessID is the session id of the harness, for History.
+	harnessID string
 
 	// scan keeps one paths scan at a time. lastPaths is the set of the last report.
 	scan      sync.Mutex
@@ -327,6 +370,10 @@ func (s *session) instructions() string {
 func (s *session) handle(ev agentwire.Event) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if ev.SessionID != "" && ev.SessionID != s.harnessID {
+		s.harnessID = ev.SessionID
+		s.saveMeta()
+	}
 	if ev.Type == agentwire.EventAssistant && ev.Delta {
 		s.partial += ev.Text
 		return
@@ -376,6 +423,12 @@ func (s *session) handle(ev agentwire.Event) {
 		}
 		s.finish(reason)
 	}
+}
+
+// saveMeta writes the session file. Call it with s.mu held.
+func (s *session) saveMeta() {
+	data, _ := json.Marshal(sessionMeta{Agent: s.req.Agent, HarnessSession: s.harnessID})
+	_ = os.WriteFile(s.rt.metaPath(s.id), data, 0o600)
 }
 
 // say1 keeps one assistant text block.

@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/oversire/runner/digest"
 	"github.com/oversire/runner/runtime"
 	"github.com/oversire/runner/wire"
 )
@@ -287,5 +289,49 @@ func TestAgentCommand(t *testing.T) {
 	}
 	if got := AgentCommand("codex", "X-1"); got != "codex" {
 		t.Fatal(got)
+	}
+}
+
+func TestHistory(t *testing.T) {
+	o, r := setup()
+	o.digests = func(h string) (digest.Reader, error) { return digest.ForHarness(h, t.TempDir()) }
+	file, err := filepath.Abs("../../contract/fixtures/session-digest/claude/basic.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.on("terminal show", `{"ok":true,"result":{"terminal":{"handle":"h1","title":"✳ ENG-4","worktreePath":"/w/eng-4","agentIdentity":"claude"}}}`)
+	r.on("search --query", `{"ok":true,"result":{"kind":"results","hits":[`+
+		`{"agent":"claude","sessionId":"x","title":"Other","source":{"presence":"present","filePath":"/nope.jsonl"}},`+
+		`{"agent":"claude","sessionId":"y","title":"ENG-4","source":{"presence":"present","filePath":"`+file+`"}}]}}`)
+	ref := wire.SessionRef{Workspace: wire.WorkspaceRef{Account: wire.AccountID{Provider: ID, ID: "local"}, ID: "c1"}, ID: "h1"}
+	d, err := o.History(context.Background(), ref, wire.NewHistoryBudget(12, 3, 4000))
+	if err != nil || d.Source != wire.DigestFromRunner || d.Turns == 0 {
+		t.Fatal(d, err)
+	}
+	want := []string{"search", "--query", "ENG-4", "--agent", "claude", "--path", "/w/eng-4", "--sort", "newest", "--limit", "100", "--json"}
+	if got := r.args("search --query"); len(got) != 1 || !slices.Equal(got[0], want) {
+		t.Fatalf("search args %q", got)
+	}
+}
+
+func TestHistoryFailures(t *testing.T) {
+	ref := wire.SessionRef{Workspace: wire.WorkspaceRef{Account: wire.AccountID{Provider: ID, ID: "mbp"}, ID: "c1"}, ID: "h1"}
+	cases := map[string]struct{ show, search, want string }{
+		"no agent":    {`{"ok":true,"result":{"terminal":{"title":"ENG-4","worktreePath":"/w","agentIdentity":""}}}`, "", "knows no agent"},
+		"codex":       {`{"ok":true,"result":{"terminal":{"title":"ENG-4","worktreePath":"/w","agentIdentity":"codex"}}}`, "", `harness "codex"`},
+		"no match":    {`{"ok":true,"result":{"terminal":{"title":"ENG-4","worktreePath":"/w","agentIdentity":"claude"}}}`, `{"ok":true,"result":{"hits":[{"title":"ENG-5","source":{"filePath":"/x"}}]}}`, "found no claude session"},
+		"remote path": {`{"ok":true,"result":{"terminal":{"title":"ENG-4","worktreePath":"/w","agentIdentity":"claude"}}}`, `{"ok":true,"result":{"hits":[{"title":"ENG-4","source":{}}]}}`, "only local transcripts"},
+	}
+	for name, c := range cases {
+		o, r := setup()
+		o.digests = func(h string) (digest.Reader, error) { return digest.ForHarness(h, t.TempDir()) }
+		r.on("terminal show", c.show)
+		r.on("search --query", c.search)
+		if _, err := o.History(context.Background(), ref, wire.HistoryBudget{}); err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: %v", name, err)
+		}
+		if name == "no match" && !slices.Contains(r.calls[0], "mbp") {
+			t.Errorf("no environment in %q", r.calls[0])
+		}
 	}
 }

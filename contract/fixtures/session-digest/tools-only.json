@@ -1,0 +1,20 @@
+{
+  "harness": "claude",
+  "sessionId": "5b6e0f3a-1c2d-4e5f-8a9b-0c1d2e3f4a5b",
+  "source": "file",
+  "turns": 2,
+  "earlier": [],
+  "last": [
+    {
+      "prompt": "run the tests",
+      "text": "All 412 tests pass.",
+      "tools": 1
+    },
+    {
+      "prompt": "what is left?",
+      "text": "Only the manual check of Tell the agent is left. You must do it on the Mac.",
+      "tools": 0
+    }
+  ],
+  "truncated": false
+}

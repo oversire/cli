@@ -1,0 +1,20 @@
+{
+  "harness": "claude",
+  "sessionId": "5b6e0f3a-1c2d-4e5f-8a9b-0c1d2e3f4a5b",
+  "source": "file",
+  "turns": 2,
+  "earlier": [],
+  "last": [
+    {
+      "prompt": "deploy the cloud worker",
+      "text": "Deployed version 42. The health check gives 200.\n\nI saw the task notice. Nothing else changed.",
+      "tools": 1
+    },
+    {
+      "prompt": "<pasted_content id=\"a1\">\nlog line\n</pasted_content>\nwhy does this fail?",
+      "text": "The token expired. Run the login again.",
+      "tools": 0
+    }
+  ],
+  "truncated": false
+}

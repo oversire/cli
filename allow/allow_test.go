@@ -86,6 +86,7 @@ func TestOversireRuntime(t *testing.T) {
 		wire.StopPayload{Session: s},
 		wire.ReadPayload{Session: s, Lines: 4},
 		wire.SendPayload{Session: s, Permission: &wire.PermissionAnswer{ID: "p-1", Allow: true}},
+		wire.HistoryPayload{Session: s},
 	} {
 		if err := l.Check(wire.WorkOrder{Runtime: "oversire", Payload: p}); err != nil {
 			t.Errorf("%s: %v", p.Op(), err)
@@ -98,6 +99,7 @@ func TestSessionOrders(t *testing.T) {
 		wire.StopPayload{Session: session("mbp")},
 		wire.ReadPayload{Session: session("local"), Lines: 4},
 		wire.SendPayload{Session: session("mbp"), Text: "go"},
+		wire.HistoryPayload{Session: session("local")},
 	} {
 		if err := list.Check(wire.WorkOrder{Runtime: "orca", Payload: p}); err != nil {
 			t.Errorf("%s: %v", p.Op(), err)
@@ -106,6 +108,9 @@ func TestSessionOrders(t *testing.T) {
 		if err := list.Check(bad); err == nil {
 			t.Errorf("%s: unknown environment passed", p.Op())
 		}
+	}
+	if err := list.Check(wire.WorkOrder{Runtime: "orca", Payload: wire.HistoryPayload{Session: session("studio")}}); err == nil {
+		t.Error("history: unknown environment passed")
 	}
 }
 

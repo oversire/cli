@@ -203,3 +203,17 @@ func TestNewItemPaths(t *testing.T) {
 		t.Errorf("paths %v", p.Paths[:3])
 	}
 }
+
+func TestHistoryFixture(t *testing.T) {
+	var o WorkOrder
+	if err := Decode(fixtures(t, "work-order")["history-done.json"], &o); err != nil {
+		t.Fatal(err)
+	}
+	p, ok := o.Payload.(HistoryPayload)
+	if e, f, c := p.Budget.Values(); !ok || e != 12 || f != 3 || c != 4000 {
+		t.Fatalf("%#v", o.Payload)
+	}
+	if d := o.Result.Digest; d == nil || d.Source != DigestFromRunner || len(d.Last) != 3 || d.Earlier == nil {
+		t.Fatalf("%#v", o.Result)
+	}
+}

@@ -1,0 +1,54 @@
+{
+  "runner": "runner-mini",
+  "runtime": "oversire",
+  "suggestion": "s-start",
+  "createdAt": "2026-10-01T09:10:00Z",
+  "expiresAt": "2026-10-01T09:20:00Z",
+  "id": "o9",
+  "op": "sessionHistory",
+  "payload": {
+    "session": {
+      "workspace": {
+        "account": {
+          "provider": "oversire",
+          "id": "local"
+        },
+        "id": "app/APP-3"
+      },
+      "id": "s-7f3a"
+    },
+    "budget": {
+      "earlier": 12,
+      "full": 3,
+      "maxChars": 4000
+    }
+  },
+  "state": "done",
+  "result": {
+    "digest": {
+      "harness": "claude",
+      "sessionId": "5b6e0f3a-1c2d-4e5f-8a9b-0c1d2e3f4a5b",
+      "source": "runner",
+      "turns": 3,
+      "earlier": [],
+      "last": [
+        {
+          "prompt": "work on OVERSIRE-200: add a retry to the sync client",
+          "text": "I read the sync client first.\n\nAdded the retry with 3 tries and a backoff. The tests pass.",
+          "tools": 1
+        },
+        {
+          "prompt": "also log each retry",
+          "text": "Each retry now writes one log line.",
+          "tools": 1
+        },
+        {
+          "prompt": "commit it",
+          "text": "Committed as a1b2c3d on branch oversire-200.",
+          "tools": 1
+        }
+      ],
+      "truncated": false
+    }
+  }
+}

@@ -12,7 +12,9 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 
+	"github.com/oversire/runner/digest"
 	"github.com/oversire/runner/runtime"
 	"github.com/oversire/runner/wire"
 )
@@ -49,10 +51,12 @@ type Orca struct {
 	exe       string
 	run       Runner
 	shellWait time.Duration
+	// digests gives the transcript reader of a harness.
+	digests func(harness string) (digest.Reader, error)
 }
 
 func New(exe string, run Runner) *Orca {
-	return &Orca{exe: exe, run: run, shellWait: 300 * time.Millisecond}
+	return &Orca{exe: exe, run: run, shellWait: 300 * time.Millisecond, digests: digest.ForUser}
 }
 
 func (o *Orca) ID() string { return ID }
@@ -273,6 +277,59 @@ func (o *Orca) Read(ctx context.Context, s wire.SessionRef, lines int) ([]string
 		out = out[len(out)-lines:]
 	}
 	return out, nil
+}
+
+// History finds the transcript of the agent in the terminal through orca search, then reads it.
+// The session is the newest one of the agent at the workspace path with the terminal title as its name.
+// Orca gives the transcript path only for a session on this machine.
+func (o *Orca) History(ctx context.Context, s wire.SessionRef, b wire.HistoryBudget) (wire.SessionDigest, error) {
+	var none wire.SessionDigest
+	env := sessionEnv(s)
+	var shown struct {
+		Terminal struct {
+			Title         string `json:"title"`
+			WorktreePath  string `json:"worktreePath"`
+			AgentIdentity string `json:"agentIdentity"`
+		} `json:"terminal"`
+	}
+	if err := o.callInto(ctx, env, 20*time.Second, &shown, "terminal", "show", "--terminal", s.ID); err != nil {
+		return none, err
+	}
+	t := shown.Terminal
+	if t.AgentIdentity == "" {
+		return none, fmt.Errorf("Orca knows no agent in the terminal %s.", s.ID)
+	}
+	reader, err := o.digests(t.AgentIdentity)
+	if err != nil {
+		return none, err
+	}
+	// The agent puts a status glyph in front of the session name.
+	name := strings.TrimLeftFunc(t.Title, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
+	if name == "" || t.WorktreePath == "" {
+		return none, fmt.Errorf("Orca gives no session name or path for the terminal %s.", s.ID)
+	}
+	var found struct {
+		Hits []struct {
+			Title  string `json:"title"`
+			Source struct {
+				FilePath string `json:"filePath"`
+			} `json:"source"`
+		} `json:"hits"`
+	}
+	if err := o.callInto(ctx, env, 30*time.Second, &found, "search", "--query", name, "--agent", t.AgentIdentity,
+		"--path", t.WorktreePath, "--sort", "newest", "--limit", "100"); err != nil {
+		return none, err
+	}
+	for _, h := range found.Hits {
+		if !strings.EqualFold(strings.TrimSpace(h.Title), name) {
+			continue
+		}
+		if h.Source.FilePath == "" {
+			return none, fmt.Errorf("Orca gives no transcript path for the session %q in the environment %s. The runner reads only local transcripts.", name, env)
+		}
+		return reader.Digest(h.Source.FilePath, &b, wire.DigestFromRunner)
+	}
+	return none, fmt.Errorf("Orca found no %s session %q at %s.", t.AgentIdentity, name, t.WorktreePath)
 }
 
 func environment(env string) string {

@@ -13,6 +13,13 @@ import (
 // MaxReadLines caps the lines of one sessionRead.
 const MaxReadLines = 200
 
+// The caps of the budget of one sessionHistory. They keep a result far below the read limit of the hub socket.
+const (
+	MaxHistoryEarlier = 50
+	MaxHistoryFull    = 10
+	MaxHistoryChars   = 20000
+)
+
 // Order names the sessionStart order. A runtime that queues a session fails it at ExpiresAt.
 // A zero ExpiresAt has no limit.
 type Order struct {
@@ -28,6 +35,8 @@ type Runtime interface {
 	Read(ctx context.Context, s wire.SessionRef, lines int) ([]string, error)
 	// Send gives the text, or the permission answer, of p to the session p.Session.
 	Send(ctx context.Context, p wire.SendPayload) error
+	// History reads the history of the harness session behind s.
+	History(ctx context.Context, s wire.SessionRef, b wire.HistoryBudget) (wire.SessionDigest, error)
 }
 
 type Registry struct{ byID map[string]Runtime }
@@ -81,6 +90,14 @@ func (r *Registry) Do(ctx context.Context, o wire.WorkOrder) (*wire.WorkOrderRes
 		return &wire.WorkOrderResult{Lines: lines}, nil
 	case wire.SendPayload:
 		return &wire.WorkOrderResult{}, rt.Send(ctx, p)
+	case wire.HistoryPayload:
+		earlier, full, chars := p.Budget.Values()
+		b := wire.NewHistoryBudget(min(max(earlier, 0), MaxHistoryEarlier), min(max(full, 0), MaxHistoryFull), min(max(chars, 1), MaxHistoryChars))
+		d, err := rt.History(ctx, p.Session, b)
+		if err != nil {
+			return nil, err
+		}
+		return &wire.WorkOrderResult{Digest: &d}, nil
 	}
 	return nil, fmt.Errorf("This runner does not know the op of order %s.", o.ID)
 }

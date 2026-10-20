@@ -16,6 +16,8 @@ const (
 	OpSessionStop  Op = "sessionStop"
 	OpSessionRead  Op = "sessionRead"
 	OpSessionSend  Op = "sessionSend"
+	// OpSessionHistory reads the history of a session as a SessionDigest.
+	OpSessionHistory Op = "sessionHistory"
 )
 
 type State string
@@ -31,7 +33,7 @@ const (
 	StateExpired State = "expired"
 )
 
-// Payload is the payload of one op: LaunchRequest, StopPayload, ReadPayload or SendPayload.
+// Payload is the payload of one op: LaunchRequest, StopPayload, ReadPayload, SendPayload or HistoryPayload.
 type Payload interface{ Op() Op }
 
 type StopPayload struct {
@@ -62,9 +64,10 @@ func (ReadPayload) Op() Op   { return OpSessionRead }
 func (SendPayload) Op() Op   { return OpSessionSend }
 
 type WorkOrderResult struct {
-	Session *SessionRef `json:"session,omitempty"`
-	Lines   []string    `json:"lines,omitempty"`
-	Error   string      `json:"error,omitempty"`
+	Session *SessionRef    `json:"session,omitempty"`
+	Lines   []string       `json:"lines,omitempty"`
+	Digest  *SessionDigest `json:"digest,omitempty"`
+	Error   string         `json:"error,omitempty"`
 }
 
 // WorkOrderHold says why the hub holds an order.
@@ -141,6 +144,10 @@ func (o *WorkOrder) UnmarshalJSON(data []byte) error {
 		p = v
 	case OpSessionSend:
 		var v SendPayload
+		err = Decode(j.Payload, &v)
+		p = v
+	case OpSessionHistory:
+		var v HistoryPayload
 		err = Decode(j.Payload, &v)
 		p = v
 	default:

@@ -6,7 +6,7 @@ The runner dials out. The hub never connects in. There is no shell order.
 
 There are two runtimes:
 
-- `orca` starts agent sessions in Orca workspaces, reads them, sends text to them and closes them. The runner has it when the Orca CLI is on the machine.
+- `orca` starts agent sessions in Orca workspaces, reads them, sends text to them and closes them. The runner has it when the Orca CLI is on the machine. For `sessionHistory`, the runner finds the transcript of the agent through `orca search`. See [History](#history).
 - `oversire` runs agent sessions without Orca. See [runtime:oversire](#runtimeoversire).
 
 ## Install
@@ -88,11 +88,24 @@ It uses the CLI and the login that are on the machine.
 | Slots | At most `maxSessions` sessions run at the same time (default 2). A new session waits in `queued`. If the order expires before a slot is free, the session is `failed`. |
 | Permissions | The agent asks before it uses a tool. The session goes to `waitingPermission` with a prompt. Answer it with `sessionSend` and a `permission` answer. With no answer in 10 minutes, the runner denies the request. |
 | Transcript | `sessionRead` gives the last lines of the transcript. The full transcript is in `<data>/sessions/<session id>.log`. |
+| History | `sessionHistory` reads the harness transcript of the session as a digest. The runner keeps the harness session id in `<data>/sessions/<session id>.json`, so the order also works after a restart. See [History](#history). |
 | Reports | Each change of state, summary or permission prompt goes to the hub as a `session` message. Without a connection, the runner keeps the latest state and sends it after the next welcome. |
 
 The data folder is `~/.local/share/oversire-runner` (macOS and Linux) or `%LocalAppData%\oversire-runner` (Windows).
 With `OVERSIRE_RUNNER_HOME`, it is `$OVERSIRE_RUNNER_HOME/data`.
 To change the data folder or the number of slots, set `dataDir` or `maxSessions` in `config.json`. `pair` keeps these fields.
+
+## History
+
+A `sessionHistory` order gives a `SessionDigest` (`contract/schema/session-digest.json`): the earlier turns in short, and the last turns with the full agent text.
+The runner reads the transcript file of the harness on this machine. Only the `claude` harness is supported. For other harnesses, the order fails with the reason.
+The transcript of a Claude session is the newest `~/.claude/projects/*/<session id>.jsonl`.
+The budget of the order has caps: 50 earlier turns, 10 last turns and 20000 characters for each last turn.
+
+| Runtime | How the runner finds the transcript |
+|---|---|
+| `oversire` | agent-wire gives the harness session id at the start of the session. |
+| `orca` | `orca terminal show` gives the agent, the workspace path and the title of the terminal. Then `orca search` gives the newest session of the agent at that path with the title as its name, and its transcript path. Orca gives the path only for a session on this machine. For a paired environment, the order fails. |
 
 ## Commands
 
@@ -104,7 +117,19 @@ To change the data folder or the number of slots, set `dataDir` or `maxSessions`
 | `oversire-runner status [--json]` | Show the version, the pairing, the connection, the service and the runtimes. |
 | `oversire-runner install [--keep-awake]` | Install and start the service. |
 | `oversire-runner uninstall` | Stop and remove the service. |
+| `oversire-runner digest --harness claude --session <id or file> [--markers] [--source S] [--earlier N] [--full N] [--max-chars N]` | Print the digest of a session as JSON. See below. |
 | `oversire-runner version` | Show the version. |
+
+`digest` reads a session id (the newest transcript with that id) or the path of a transcript file.
+It gives the same JSON as `oversire/scripts/digest.py`, and it needs no Python and no pairing.
+The defaults are `--source file`, `--earlier 12`, `--full 3` and `--max-chars 4000`.
+With `--markers`, it prints `OVERSIRE-DIGEST-BEGIN`, the gzip and base64 of the JSON in lines of 76 characters, then `OVERSIRE-DIGEST-END`.
+On an error with `--markers`, it prints `OVERSIRE-DIGEST-ERROR <message>` and the exit code is 1.
+
+```bash
+oversire-runner digest --harness claude --session 5b6e0f3a-1c2d-4e5f-8a9b-0c1d2e3f4a5b
+oversire-runner digest --session ~/.claude/projects/-Users-ada-app/5b6e0f3a-1c2d-4e5f-8a9b-0c1d2e3f4a5b.jsonl --markers
+```
 
 `run` writes `state.json` in the config folder. `status` reads it.
 `status --json` prints:
@@ -138,7 +163,7 @@ On macOS, `install --keep-awake` keeps the Mac awake while the runner runs (`caf
 ## Security model
 
 - **Dial-out only.** The runner opens the connection. It needs no open port.
-- **Typed orders.** An order is one of `sessionStart`, `sessionStop`, `sessionRead` and `sessionSend`. There is no shell order. The `oversire` runtime asks the hub before an agent uses a tool, and denies it when no answer comes. An order with a field that the contract does not know fails.
+- **Typed orders.** An order is one of `sessionStart`, `sessionStop`, `sessionRead`, `sessionSend` and `sessionHistory`. There is no shell order. The `oversire` runtime asks the hub before an agent uses a tool, and denies it when no answer comes. An order with a field that the contract does not know fails.
 - **Checked start command.** A `sessionStart` order can carry `command`, the start command that the user set in OverSire (Settings › Runtime). The `orca` runtime types it into the terminal in place of its default. It accepts the command only if the first word is the agent of the order (or a path that ends in `/<agent>`), and the text has no shell operator (`;` `|` `&` `` ` `` `$(` `>` `<` or a newline). Else the order fails with the reason. An empty field gives the default command. The `oversire` runtime starts the agent over agent-wire, without a command line, and ignores the field.
 - **Local allow list.** The machine owner decides which runtimes, repos, agents and environments the hub can use. The hub cannot change the list.
 - **Expiry.** Each order has an expiry time. The runner never does an expired order.
@@ -160,6 +185,7 @@ Set `OVERSIRE_RUNNER_HOME` to use another config folder, for example for a test 
 `contract/` is a copy of `Contract/` from [oversire/oversire](https://github.com/oversire/oversire): `schema/`, `fixtures/` and `prompts/`.
 Do not edit it here. Change the contract in the app first, then copy it again and run the tests.
 The `wire` tests decode and encode each fixture of `work-order/`, `runner-message/`, `runner-session/` and `launch-request/`.
+The `digest` tests read each `session-digest/claude/<case>.jsonl` and compare the digest with `session-digest/<case>.json`.
 
 The layout:
 
@@ -169,6 +195,7 @@ The layout:
 | `wire` | The Go types of the wire contract. |
 | `hub` | The WebSocket client and the journal of finished orders. |
 | `runtime` | The `Runtime` interface and the registry. `runtime/orca` is the Orca driver. `runtime/oversire` is the agent-wire driver. |
+| `digest` | The transcript readers that make a `SessionDigest`. |
 | `allow` | The allow list. |
 | `config` | The config folder, `config.json` and `state.json`. |
 | `secret` | The token storage. |

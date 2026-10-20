@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oversire.dev/contract/session-digest.json",
+  "title": "OverSire session digest",
+  "description": "A short record of the history of one coding agent session. The Status job reads it. Readers: AgentBinder TranscriptReader (Swift), oversire-runner digest (Go) and oversire/scripts/digest.py. All three give the same digest for the cases in fixtures/session-digest (input in fixtures/session-digest/<harness>/<case>.jsonl). Lengths count Unicode code points.",
+  "x-oversire-schema": 1,
+  "$defs": {
+    "HistoryBudget": {
+      "description": "How much of the history a reader keeps. A missing field takes its default.",
+      "type": "object",
+      "properties": {
+        "earlier": { "description": "The number of earlier turns, before the last ones.", "type": "integer", "minimum": 0, "default": 12 },
+        "full": { "description": "The number of last turns with the full agent text.", "type": "integer", "minimum": 0, "default": 3 },
+        "maxChars": { "description": "The maximum length of the agent text of one last turn. The reader keeps the end of the text.", "type": "integer", "minimum": 1, "default": 4000 }
+      },
+      "additionalProperties": false
+    },
+    "EarlierTurn": {
+      "type": "object",
+      "properties": {
+        "prompt": { "description": "The first 120 characters of the human prompt.", "type": "string", "maxLength": 120 },
+        "closing": { "description": "The first 700 characters of the last text block of the agent in the turn.", "type": "string", "maxLength": 700 },
+        "interrupted": { "description": "The developer stopped the turn. Missing means false.", "type": "boolean" }
+      },
+      "required": ["prompt", "closing"],
+      "additionalProperties": false
+    },
+    "LastTurn": {
+      "type": "object",
+      "properties": {
+        "prompt": { "description": "The first 1500 characters of the human prompt.", "type": "string", "maxLength": 1500 },
+        "text": { "description": "The text blocks of the agent, joined with an empty line. Tool input and output are left out.", "type": "string" },
+        "tools": { "description": "The number of tool calls in the turn.", "type": "integer", "minimum": 0 },
+        "interrupted": { "description": "The developer stopped the turn. Missing means false.", "type": "boolean" }
+      },
+      "required": ["prompt", "text", "tools"],
+      "additionalProperties": false
+    },
+    "SessionDigest": {
+      "description": "A turn is a human prompt and the agent output until the next human prompt. The reader skips meta lines, sidechain lines, compaction summaries, tool results and notices (a prompt that starts with '<', but not '<pasted'). A prompt that starts with '[Request interrupted' marks the turn before it. A turn without agent text is left out.",
+      "type": "object",
+      "properties": {
+        "harness": { "description": "The AgentBinder harness, for example claude.", "type": "string", "minLength": 1 },
+        "sessionId": { "description": "The harness session id.", "type": "string", "minLength": 1 },
+        "source": { "description": "Where the digest comes from. A reader that does not know a value keeps it.", "enum": ["file", "orca-terminal", "runner"] },
+        "turns": { "description": "The number of turns in the session.", "type": "integer", "minimum": 0 },
+        "earlier": { "description": "The earlier turns, oldest first.", "type": "array", "items": { "$ref": "#/$defs/EarlierTurn" } },
+        "last": { "description": "The last turns, oldest first.", "type": "array", "items": { "$ref": "#/$defs/LastTurn" } },
+        "truncated": { "description": "The reader left out turns or cut the text of a last turn.", "type": "boolean" }
+      },
+      "required": ["harness", "sessionId", "source", "turns", "earlier", "last", "truncated"],
+      "additionalProperties": false
+    }
+  }
+}

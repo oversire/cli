@@ -28,6 +28,11 @@
           "type": "object",
           "properties": { "op": { "const": "sessionSend" }, "payload": { "$ref": "#/$defs/SendPayload" } },
           "required": ["op", "payload"]
+        },
+        {
+          "type": "object",
+          "properties": { "op": { "const": "sessionHistory" }, "payload": { "$ref": "#/$defs/HistoryPayload" } },
+          "required": ["op", "payload"]
         }
       ]
     },
@@ -44,6 +49,16 @@
         "lines": { "description": "The number of last lines. The runner caps it.", "type": "integer", "minimum": 1 }
       },
       "required": ["session", "lines"],
+      "additionalProperties": false
+    },
+    "HistoryPayload": {
+      "description": "Read the history of a session as a SessionDigest. A runner that does not know the op fails the order.",
+      "type": "object",
+      "properties": {
+        "session": { "$ref": "refs.json#/$defs/SessionRef" },
+        "budget": { "$ref": "session-digest.json#/$defs/HistoryBudget" }
+      },
+      "required": ["session"],
       "additionalProperties": false
     },
     "SendPayload": {
@@ -107,7 +122,7 @@
       "properties": {
         "runtime": { "description": "The AgentRuntime provider id, for example orca or oversire.", "$ref": "refs.json#/$defs/ProviderID" },
         "runner": { "description": "The runner device. Missing: the hub picks a runner with the runtime.", "type": "string" },
-        "op": { "enum": ["sessionStart", "sessionStop", "sessionRead", "sessionSend"] },
+        "op": { "enum": ["sessionStart", "sessionStop", "sessionRead", "sessionSend", "sessionHistory"] },
         "payload": { "type": "object" }
       },
       "allOf": [{ "$ref": "#/$defs/SessionOrder" }],
@@ -134,6 +149,7 @@
       "properties": {
         "session": { "description": "The session that sessionStart made.", "$ref": "refs.json#/$defs/SessionRef" },
         "lines": { "description": "The lines that sessionRead read.", "type": "array", "items": { "type": "string" } },
+        "digest": { "description": "The digest that sessionHistory read.", "$ref": "session-digest.json#/$defs/SessionDigest" },
         "error": { "description": "Why the order failed.", "type": "string" }
       },
       "additionalProperties": false
@@ -145,7 +161,7 @@
         "id": { "type": "string", "minLength": 1 },
         "runner": { "description": "The runner device id.", "type": "string", "minLength": 1 },
         "runtime": { "description": "The AgentRuntime provider id, for example orca or oversire.", "$ref": "refs.json#/$defs/ProviderID" },
-        "op": { "enum": ["sessionStart", "sessionStop", "sessionRead", "sessionSend"] },
+        "op": { "enum": ["sessionStart", "sessionStop", "sessionRead", "sessionSend", "sessionHistory"] },
         "payload": { "type": "object" },
         "suggestion": { "description": "The accepted Suggestion id.", "type": "string", "minLength": 1 },
         "createdAt": { "$ref": "#/$defs/Date" },
