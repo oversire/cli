@@ -74,7 +74,11 @@ func (s *session) answer(ctx context.Context, id string, allow bool, reason stri
 func (s *session) showPermission() {
 	if len(s.permissions) == 0 {
 		s.info.Permission = nil
-		s.change(wire.SessionWorking)
+		if s.question != nil {
+			s.change(wire.SessionWaitingInput)
+		} else {
+			s.change(wire.SessionWorking)
+		}
 		return
 	}
 	p := s.permissions[0].prompt

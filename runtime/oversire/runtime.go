@@ -195,7 +195,7 @@ func (rt *Runtime) Read(_ context.Context, ref wire.SessionRef, lines int) ([]st
 	return t.tail(lines), sc.Err()
 }
 
-// Send answers the open permission prompt of p, else gives the text to the agent as a user message.
+// Send answers the open permission prompt or question of p, else gives the text to the agent as a user message.
 func (rt *Runtime) Send(ctx context.Context, p wire.SendPayload) error {
 	s, err := rt.session(p.Session)
 	if err != nil {
@@ -203,6 +203,9 @@ func (rt *Runtime) Send(ctx context.Context, p wire.SendPayload) error {
 	}
 	if p.Permission != nil {
 		return s.answer(ctx, p.Permission.ID, p.Permission.Allow, "")
+	}
+	if p.Answer != nil {
+		return s.answerQuestion(ctx, *p.Answer)
 	}
 	return s.say(ctx, p.Text)
 }
@@ -305,6 +308,9 @@ type session struct {
 	failure     string
 	stopped     bool
 	permissions []*openPermission
+	// question is the open AskUserQuestion request. rounds counts the questions of the session.
+	question *openQuestion
+	rounds   int
 	// harnessID is the session id of the harness, for History.
 	harnessID string
 
@@ -382,6 +388,8 @@ func (s *session) handle(ev agentwire.Event) {
 	switch ev.Type {
 	case agentwire.EventAssistant:
 		s.addText(ev.Text)
+		// The agent went on, for example after an answer in a terminal.
+		s.clearQuestion()
 		if s.info.State == wire.SessionWaitingInput {
 			s.change(wire.SessionWorking)
 		}
@@ -390,9 +398,13 @@ func (s *session) handle(ev agentwire.Event) {
 			s.log.add("· " + ev.Tool.Name + " " + clip(ev.Tool.Input, 200))
 		}
 	case agentwire.EventPermission:
-		if ev.Permission != nil {
-			s.ask(ev.Permission)
+		if ev.Permission == nil {
+			break
 		}
+		if ev.Permission.Tool == askTool && s.askQuestion(ev.Permission) {
+			break
+		}
+		s.ask(ev.Permission)
 	case agentwire.EventResult:
 		text := s.last
 		if text == "" && ev.Result != nil {
@@ -403,6 +415,8 @@ func (s *session) handle(ev agentwire.Event) {
 		if ev.Result != nil && ev.Result.IsError {
 			s.info.Error = ev.Result.Text
 		}
+		s.question = nil
+		s.info.Question = nil
 		if len(s.permissions) == 0 {
 			s.info.State = wire.SessionWaitingInput
 		}
@@ -523,6 +537,8 @@ func (s *session) finish(reason string) {
 	}
 	s.permissions = nil
 	s.info.Permission = nil
+	s.question = nil
+	s.info.Question = nil
 	state := wire.SessionDone
 	if reason != "" {
 		state = wire.SessionFailed

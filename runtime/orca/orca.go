@@ -247,6 +247,9 @@ func (o *Orca) Send(ctx context.Context, p wire.SendPayload) error {
 	if p.Permission != nil {
 		return errors.New("The orca runtime has no permission prompts. Answer the agent in its terminal.")
 	}
+	if p.Answer != nil {
+		return errors.New("The orca runtime has no runner questions. Answer the agent in Orca.")
+	}
 	return o.send(ctx, p.Session, p.Text)
 }
 

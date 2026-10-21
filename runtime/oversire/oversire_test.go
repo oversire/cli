@@ -116,6 +116,12 @@ type fixture struct {
 
 func setup(t *testing.T, script string, opts Options) fixture {
 	t.Helper()
+	return setupWith(t, script, opts, func(aw *agentwire.Runtime) Harnesses { return aw })
+}
+
+// setupWith lets a test wrap the agent-wire runtime.
+func setupWith(t *testing.T, script string, opts Options, wrap func(*agentwire.Runtime) Harnesses) fixture {
+	t.Helper()
 	if goruntime.GOOS == "windows" {
 		t.Skip("the fake harness needs a POSIX sh")
 	}
@@ -126,7 +132,7 @@ func setup(t *testing.T, script string, opts Options) fixture {
 		opts.DataDir = t.TempDir()
 	}
 	f := fixture{rec: &recorder{}, repo: gitRepo(t), data: opts.DataDir}
-	f.rt = New(opts, aw, proc.Local{}, f.rec)
+	f.rt = New(opts, wrap(aw), proc.Local{}, f.rec)
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
