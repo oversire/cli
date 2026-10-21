@@ -122,8 +122,9 @@ func (s *session) answerQuestion(ctx context.Context, a wire.QuestionAnswer) err
 		input[k] = v
 	}
 	input["answers"] = answers
-	if a.Note != "" {
-		input["note"] = a.Note
+	// The tool has no field for one note. It goes with the first question, as the notes of the form.
+	if a.Note != "" && len(oq.texts) > 0 {
+		input["annotations"] = map[string]any{oq.texts[0]: map[string]any{"notes": a.Note}}
 	}
 	updated, err := json.Marshal(input)
 	if err != nil {

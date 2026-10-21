@@ -114,7 +114,7 @@ func TestAskUserQuestion(t *testing.T) {
 	if err := f.rt.Send(ctx, wire.SendPayload{Session: ref, Answer: &wrong}); !errors.Is(err, ErrAnswered) {
 		t.Fatalf("wrong id: %v", err)
 	}
-	a := wire.QuestionAnswer{ID: "q-1", Items: []wire.QuestionAnswerItem{
+	a := wire.QuestionAnswer{ID: "q-1", Note: "Keep it short.", Items: []wire.QuestionAnswerItem{
 		{ID: "q1", Choices: []string{"Exponential"}},
 		{ID: "q2", Choices: []string{"Unit", "Live"}, Other: "and lint"},
 	}}
@@ -133,7 +133,8 @@ func TestAskUserQuestion(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := map[string]any{"Which retry rule?": "Exponential", "Which tests?": "Unit, Live, and lint"}
-	if fmt.Sprint(got["answers"]) != fmt.Sprint(want) || got["questions"] == nil {
+	notes := map[string]any{"Which retry rule?": map[string]any{"notes": "Keep it short."}}
+	if fmt.Sprint(got["answers"]) != fmt.Sprint(want) || fmt.Sprint(got["annotations"]) != fmt.Sprint(notes) || got["questions"] == nil {
 		t.Fatalf("updated input %s", d[0].UpdatedInput)
 	}
 	s = f.rec.wait(t, ref.ID, wire.SessionWaitingInput)
