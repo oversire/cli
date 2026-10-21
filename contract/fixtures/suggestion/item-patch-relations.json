@@ -1,0 +1,55 @@
+{
+  "createdAt": "2026-10-01T09:00:07Z",
+  "expiresAt": "2026-10-08T09:00:07Z",
+  "id": "s-triage-relations",
+  "subject": {
+    "kind": "item",
+    "ref": {
+      "project": {
+        "account": {
+          "provider": "plane",
+          "id": "ocral"
+        },
+        "id": "b1f0c2d4",
+        "key": "TOWERTAIL"
+      },
+      "id": "9a7e",
+      "key": "TOWERTAIL-2",
+      "url": "https://app.plane.so/ocral/browse/TOWERTAIL-2/"
+    }
+  },
+  "kind": "triage",
+  "title": "Set priority to high, blocked by TOWERTAIL-1",
+  "body": "The item reports a crash on login.",
+  "proposal": {
+    "type": "itemPatch",
+    "patch": {
+      "priority": "high",
+      "labels": [
+        "bug"
+      ]
+    },
+    "relations": [
+      {
+        "kind": "blockedBy",
+        "item": {
+          "project": {
+            "account": {
+              "provider": "plane",
+              "id": "ocral"
+            },
+            "id": "b1f0c2d4",
+            "key": "TOWERTAIL"
+          },
+          "id": "8c1d",
+          "key": "TOWERTAIL-1",
+          "url": "https://app.plane.so/ocral/browse/TOWERTAIL-1/"
+        }
+      }
+    ]
+  },
+  "state": "open",
+  "dedupeKey": "item:9a7e|triage|2026-10-01T08:59:00Z",
+  "subjectVersion": "2026-10-01T08:59:00Z",
+  "jobRun": "run-1"
+}

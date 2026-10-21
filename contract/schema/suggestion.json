@@ -11,7 +11,15 @@
       "oneOf": [
         {
           "type": "object",
-          "properties": { "type": { "const": "itemPatch" }, "patch": { "$ref": "actions.json#/$defs/ItemPatch" } },
+          "properties": {
+            "type": { "const": "itemPatch" },
+            "patch": { "$ref": "actions.json#/$defs/ItemPatch" },
+            "relations": {
+              "description": "Relations of the subject to add on accept. Only to items that the job input names. The hub drops none: a cycle fails the accept.",
+              "type": "array",
+              "items": { "$ref": "actions.json#/$defs/ItemRelation" }
+            }
+          },
           "required": ["type", "patch"],
           "additionalProperties": false
         },

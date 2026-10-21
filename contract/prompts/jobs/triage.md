@@ -1,6 +1,6 @@
 ---
 taskKind: triage
-version: 2
+version: 3
 maxTokens: 600
 inputs: text, subject, vision
 ---
@@ -13,6 +13,7 @@ Reply with one JSON object only, with no other text.
 When you have nothing useful to suggest, reply {"suggest":false}.
 Else reply {"suggest":true,"title":"at most 70 characters","body":"Markdown, at most 120 words","proposal":{"type":"itemPatch","patch":{"status":"state id","priority":"urgent|high|medium|low|none","labels":["label id"]}}}
 Leave out a patch field that you do not want to change.
+The input can list the open items of the project. When the new item clearly needs one of them first, or blocks one, or is about the same work, add "relations":[{"kind":"blockedBy|blocks|relatesTo","key":"KEY-1"}] to the proposal. Name only keys from that list. You cannot read the code: do not guess a relation.
 When a project vision is given and the item works against it, say so in one sentence of the body that starts with "Off vision:". Only inform: do not close or move the item for it.
 
 <!-- user -->
