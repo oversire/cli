@@ -1,0 +1,67 @@
+{
+  "id": "s-9c11",
+  "runner": "runner-mini",
+  "session": {
+    "workspace": {
+      "account": {
+        "provider": "oversire",
+        "id": "local"
+      },
+      "id": "towertail-workspace/TOWERTAIL-2"
+    },
+    "id": "s-9c11"
+  },
+  "order": "o1",
+  "agent": "claude",
+  "repo": "/home/ada/src/towertail-workspace",
+  "branch": "towertail-2",
+  "item": {
+    "project": {
+      "account": {
+        "provider": "plane",
+        "id": "ocral"
+      },
+      "id": "b1f0c2d4",
+      "key": "TOWERTAIL"
+    },
+    "id": "9a7e",
+    "key": "TOWERTAIL-2",
+    "url": "https://app.plane.so/ocral/browse/TOWERTAIL-2/"
+  },
+  "state": "waitingInput",
+  "summary": "Read the sync client. Asks which retry rule to use.",
+  "startedAt": "2026-10-01T09:12:00Z",
+  "updatedAt": "2026-10-01T09:40:00Z",
+  "question": {
+    "id": "toolu_01XyZ",
+    "round": 2,
+    "items": [
+      {
+        "id": "q1",
+        "text": "Which tests must run before the merge?",
+        "kind": "multi",
+        "options": [
+          {
+            "label": "Unit"
+          },
+          {
+            "label": "Contract"
+          },
+          {
+            "label": "Live"
+          }
+        ],
+        "allowsOther": true
+      },
+      {
+        "id": "q2",
+        "header": "Name",
+        "text": "What name do you want for the new flag?",
+        "kind": "free",
+        "options": [],
+        "allowsOther": false
+      }
+    ],
+    "askedAt": "2026-10-01T09:42:00Z"
+  }
+}

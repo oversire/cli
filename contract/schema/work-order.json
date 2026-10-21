@@ -65,8 +65,9 @@
       "type": "object",
       "properties": {
         "session": { "$ref": "refs.json#/$defs/SessionRef" },
-        "text": { "description": "A user message. Empty with a permission answer.", "type": "string" },
-        "permission": { "$ref": "#/$defs/PermissionAnswer" }
+        "text": { "description": "A user message. Empty with a permission answer or a question answer.", "type": "string" },
+        "permission": { "$ref": "#/$defs/PermissionAnswer" },
+        "answer": { "$ref": "#/$defs/RunnerAnswer" }
       },
       "required": ["session", "text"],
       "additionalProperties": false
@@ -93,6 +94,63 @@
       "required": ["id", "tool", "text", "expiresAt"],
       "additionalProperties": false
     },
+    "RunnerQuestion": {
+      "description": "An agent asks the user one or more questions and waits. The id is the pending request id of the runner.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "round": { "description": "1 for the first round of questions.", "type": "integer", "minimum": 1 },
+        "items": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/RunnerQuestionItem" } },
+        "askedAt": { "$ref": "#/$defs/Date" }
+      },
+      "required": ["id", "round", "items", "askedAt"],
+      "additionalProperties": false
+    },
+    "RunnerQuestionItem": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "header": { "description": "A short label, for example Schema read.", "type": "string" },
+        "text": { "type": "string", "maxLength": 2000 },
+        "why": { "description": "Why the agent asks.", "type": "string" },
+        "kind": { "enum": ["single", "multi", "free"] },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": { "label": { "type": "string", "minLength": 1 }, "detail": { "type": "string" } },
+            "required": ["label"],
+            "additionalProperties": false
+          }
+        },
+        "allowsOther": { "description": "A free text next to the options.", "type": "boolean" }
+      },
+      "required": ["id", "text", "kind", "options", "allowsOther"],
+      "additionalProperties": false
+    },
+    "RunnerAnswer": {
+      "description": "The answer to the RunnerQuestion of a session.",
+      "type": "object",
+      "properties": {
+        "id": { "description": "The RunnerQuestion id.", "type": "string", "minLength": 1 },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "choices": { "description": "The chosen option labels.", "type": "array", "items": { "type": "string" } },
+              "other": { "description": "The free text.", "type": "string" }
+            },
+            "required": ["id", "choices"],
+            "additionalProperties": false
+          }
+        },
+        "note": { "type": "string" }
+      },
+      "required": ["id", "items"],
+      "additionalProperties": false
+    },
     "RunnerSessionState": { "enum": ["queued", "starting", "working", "waitingInput", "waitingPermission", "done", "failed"] },
     "RunnerSession": {
       "description": "Collection runner-sessions: a session of the oversire runtime on a runner (id = session.id). Only the hub writes it, from the session messages of the runner. The full transcript stays on the runner.",
@@ -109,6 +167,7 @@
         "state": { "$ref": "#/$defs/RunnerSessionState" },
         "summary": { "description": "The last short summary of the transcript.", "type": "string", "maxLength": 500 },
         "permission": { "$ref": "#/$defs/PermissionPrompt" },
+        "question": { "$ref": "#/$defs/RunnerQuestion" },
         "error": { "type": "string" },
         "startedAt": { "$ref": "#/$defs/Date" },
         "updatedAt": { "$ref": "#/$defs/Date" }

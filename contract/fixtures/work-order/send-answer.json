@@ -1,0 +1,34 @@
+{
+  "runner": "runner-mini",
+  "runtime": "oversire",
+  "suggestion": "s-start",
+  "createdAt": "2026-10-01T09:10:00Z",
+  "expiresAt": "2026-10-01T21:10:00Z",
+  "id": "o13",
+  "op": "sessionSend",
+  "payload": {
+    "session": {
+      "workspace": {
+        "account": {
+          "provider": "oversire",
+          "id": "local"
+        },
+        "id": "towertail-workspace/TOWERTAIL-2"
+      },
+      "id": "s-9c10"
+    },
+    "text": "",
+    "answer": {
+      "id": "toolu_01AbC",
+      "items": [
+        {
+          "id": "q1",
+          "choices": [
+            "Exponential"
+          ]
+        }
+      ]
+    }
+  },
+  "state": "queued"
+}

@@ -45,11 +45,25 @@ type ReadPayload struct {
 	Lines   int        `json:"lines"`
 }
 
-// SendPayload carries a user message or a permission answer. With a permission, Text is "".
+// SendPayload carries a user message, a permission answer or a question answer. With an answer, Text is "".
 type SendPayload struct {
 	Session    SessionRef        `json:"session"`
 	Text       string            `json:"text"`
 	Permission *PermissionAnswer `json:"permission,omitempty"`
+	Answer     *QuestionAnswer   `json:"answer,omitempty"`
+}
+
+// QuestionAnswer answers the RunnerQuestion with the same id.
+type QuestionAnswer struct {
+	ID    string               `json:"id"`
+	Items []QuestionAnswerItem `json:"items"`
+	Note  string               `json:"note,omitempty"`
+}
+
+type QuestionAnswerItem struct {
+	ID      string   `json:"id"`
+	Choices []string `json:"choices"`
+	Other   string   `json:"other,omitempty"`
 }
 
 // PermissionAnswer answers the PermissionPrompt with the same id.

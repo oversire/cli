@@ -1,0 +1,42 @@
+{
+  "runner": "runner-mini",
+  "runtime": "oversire",
+  "suggestion": "s-start",
+  "createdAt": "2026-10-01T09:10:00Z",
+  "expiresAt": "2026-10-01T21:10:00Z",
+  "id": "o14",
+  "op": "sessionSend",
+  "payload": {
+    "session": {
+      "workspace": {
+        "account": {
+          "provider": "oversire",
+          "id": "local"
+        },
+        "id": "towertail-workspace/TOWERTAIL-2"
+      },
+      "id": "s-9c11"
+    },
+    "text": "",
+    "answer": {
+      "id": "toolu_01XyZ",
+      "items": [
+        {
+          "id": "q1",
+          "choices": [
+            "Unit",
+            "Contract"
+          ],
+          "other": "and the UI shots"
+        },
+        {
+          "id": "q2",
+          "choices": [],
+          "other": "retryRule"
+        }
+      ],
+      "note": "Keep the old flag one release."
+    }
+  },
+  "state": "queued"
+}

@@ -109,6 +109,27 @@ func TestSendPermissionFixture(t *testing.T) {
 	}
 }
 
+func TestSendAnswerFixtures(t *testing.T) {
+	var o WorkOrder
+	if err := Decode(fixtures(t, "work-order")["send-answer-multi.json"], &o); err != nil {
+		t.Fatal(err)
+	}
+	p, ok := o.Payload.(SendPayload)
+	if !ok || p.Text != "" || p.Answer == nil || p.Answer.ID != "toolu_01XyZ" || len(p.Answer.Items) != 2 ||
+		!reflect.DeepEqual(p.Answer.Items[0].Choices, []string{"Unit", "Contract"}) || p.Answer.Items[1].Other != "retryRule" {
+		t.Fatalf("%#v", o.Payload)
+	}
+	var s RunnerSession
+	if err := Decode(fixtures(t, "runner-session")["question-multi.json"], &s); err != nil {
+		t.Fatal(err)
+	}
+	q := s.Question
+	if q == nil || s.State != SessionWaitingInput || q.Round != 2 || q.Items[0].Kind != QuestionMulti || !q.Items[0].AllowsOther ||
+		q.Items[1].Kind != QuestionFree || len(q.Items[1].Options) != 0 {
+		t.Fatalf("%#v", s)
+	}
+}
+
 func TestSessionMessageFixture(t *testing.T) {
 	m, err := DecodeMessage(fixtures(t, "runner-message")["session.json"])
 	if err != nil {

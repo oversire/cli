@@ -1,0 +1,60 @@
+{
+  "id": "s-9c10",
+  "runner": "runner-mini",
+  "session": {
+    "workspace": {
+      "account": {
+        "provider": "oversire",
+        "id": "local"
+      },
+      "id": "towertail-workspace/TOWERTAIL-2"
+    },
+    "id": "s-9c10"
+  },
+  "order": "o1",
+  "agent": "claude",
+  "repo": "/home/ada/src/towertail-workspace",
+  "branch": "towertail-2",
+  "item": {
+    "project": {
+      "account": {
+        "provider": "plane",
+        "id": "ocral"
+      },
+      "id": "b1f0c2d4",
+      "key": "TOWERTAIL"
+    },
+    "id": "9a7e",
+    "key": "TOWERTAIL-2",
+    "url": "https://app.plane.so/ocral/browse/TOWERTAIL-2/"
+  },
+  "state": "waitingInput",
+  "summary": "Read the sync client. Asks which retry rule to use.",
+  "startedAt": "2026-10-01T09:12:00Z",
+  "updatedAt": "2026-10-01T09:40:00Z",
+  "question": {
+    "id": "toolu_01AbC",
+    "round": 1,
+    "items": [
+      {
+        "id": "q1",
+        "header": "Retry rule",
+        "text": "Which retry rule should the sync client use?",
+        "why": "The API docs give two rules.",
+        "kind": "single",
+        "options": [
+          {
+            "label": "Exponential",
+            "detail": "1 s, 2 s, 4 s, up to 60 s"
+          },
+          {
+            "label": "Fixed",
+            "detail": "Each 5 s"
+          }
+        ],
+        "allowsOther": false
+      }
+    ],
+    "askedAt": "2026-10-01T09:41:00Z"
+  }
+}
