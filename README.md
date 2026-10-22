@@ -142,6 +142,15 @@ The budget of the order has caps: 50 earlier turns, 10 last turns and 20000 char
 | `oversire hub pair <code> [--hub URL] [--name NAME]` | Pair with a runner code. |
 | `oversire hub pair - [--hub URL] [--name NAME]` | Pair, and read the code from stdin. |
 | `oversire digest --harness claude --session <id or file> [--markers] [--source S] [--earlier N] [--full N] [--max-chars N]` | Print the digest of a session as JSON. See below. |
+| `oversire hooks install [--harness claude,codex]` | Add or update the OverSire agent hooks. Other hooks stay. |
+| `oversire hooks remove [--harness claude,codex]` | Remove only the OverSire agent hooks. |
+| `oversire hooks status [--json]` | Show the hook state of each harness. |
+| `oversire group show [--json]` | Show the machines and the apps of the group. |
+| `oversire group invite` | Make an invite code for a new machine. |
+| `oversire group requests`, `approve <id>`, `deny <id>` | List and decide the join requests. |
+| `oversire group request-code`, `admit <machine> <code>` | Join the other way: the new machine shows a code, and a member admits it. |
+| `oversire group remove <machine or device>`, `home <machine>`, `rotate` | Remove a member or an app, move home, or make a new group secret. |
+| `oversire join <host> <code>` | Join the group of the member at host. `-` reads the code from stdin. |
 | `oversire version` | Show the version. |
 
 `digest` reads a session id (the newest transcript with that id) or the path of a transcript file.
@@ -188,6 +197,16 @@ With the role `serve`, `daemon run` serves the API `/v1` of the local hub. The p
 The daemon looks for the tailnet addresses again each 30 s. It never binds `0.0.0.0`. `serve.tailscale: false` stops the Tailscale listener.
 
 `GET /v1/connect` is a WebSocket with the frames of the cloud hub: `ping` gets `pong`, and `{"type":"poke"}` and `{"type":"store"}` tell the client to read again. A revoked credential closes its socket with code 4001.
+
+### Hooks and questions
+
+The agent hooks call `oversire hook <harness> <event>`. The command posts the event to `POST /v1/hooks/{harness}` and ends at once. When the daemon does not answer, it writes the event to a spool file, and the daemon reads the spool each 10 s. The app reads, installs and removes the hooks with `GET`, `POST` and `DELETE /v1/hooks/install`, body `{"harnesses":[...]}` (loopback only).
+
+The daemon finds the open questions of the agent sessions: forms and permission prompts on the Orca screen, and a turn that ends with a question. `GET /v1/questions` lists them. `POST /v1/questions/{id}/answer` types the answer into the terminal. `GET /v1/questions/{id}/given` tells the answer that the user gave in the terminal.
+
+### Group
+
+The machines of one user form a group. Each member keeps the roster and the group secret. A member that joins gets a group credential for the Tailscale listener. The roster syncs between members each 60 s, and at once after a `poke`. The home member keeps the shared store (see below).
 
 ### Home store
 
