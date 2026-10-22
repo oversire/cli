@@ -43,7 +43,8 @@ func NewTailnet(run Runner) *Tailnet {
 	return t
 }
 
-// Addrs gives the addresses of `tailscale ip`. Without the CLI, it gives the interface addresses in the tailnet ranges.
+// Addrs gives the addresses of `tailscale ip`. Without the CLI or its addresses, it gives the interface addresses in the tailnet ranges.
+// The app CLI can print "The Tailscale GUI failed to start" and exit 0, so an empty answer uses the interfaces too.
 // `tailscale ip` prints IPv4 and IPv6; the flags -4 and -6 do not go together.
 func (t *Tailnet) Addrs(ctx context.Context) ([]netip.Addr, error) {
 	if t.exe != "" {
@@ -55,7 +56,9 @@ func (t *Tailnet) Addrs(ctx context.Context) ([]netip.Addr, error) {
 					addrs = append(addrs, a)
 				}
 			}
-			return addrs, nil
+			if len(addrs) > 0 {
+				return addrs, nil
+			}
 		}
 	}
 	ifs, err := t.ifaces()

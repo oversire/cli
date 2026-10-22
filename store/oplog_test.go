@@ -286,3 +286,15 @@ func TestRecordFixturesPass(t *testing.T) {
 		}
 	}
 }
+
+func TestOpenMakesTheFolder(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "share", "oversire")
+	l, err := Open(filepath.Join(dir, "store.db"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l.Close()
+	if st, err := os.Stat(dir); err != nil || st.Mode().Perm() != 0o700 {
+		t.Fatalf("folder: %v %v", st, err)
+	}
+}

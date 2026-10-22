@@ -47,6 +47,7 @@ func TestTailnetAddrs(t *testing.T) {
 		{"cli drops other addresses", Tailnet{exe: "tailscale", run: fakeRunner{"ip": "10.0.0.1\n100.64.0.1\n"}, ifaces: lan},
 			"[100.64.0.1]"},
 		{"cli fails", Tailnet{exe: "tailscale", run: fakeRunner{}, ifaces: lan}, "[100.101.1.2 fd7a:115c:a1e0::9]"},
+		{"cli gives nothing", Tailnet{exe: "tailscale", run: fakeRunner{"ip": ""}, ifaces: lan}, "[100.101.1.2 fd7a:115c:a1e0::9]"},
 		{"no cli", Tailnet{ifaces: lan}, "[100.101.1.2 fd7a:115c:a1e0::9]"},
 		{"no tailnet", Tailnet{ifaces: ifaces("192.168.1.20/24")}, "[]"},
 	}
