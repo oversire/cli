@@ -169,9 +169,25 @@ oversire digest --session ~/.claude/projects/-Users-ada-app/5b6e0f3a-1c2d-4e5f-8
   "since": "2026-10-17T09:00:00Z",
   "lastError": "",
   "service": { "installed": true, "running": true },
-  "runtimes": ["orca", "oversire"]
+  "runtimes": ["orca", "oversire"],
+  "serve": { "loopback": "127.0.0.1:7690", "tailscale": "100.97.81.23:7690", "group": "3f9c0a1b2c3d4e5f", "home": "mbp" }
 }
 ```
+
+`serve` comes from `GET /v1/whoami` of the running daemon. Its fields are empty when the daemon does not answer.
+
+## Local API
+
+With the role `serve`, `daemon run` serves the API `/v1` of the local hub. The port is 7690. `serve.port` in `config.json` changes it.
+
+| Listener | Address | Auth |
+|---|---|---|
+| Loopback | `127.0.0.1` and `[::1]` | None. The daemon gives 403 to a request with an `Origin` header, a `Host` that is not `127.0.0.1`, `[::1]` or `localhost` with the port, or a POST, PUT or DELETE that is not `application/json`. |
+| Tailscale | Each tailnet address (`tailscale ip`, else the interface addresses in `100.64.0.0/10` and `fd7a:115c:a1e0::/48`) | `Authorization: Bearer <group credential>`, except `GET /v1/whoami` and the join routes. A bad or revoked credential gets 401. Loopback-only routes get 404. |
+
+The daemon looks for the tailnet addresses again each 30 s. It never binds `0.0.0.0`. `serve.tailscale: false` stops the Tailscale listener.
+
+`GET /v1/connect` is a WebSocket with the frames of the cloud hub: `ping` gets `pong`, and `{"type":"poke"}` and `{"type":"store"}` tell the client to read again. A revoked credential closes its socket with code 4001.
 
 ## Service
 
