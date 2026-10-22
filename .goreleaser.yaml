@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://goreleaser.com/static/schema.json
 version: 2
 
-project_name: oversire-runner
+project_name: oversire
 
 before:
   hooks:
@@ -9,9 +9,9 @@ before:
     - go test ./...
 
 builds:
-  - id: oversire-runner
-    main: ./cmd/oversire-runner
-    binary: oversire-runner
+  - id: oversire
+    main: ./cmd/oversire
+    binary: oversire
     env:
       - CGO_ENABLED=0
     goos: [darwin, linux, windows]
@@ -19,12 +19,12 @@ builds:
     flags: [-trimpath]
     ldflags:
       - -s -w -X main.version={{ .Version }}
-    # TODO(windows-signing): sign oversire-runner.exe with Authenticode. This needs a code signing
+    # TODO(windows-signing): sign oversire.exe with Authenticode. This needs a code signing
     # certificate. Add a post hook here (for example signtool or osslsigncode) when the certificate exists.
 
 archives:
   - id: default
-    name_template: "oversire-runner_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    name_template: "oversire_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     formats: [tar.gz]
     format_overrides:
       - goos: windows
@@ -40,7 +40,7 @@ checksum:
 notarize:
   macos:
     - enabled: '{{ isEnvSet "MACOS_SIGN_P12" }}'
-      ids: [oversire-runner]
+      ids: [oversire]
       sign:
         certificate: "{{ .Env.MACOS_SIGN_P12 }}"
         password: "{{ .Env.MACOS_SIGN_PASSWORD }}"
@@ -53,13 +53,13 @@ notarize:
 
 nfpms:
   - id: packages
-    package_name: oversire-runner
-    file_name_template: "oversire-runner_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    ids: [oversire-runner]
+    package_name: oversire
+    file_name_template: "oversire_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    ids: [oversire]
     vendor: OverSire
-    homepage: https://github.com/oversire/runner
+    homepage: https://github.com/oversire/cli
     maintainer: OverSire <noreply@oversire.dev>
-    description: Headless OverSire runner. It connects to the OverSire hub and drives agent runtimes.
+    description: The OverSire CLI and daemon. It serves the live agent state of the machine and does work orders.
     license: MIT
     formats: [deb, rpm]
     bindir: /usr/bin
@@ -67,7 +67,7 @@ nfpms:
 release:
   github:
     owner: oversire
-    name: runner
+    name: cli
   draft: false
   prerelease: auto
 

@@ -20,7 +20,7 @@ import (
 )
 
 // ErrUnauthorized means the hub does not know the token. Pair the runner again.
-var ErrUnauthorized = errors.New("The hub refused the token (401). Pair the runner again with `oversire-runner pair`.")
+var ErrUnauthorized = errors.New("The hub refused the token (401). Pair again with `oversire hub pair`.")
 
 // RefusedError is a refused hello. Update the runner.
 type RefusedError struct {

@@ -26,14 +26,14 @@ func (r *record) has(call ...string) bool {
 }
 
 func TestLaunchdPlist(t *testing.T) {
-	p := LaunchdPlist("/opt/o&r/oversire-runner", "/Users/ada/Library/Logs/oversire-runner.log")
+	p := LaunchdPlist(Current.Label, "/opt/o&r/oversire", "/Users/ada/Library/Logs/oversire-daemon.log")
 	for _, want := range []string{
-		"<string>com.oversire.runner</string>",
-		"<string>/opt/o&amp;r/oversire-runner</string>\n\t\t<string>run</string>",
+		"<string>com.oversire.daemon</string>",
+		"<string>com.oversire.daemon</string>", "<string>/opt/o&amp;r/oversire</string>\n\t\t<string>daemon</string>\n\t\t<string>run</string>",
 		"<key>RunAtLoad</key>\n\t<true/>",
 		"<key>SuccessfulExit</key>\n\t\t<false/>",
 		"<key>ThrottleInterval</key>\n\t<integer>30</integer>",
-		"<string>/Users/ada/Library/Logs/oversire-runner.log</string>",
+		"<string>/Users/ada/Library/Logs/oversire-daemon.log</string>",
 	} {
 		if !strings.Contains(p, want) {
 			t.Errorf("plist has no %q", want)
@@ -42,8 +42,8 @@ func TestLaunchdPlist(t *testing.T) {
 }
 
 func TestSystemdUnit(t *testing.T) {
-	u := SystemdUnit("/home/ada/bin/oversire-runner")
-	for _, want := range []string{`ExecStart="/home/ada/bin/oversire-runner" run`, "Restart=on-failure", "RestartSec=30", "WantedBy=default.target"} {
+	u := SystemdUnit("/home/ada/bin/oversire")
+	for _, want := range []string{`ExecStart="/home/ada/bin/oversire" daemon run`, "Restart=on-failure", "RestartSec=30", "WantedBy=default.target"} {
 		if !strings.Contains(u, want) {
 			t.Errorf("unit has no %q", want)
 		}
@@ -51,8 +51,8 @@ func TestSystemdUnit(t *testing.T) {
 }
 
 func TestSchtasksArgs(t *testing.T) {
-	got := SchtasksCreateArgs(`C:\Program Files\oversire-runner.exe`)
-	want := []string{"/Create", "/SC", "ONLOGON", "/TN", "OverSireRunner", "/TR", `"C:\Program Files\oversire-runner.exe" run`, "/F"}
+	got := SchtasksCreateArgs(Current.Task, `C:\Program Files\oversire.exe`)
+	want := []string{"/Create", "/SC", "ONLOGON", "/TN", "OverSireDaemon", "/TR", `"C:\Program Files\oversire.exe" daemon run`, "/F"}
 	if !slices.Equal(got, want) {
 		t.Fatal(got)
 	}
@@ -78,7 +78,7 @@ func TestDarwin(t *testing.T) {
 	if err := m.Uninstall(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if !r.has("launchctl", "bootout", "gui/501/com.oversire.runner") {
+	if !r.has("launchctl", "bootout", "gui/501/com.oversire.daemon") {
 		t.Fatalf("calls %q", r.calls)
 	}
 	if _, err := os.Stat(m.PlistPath()); err == nil {
@@ -94,7 +94,7 @@ func TestLinux(t *testing.T) {
 	if err := m.Install(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if !r.has("systemctl", "--user", "daemon-reload") || !r.has("systemctl", "--user", "enable", "--now", "oversire-runner.service") {
+	if !r.has("systemctl", "--user", "daemon-reload") || !r.has("systemctl", "--user", "enable", "--now", "oversire-daemon.service") {
 		t.Fatalf("calls %q", r.calls)
 	}
 	if s := m.Status(ctx); !s.Installed || !s.Running {
@@ -115,13 +115,13 @@ func TestWindows(t *testing.T) {
 	if err := m.Install(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if !r.has(append([]string{"schtasks"}, SchtasksCreateArgs(`C:\o\oversire-runner.exe`)...)...) {
+	if !r.has(append([]string{"schtasks"}, SchtasksCreateArgs(Current.Task, `C:\o\oversire-runner.exe`)...)...) {
 		t.Fatalf("calls %q", r.calls)
 	}
 	if err := m.Uninstall(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if !r.has("schtasks", "/Delete", "/TN", "OverSireRunner", "/F") {
+	if !r.has("schtasks", "/Delete", "/TN", "OverSireDaemon", "/F") {
 		t.Fatalf("calls %q", r.calls)
 	}
 }

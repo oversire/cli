@@ -1,4 +1,5 @@
-// Command oversire-runner connects this machine to the OverSire hub and drives agent runtimes on it.
+// Command oversire is the OverSire CLI. Its daemon serves the live state of this machine to OverSire clients,
+// and does work orders from the hub.
 package main
 
 import (
@@ -15,6 +16,7 @@ import (
 	"syscall"
 
 	"github.com/oversire/cli/config"
+	"github.com/oversire/cli/migrate"
 	"github.com/oversire/cli/proc"
 	"github.com/oversire/cli/secret"
 	"github.com/oversire/cli/service"
@@ -23,20 +25,28 @@ import (
 // version is set at build time with -ldflags "-X main.version=...".
 var version = "dev"
 
-const usage = `oversire-runner connects this machine to the OverSire hub.
+const usage = `oversire is the OverSire CLI.
 
 Usage:
-  oversire-runner pair <code> [--hub URL] [--name NAME]   pair with a runner code from the console
-  oversire-runner pair - [--hub URL] [--name NAME]        read the code from stdin
-  oversire-runner run                                     connect and take orders
-  oversire-runner status [--json]                         show the state
-  oversire-runner install [--keep-awake]                  start run as a service at login
-  oversire-runner uninstall                               remove the service
-  oversire-runner digest --harness claude --session <id or file> [--markers]
-                         [--source S] [--earlier N] [--full N] [--max-chars N]
-                                                          print the history digest of a session
-  oversire-runner version                                 show the version
+  oversire daemon run                                  run the daemon (the service runs this)
+  oversire daemon install [--keep-awake]               start the daemon as a service at login
+  oversire daemon uninstall                            remove the service
+  oversire daemon status [--json]                      show the state (short form: oversire status)
+  oversire hub pair <code> [--hub URL] [--name NAME]   pair with the cloud hub as a runner
+  oversire hub pair - [--hub URL] [--name NAME]        read the code from stdin
+  oversire digest --harness claude --session <id or file> [--markers]
+                  [--source S] [--earlier N] [--full N] [--max-chars N]
+                                                       print the history digest of a session
+  oversire version                                     show the version
 `
+
+// renamed maps the commands of oversire-runner to the new commands.
+var renamed = map[string]string{
+	"run":       "oversire daemon run",
+	"install":   "oversire daemon install",
+	"uninstall": "oversire daemon uninstall",
+	"pair":      "oversire hub pair",
+}
 
 // exitError ends the program with a code.
 type exitError struct {
@@ -57,6 +67,7 @@ type cli struct {
 	log     *slog.Logger
 	secrets *secret.Store
 	service *service.Manager
+	migrate func(context.Context) (migrate.Report, error)
 	exe     string
 	home    string
 }
@@ -67,37 +78,48 @@ func main() {
 		os.Exit(2)
 	}
 	if os.Args[1] == "digest" {
-		// digest also runs on hosts without a runner setup, so it makes no config folder.
+		// digest also runs on hosts without a daemon setup, so it makes no config folder.
 		exit(digestCLI().digest(os.Args[2:]))
 	}
 	c, err := newCLI()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "oversire-runner:", err)
+		fmt.Fprintln(os.Stderr, "oversire:", err)
 		os.Exit(1)
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	exit(c.dispatch(ctx, os.Args[1:]))
+}
 
-	args := os.Args[2:]
-	switch os.Args[1] {
-	case "run":
-		err = c.run(ctx)
-	case "pair":
-		err = c.pair(ctx, args)
-	case "status":
-		err = c.status(ctx, args)
-	case "install":
-		err = c.install(ctx, args)
-	case "uninstall":
-		err = c.uninstall(ctx)
-	case "version", "--version", "-v":
-		fmt.Fprintln(c.out, version)
-	case "help", "--help", "-h":
-		fmt.Fprint(c.out, usage)
-	default:
-		err = &exitError{2, fmt.Errorf("unknown command %q\n\n%s", os.Args[1], usage)}
+func (c *cli) dispatch(ctx context.Context, args []string) error {
+	cmd, rest := args[0], args[1:]
+	sub := ""
+	if len(rest) > 0 {
+		sub = rest[0]
 	}
-	exit(err)
+	switch {
+	case cmd == "daemon" && sub == "run":
+		return c.run(ctx)
+	case cmd == "daemon" && sub == "install":
+		return c.install(ctx, rest[1:])
+	case cmd == "daemon" && sub == "uninstall":
+		return c.uninstall(ctx)
+	case cmd == "daemon" && sub == "status":
+		return c.status(ctx, rest[1:])
+	case cmd == "status":
+		return c.status(ctx, rest)
+	case cmd == "hub" && sub == "pair":
+		return c.pair(ctx, rest[1:])
+	case cmd == "version" || cmd == "--version" || cmd == "-v":
+		fmt.Fprintln(c.out, version)
+		return nil
+	case cmd == "help" || cmd == "--help" || cmd == "-h":
+		fmt.Fprint(c.out, usage)
+		return nil
+	case renamed[cmd] != "":
+		return &exitError{2, fmt.Errorf("%q is now %q.", cmd, renamed[cmd])}
+	}
+	return &exitError{2, fmt.Errorf("unknown command %q\n\n%s", cmd, usage)}
 }
 
 func exit(err error) {
@@ -105,7 +127,7 @@ func exit(err error) {
 		os.Exit(0)
 	}
 	if !errors.Is(err, errSilent) {
-		fmt.Fprintln(os.Stderr, "oversire-runner:", err)
+		fmt.Fprintln(os.Stderr, "oversire:", err)
 	}
 	var e *exitError
 	if errors.As(err, &e) {
@@ -124,9 +146,6 @@ func newCLI() (*cli, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return nil, err
-	}
 	exe, err := os.Executable()
 	if err != nil {
 		return nil, err
@@ -140,25 +159,54 @@ func newCLI() (*cli, error) {
 	}
 	paths := config.Paths{Dir: dir}
 	run := proc.Local{}
-	return &cli{
+	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	c := &cli{
 		paths:   paths,
 		in:      os.Stdin,
 		out:     os.Stdout,
-		log:     slog.New(slog.NewTextHandler(os.Stderr, nil)),
-		secrets: secret.New(run, goruntime.GOOS, paths.Token(), exec.LookPath),
+		log:     log,
+		secrets: secret.New(run, goruntime.GOOS, secret.Daemon, paths.Token(), exec.LookPath),
 		service: service.NewManager(goruntime.GOOS, home, os.Getuid(), exe, run),
 		exe:     exe,
 		home:    home,
-	}, nil
+	}
+	c.migrate = func(ctx context.Context) (migrate.Report, error) {
+		layout, err := migrate.Layouts()
+		if err != nil {
+			return migrate.Report{}, err
+		}
+		legacyDir, _ := config.LegacyDir()
+		old := secret.New(run, goruntime.GOOS, secret.Legacy, filepath.Join(legacyDir, "token"), exec.LookPath)
+		m := migrate.NewMigrator(layout, goruntime.GOOS, c.service, old, c.secrets, run, log.Info)
+		r, err := m.Run(ctx)
+		if err == nil {
+			err = os.MkdirAll(dir, 0o700)
+		}
+		return r, err
+	}
+	return c, nil
 }
 
-func (c *cli) mustConfig() (config.Config, error) {
+// setup migrates an oversire-runner install, then loads the config. A new install gets the role serve.
+func (c *cli) setup(ctx context.Context) (config.Config, error) {
+	if c.migrate != nil {
+		r, err := c.migrate(ctx)
+		if err != nil {
+			return config.Config{}, err
+		}
+		for _, n := range r.Notes {
+			c.log.Warn(n)
+		}
+	}
 	cfg, ok, err := c.paths.LoadConfig()
 	if err != nil {
 		return cfg, err
 	}
 	if !ok {
-		return cfg, &exitError{2, errors.New("This runner is not paired. Make a runner code in the console, then run `oversire-runner pair <code> --hub <url>`.")}
+		cfg.Roles = []string{config.RoleServe}
+		if err := c.paths.SaveConfig(cfg); err != nil {
+			return cfg, err
+		}
 	}
 	return cfg, nil
 }

@@ -42,10 +42,10 @@ func TestNewer(t *testing.T) {
 }
 
 func TestArchiveName(t *testing.T) {
-	if got := ArchiveName("0.2.0", "darwin", "arm64"); got != "oversire-runner_0.2.0_darwin_arm64.tar.gz" {
+	if got := ArchiveName("0.2.0", "darwin", "arm64"); got != "oversire_0.2.0_darwin_arm64.tar.gz" {
 		t.Fatal(got)
 	}
-	if got := ArchiveName("0.2.0", "windows", "amd64"); got != "oversire-runner_0.2.0_windows_amd64.zip" {
+	if got := ArchiveName("0.2.0", "windows", "amd64"); got != "oversire_0.2.0_windows_amd64.zip" {
 		t.Fatal(got)
 	}
 }
@@ -114,18 +114,18 @@ func (c *codesign) Run(_ context.Context, exe string, args []string, _ []byte) (
 		}
 		return nil, nil, nil
 	}
-	return nil, []byte("Executable=/x\nIdentifier=oversire-runner\nTeamIdentifier=" + c.team + "\n"), nil
+	return nil, []byte("Executable=/x\nIdentifier=oversire\nTeamIdentifier=" + c.team + "\n"), nil
 }
 
 func exeFile(t *testing.T) string {
-	exe := filepath.Join(t.TempDir(), "oversire-runner")
+	exe := filepath.Join(t.TempDir(), "oversire")
 	os.WriteFile(exe, []byte("old"), 0o755)
 	return exe
 }
 
 func TestUpdateReplacesTheBinary(t *testing.T) {
 	name := ArchiveName("0.2.0", "darwin", "arm64")
-	archive := targz(t, "oversire-runner", []byte("new"))
+	archive := targz(t, "oversire", []byte("new"))
 	f := newFeed("v0.2.0", name, archive, sha(archive)+"  "+name+"\n")
 	cs := &codesign{team: TeamID, valid: true}
 	exe := exeFile(t)
@@ -143,7 +143,7 @@ func TestUpdateReplacesTheBinary(t *testing.T) {
 
 func TestUpdateWindowsZip(t *testing.T) {
 	name := ArchiveName("0.2.0", "windows", "amd64")
-	archive := zipped(t, "oversire-runner.exe", []byte("new"))
+	archive := zipped(t, "oversire.exe", []byte("new"))
 	f := newFeed("v0.2.0", name, archive, sha(archive)+"  "+name+"\n")
 	exe := exeFile(t)
 	if _, err := NewUpdater(f, &codesign{}, "https://api/latest", "0.1.0", "windows", "amd64", exe).Check(context.Background()); err != nil {
@@ -156,7 +156,7 @@ func TestUpdateWindowsZip(t *testing.T) {
 
 func TestUpdateRefusals(t *testing.T) {
 	name := ArchiveName("0.2.0", "darwin", "arm64")
-	archive := targz(t, "oversire-runner", []byte("new"))
+	archive := targz(t, "oversire", []byte("new"))
 	good := sha(archive) + "  " + name + "\n"
 	cases := []struct {
 		label, version, sums, want string

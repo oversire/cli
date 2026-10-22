@@ -57,12 +57,12 @@ func missing(string) (string, error) { return "", errors.New("not found") }
 func TestKeychain(t *testing.T) {
 	f := &fakeKeys{}
 	file := filepath.Join(t.TempDir(), "token")
-	s := New(f, "darwin", file, missing)
+	s := New(f, "darwin", Daemon, file, missing)
 	ctx := context.Background()
 	if err := s.Set(ctx, "dev1", token); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(f.stdin[0], `add-generic-password -U -s oversire-runner -a "dev1" -w "`+token) {
+	if !strings.HasPrefix(f.stdin[0], `add-generic-password -U -s oversire.daemon -a "dev1" -w "`+token) {
 		t.Fatalf("stdin %q", f.stdin[0])
 	}
 	got, err := s.Get(ctx, "dev1")
@@ -77,7 +77,7 @@ func TestKeychain(t *testing.T) {
 
 func TestSecretTool(t *testing.T) {
 	f := &fakeKeys{}
-	s := New(f, "linux", filepath.Join(t.TempDir(), "token"), found)
+	s := New(f, "linux", Daemon, filepath.Join(t.TempDir(), "token"), found)
 	ctx := context.Background()
 	if err := s.Set(ctx, "dev1", token); err != nil {
 		t.Fatal(err)
@@ -102,7 +102,7 @@ func TestFileFallback(t *testing.T) {
 		{"linux", &fakeKeys{fail: true}, found},
 	} {
 		file := filepath.Join(t.TempDir(), "token")
-		s := New(c.run, c.goos, file, c.look)
+		s := New(c.run, c.goos, Daemon, file, c.look)
 		ctx := context.Background()
 		if err := s.Set(ctx, "dev1", token); err != nil {
 			t.Fatal(err)
@@ -122,7 +122,7 @@ func TestFileFallback(t *testing.T) {
 }
 
 func TestBadToken(t *testing.T) {
-	s := New(&fakeKeys{}, "darwin", filepath.Join(t.TempDir(), "token"), missing)
+	s := New(&fakeKeys{}, "darwin", Daemon, filepath.Join(t.TempDir(), "token"), missing)
 	if err := s.Set(context.Background(), "d", "a\"\n-w x"); err == nil {
 		t.Fatal("a token with a quote and a newline passed")
 	}

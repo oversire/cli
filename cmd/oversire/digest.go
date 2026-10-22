@@ -14,7 +14,7 @@ import (
 	"github.com/oversire/cli/wire"
 )
 
-const digestUsage = "usage: oversire-runner digest --harness claude --session <id or file> [--markers] [--source S] [--earlier N] [--full N] [--max-chars N]"
+const digestUsage = "usage: oversire digest --harness claude --session <id or file> [--markers] [--source S] [--earlier N] [--full N] [--max-chars N]"
 
 // digest prints the SessionDigest of a session, the same as oversire/scripts/digest.py.
 // With --markers, an error goes to stdout as OVERSIRE-DIGEST-ERROR and the exit code is 1.

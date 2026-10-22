@@ -29,7 +29,7 @@ type pairResult struct {
 func (c *cli) pair(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("pair", flag.ContinueOnError)
 	hub := fs.String("hub", "", "the hub URL, for example https://hub.example.com")
-	name := fs.String("name", "", "the name of this runner in the console (default: the host name)")
+	name := fs.String("name", "", "the name of this machine in the console (default: the host name)")
 	var positional []string
 	for {
 		if err := fs.Parse(args); err != nil {
@@ -42,7 +42,7 @@ func (c *cli) pair(ctx context.Context, args []string) error {
 		args = fs.Args()[1:]
 	}
 	if len(positional) != 1 {
-		return &exitError{2, errors.New("usage: oversire-runner pair <code>|- [--hub URL] [--name NAME]")}
+		return &exitError{2, errors.New("usage: oversire hub pair <code>|- [--hub URL] [--name NAME]")}
 	}
 	code := positional[0]
 	if code == "-" {
@@ -57,7 +57,10 @@ func (c *cli) pair(ctx context.Context, args []string) error {
 		return &exitError{2, errors.New("The code is empty.")}
 	}
 
-	old, _, _ := c.paths.LoadConfig()
+	old, err := c.setup(ctx)
+	if err != nil {
+		return err
+	}
 	if *hub == "" {
 		*hub = os.Getenv("OVERSIRE_HUB")
 	}
@@ -88,8 +91,14 @@ func (c *cli) pair(ctx context.Context, args []string) error {
 	if err := c.secrets.Set(ctx, res.DeviceID, res.Token); err != nil {
 		return fmt.Errorf("store the token: %w", err)
 	}
-	cfg := config.Config{Hub: *hub, Device: res.DeviceID, Account: res.Account, Name: *name, KeepAwake: old.KeepAwake,
-		MaxSessions: old.MaxSessions, DataDir: old.DataDir}
+	cfg := old
+	cfg.Hub, cfg.Device, cfg.Account, cfg.Name = *hub, res.DeviceID, res.Account, *name
+	if !cfg.Has(config.RoleServe) && len(cfg.Roles) == 0 {
+		cfg.Roles = []string{config.RoleServe}
+	}
+	if !cfg.Has(config.RoleRunner) {
+		cfg.Roles = append(cfg.Roles, config.RoleRunner)
+	}
 	if err := c.paths.SaveConfig(cfg); err != nil {
 		return err
 	}

@@ -37,13 +37,9 @@ func (c *cli) registry(ov runtime.Runtime) *runtime.Registry {
 }
 
 func (c *cli) run(ctx context.Context) error {
-	cfg, err := c.mustConfig()
+	cfg, err := c.setup(ctx)
 	if err != nil {
 		return err
-	}
-	token, err := c.secrets.Get(ctx, cfg.Device)
-	if err != nil {
-		return &exitError{2, err}
 	}
 	if cfg.KeepAwake && goruntime.GOOS == "darwin" {
 		if err := exec.Command("/usr/bin/caffeinate", "-s", "-w", strconv.Itoa(os.Getpid())).Start(); err != nil {
@@ -54,7 +50,7 @@ func (c *cli) run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	agents := agentwire.New(agentwire.Options{ClientName: "oversire-runner", ClientVersion: version, LedgerPath: filepath.Join(data, "agents.json"), Logger: c.log})
+	agents := agentwire.New(agentwire.Options{ClientName: "oversire", ClientVersion: version, LedgerPath: filepath.Join(data, "agents.json"), Logger: c.log})
 	_ = agents.Reconcile()
 	var client *hub.Client
 	ov := oversire.New(oversire.Options{Runner: cfg.Device, DataDir: data, Slots: cfg.Sessions()}, agents, proc.Local{},
@@ -66,46 +62,73 @@ func (c *cli) run(ctx context.Context) error {
 		agents.Close(ctx)
 	}()
 	reg := c.registry(ov)
-	c.log.Info("runner start", "version", version, "hub", cfg.Hub, "device", cfg.Device, "runtimes", reg.IDs(), "data", data)
-
-	state := config.NewStateFile(c.paths.State(), config.State{Device: cfg.Device, Hub: cfg.Hub, Version: version})
-	client = hub.NewClient(cfg.Hub, token, version, reg, allow.File{Path: c.paths.Allow()}, hub.OpenJournal(c.paths.Journal()), state)
-	client.Log = c.log
+	c.log.Info("daemon start", "version", version, "roles", cfg.Roles, "hub", cfg.Hub, "device", cfg.Device, "runtimes", reg.IDs(), "data", data)
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	checks := make(chan struct{}, 1)
-	client.OnUpdate = func(string) {
-		select {
-		case checks <- struct{}{}:
-		default:
-		}
-	}
 	updated := make(chan string, 1)
 	go c.updateLoop(ctx, checks, updated)
 
-	done := make(chan error, 1)
-	go func() { done <- client.Run(ctx) }()
+	var tasks []func(context.Context) error
+	if cfg.Has(config.RoleRunner) && cfg.Paired() {
+		token, err := c.secrets.Get(ctx, cfg.Device)
+		if err != nil {
+			return &exitError{2, err}
+		}
+		state := config.NewStateFile(c.paths.State(), config.State{Device: cfg.Device, Hub: cfg.Hub, Version: version})
+		client = hub.NewClient(cfg.Hub, token, version, reg, allow.File{Path: c.paths.Allow()}, hub.OpenJournal(c.paths.Journal()), state)
+		client.Log = c.log
+		client.OnUpdate = func(string) {
+			select {
+			case checks <- struct{}{}:
+			default:
+			}
+		}
+		tasks = append(tasks, c.hubTask(client))
+	}
+	if len(tasks) == 0 {
+		tasks = append(tasks, func(ctx context.Context) error { <-ctx.Done(); return nil })
+	}
+
+	done := make(chan error, len(tasks))
+	for _, t := range tasks {
+		go func() { done <- t(ctx) }()
+	}
 	select {
 	case v := <-updated:
-		c.log.Info("runner updated, restart", "version", v)
+		c.log.Info("daemon updated, restart", "version", v)
 		cancel()
-		<-done
+		for range tasks {
+			<-done
+		}
 		return restart(c.exe)
 	case err = <-done:
 	}
-	if ctx.Err() != nil {
+	cancel()
+	if ctx.Err() != nil && err == nil {
 		return nil
 	}
-	var refused *hub.RefusedError
-	if errors.Is(err, hub.ErrUnauthorized) || errors.As(err, &refused) {
-		c.log.Error("runner stop", "err", err, "wait", stopWait)
-		select {
-		case <-ctx.Done():
-		case <-time.After(stopWait):
-		}
-	}
 	return err
+}
+
+// hubTask runs the hub client. After a refused token or hello, it waits, so that the service does not retry fast.
+func (c *cli) hubTask(client *hub.Client) func(context.Context) error {
+	return func(ctx context.Context) error {
+		err := client.Run(ctx)
+		if ctx.Err() != nil {
+			return nil
+		}
+		var refused *hub.RefusedError
+		if errors.Is(err, hub.ErrUnauthorized) || errors.As(err, &refused) {
+			c.log.Error("hub stop", "err", err, "wait", stopWait)
+			select {
+			case <-ctx.Done():
+			case <-time.After(stopWait):
+			}
+		}
+		return err
+	}
 }
 
 // updateLoop checks the release feed one minute after the start, each day, and on each hub hint.
@@ -133,9 +156,17 @@ func (c *cli) updateLoop(ctx context.Context, hints <-chan struct{}, updated cha
 	}
 }
 
-// lateReporter passes the reports to the client, which the runner makes after the runtime.
+// lateReporter passes the reports to the hub client, which the daemon makes after the runtime. Without a hub, it drops them.
 type lateReporter struct{ c **hub.Client }
 
-func (r lateReporter) Report(s wire.RunnerSession) { (*r.c).Report(s) }
+func (r lateReporter) Report(s wire.RunnerSession) {
+	if *r.c != nil {
+		(*r.c).Report(s)
+	}
+}
 
-func (r lateReporter) ReportPaths(order string, p wire.ChangedPaths) { (*r.c).ReportPaths(order, p) }
+func (r lateReporter) ReportPaths(order string, p wire.ChangedPaths) {
+	if *r.c != nil {
+		(*r.c).ReportPaths(order, p)
+	}
+}

@@ -1,4 +1,4 @@
-// Package update replaces the runner with the latest GitHub release.
+// Package update replaces the CLI with the latest GitHub release.
 package update
 
 import (
@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	LatestURL = "https://api.github.com/repos/oversire/runner/releases/latest"
+	LatestURL = "https://api.github.com/repos/oversire/cli/releases/latest"
 	TeamID    = "Q56WK6TB88"
 	maxSize   = 200 << 20
 )
@@ -106,9 +106,9 @@ func (u *Updater) Check(ctx context.Context) (string, error) {
 
 func (u *Updater) binaryName() string {
 	if u.goos == "windows" {
-		return "oversire-runner.exe"
+		return "oversire.exe"
 	}
-	return "oversire-runner"
+	return "oversire"
 }
 
 func (u *Updater) get(ctx context.Context, url string) ([]byte, error) {
@@ -116,7 +116,7 @@ func (u *Updater) get(ctx context.Context, url string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "oversire-runner/"+u.version)
+	req.Header.Set("User-Agent", "oversire-cli/"+u.version)
 	resp, err := u.http.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("update: %w", err)
@@ -135,7 +135,7 @@ func (u *Updater) replace(ctx context.Context, bin []byte) error {
 		return fmt.Errorf("update: %w", err)
 	}
 	if u.goos == "darwin" {
-		if err := u.verifySignature(ctx, next); err != nil {
+		if err := SignedByTeam(ctx, u.run, next); err != nil {
 			_ = os.Remove(next)
 			return err
 		}
@@ -154,11 +154,12 @@ func (u *Updater) replace(ctx context.Context, bin []byte) error {
 	return nil
 }
 
-func (u *Updater) verifySignature(ctx context.Context, file string) error {
-	if _, stderr, err := u.run.Run(ctx, "/usr/bin/codesign", []string{"--verify", "--strict", file}, nil); err != nil {
+// SignedByTeam checks the code signature of file and its Team ID (macOS).
+func SignedByTeam(ctx context.Context, run Runner, file string) error {
+	if _, stderr, err := run.Run(ctx, "/usr/bin/codesign", []string{"--verify", "--strict", file}, nil); err != nil {
 		return fmt.Errorf("update: the signature is not valid: %s", strings.TrimSpace(string(stderr)))
 	}
-	_, stderr, err := u.run.Run(ctx, "/usr/bin/codesign", []string{"-dv", file}, nil)
+	_, stderr, err := run.Run(ctx, "/usr/bin/codesign", []string{"-dv", file}, nil)
 	if err != nil || !slices.Contains(strings.Split(string(stderr), "\n"), "TeamIdentifier="+TeamID) {
 		return fmt.Errorf("update: the binary is not signed by team %s", TeamID)
 	}
@@ -171,7 +172,7 @@ func ArchiveName(version, goos, goarch string) string {
 	if goos == "windows" {
 		ext = ".zip"
 	}
-	return fmt.Sprintf("oversire-runner_%s_%s_%s%s", version, goos, goarch, ext)
+	return fmt.Sprintf("oversire_%s_%s_%s%s", version, goos, goarch, ext)
 }
 
 // VerifyChecksum checks data against the sha256 line of name in checksums.txt.

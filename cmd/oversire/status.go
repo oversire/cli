@@ -14,6 +14,7 @@ import (
 
 type statusReport struct {
 	Version   string         `json:"version"`
+	Roles     []string       `json:"roles"`
 	Paired    bool           `json:"paired"`
 	Device    string         `json:"device"`
 	Hub       string         `json:"hub"`
@@ -30,7 +31,7 @@ func (c *cli) status(ctx context.Context, args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return &exitError{2, err}
 	}
-	cfg, paired, err := c.paths.LoadConfig()
+	cfg, err := c.setup(ctx)
 	if err != nil {
 		return err
 	}
@@ -39,7 +40,7 @@ func (c *cli) status(ctx context.Context, args []string) error {
 		return err
 	}
 	r := statusReport{
-		Version: version, Paired: paired, Device: cfg.Device, Hub: cfg.Hub,
+		Version: version, Roles: cfg.Roles, Paired: cfg.Paired(), Device: cfg.Device, Hub: cfg.Hub,
 		Service: c.service.Status(ctx), Runtimes: c.registry(oversire.New(oversire.Options{}, nil, nil, nil)).IDs(), LastError: st.LastError,
 	}
 	// A state file of a stopped service is old.
@@ -53,6 +54,7 @@ func (c *cli) status(ctx context.Context, args []string) error {
 	}
 	yesNo := map[bool]string{true: "yes", false: "no"}
 	fmt.Fprintf(c.out, "version:   %s\n", r.Version)
+	fmt.Fprintf(c.out, "roles:     %v\n", r.Roles)
 	fmt.Fprintf(c.out, "paired:    %s\n", yesNo[r.Paired])
 	if r.Paired {
 		fmt.Fprintf(c.out, "device:    %s (%s)\n", r.Device, cfg.Name)
@@ -73,11 +75,11 @@ func (c *cli) status(ctx context.Context, args []string) error {
 
 func (c *cli) install(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("install", flag.ContinueOnError)
-	keepAwake := fs.Bool("keep-awake", false, "keep the Mac awake while the runner runs (macOS)")
+	keepAwake := fs.Bool("keep-awake", false, "keep the Mac awake while the daemon runs (macOS)")
 	if err := fs.Parse(args); err != nil {
 		return &exitError{2, err}
 	}
-	cfg, err := c.mustConfig()
+	cfg, err := c.setup(ctx)
 	if err != nil {
 		return err
 	}
@@ -88,7 +90,7 @@ func (c *cli) install(ctx context.Context, args []string) error {
 	if err := c.service.Install(ctx); err != nil {
 		return err
 	}
-	fmt.Fprintf(c.out, "The service is installed. It runs %s run at login.\n", c.exe)
+	fmt.Fprintf(c.out, "The service is installed. It runs %s daemon run at login.\n", c.exe)
 	return nil
 }
 

@@ -17,7 +17,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      # The app installs only a signed, notarized runner. Stop before an unsigned release.
+      # The app installs only a signed, notarized CLI. Stop before an unsigned release.
       - name: Check the signing secrets
         env:
           MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}

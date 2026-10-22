@@ -33,9 +33,9 @@ func testCLI(t *testing.T, stdin string) (*cli, *bytes.Buffer, *noRun) {
 	return &cli{
 		paths: paths, in: strings.NewReader(stdin), out: out,
 		log:     slog.New(slog.NewTextHandler(io.Discard, nil)),
-		secrets: secret.New(run, "windows", paths.Token(), nil),
-		service: service.NewManager("linux", dir, 1000, "/bin/oversire-runner", run),
-		exe:     "/bin/oversire-runner",
+		secrets: secret.New(run, "windows", secret.Daemon, paths.Token(), nil),
+		service: service.NewManager("linux", dir, 1000, "/bin/oversire", run),
+		exe:     "/bin/oversire",
 	}, out, run
 }
 
@@ -102,8 +102,8 @@ func TestPairClientCodeFails(t *testing.T) {
 	if err == nil || err.Error() != "This code is for a client. Make a runner code in the console." {
 		t.Fatal(err)
 	}
-	if _, ok, _ := c.paths.LoadConfig(); ok {
-		t.Fatal("a client code paired the runner")
+	if cfg, _, _ := c.paths.LoadConfig(); cfg.Paired() {
+		t.Fatal("a client code paired the daemon")
 	}
 }
 
@@ -117,7 +117,7 @@ func TestStatusJSON(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &r); err != nil {
 		t.Fatal(err)
 	}
-	for _, k := range []string{"version", "paired", "device", "hub", "connected", "since", "lastError", "service", "runtimes"} {
+	for _, k := range []string{"version", "roles", "paired", "device", "hub", "connected", "since", "lastError", "service", "runtimes"} {
 		if _, ok := r[k]; !ok {
 			t.Errorf("status has no %s", k)
 		}
@@ -135,5 +135,49 @@ func TestInstallKeepAwake(t *testing.T) {
 	}
 	if cfg, _, _ := c.paths.LoadConfig(); !cfg.KeepAwake {
 		t.Fatal("keepAwake not stored")
+	}
+}
+
+func TestPairAddsRunnerRole(t *testing.T) {
+	var body map[string]string
+	srv := fakePair(t, "runner", &body)
+	c, _, _ := testCLI(t, "")
+	c.paths.SaveConfig(config.Config{Roles: []string{config.RoleServe}, MaxSessions: 4})
+	if err := c.pair(context.Background(), []string{"ABCD-1234", "--hub", srv.URL}); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, _ := c.paths.LoadConfig()
+	if !cfg.Has(config.RoleServe) || !cfg.Has(config.RoleRunner) || cfg.MaxSessions != 4 || !cfg.Paired() {
+		t.Fatalf("config %#v", cfg)
+	}
+}
+
+func TestNewInstallGetsServe(t *testing.T) {
+	c, _, _ := testCLI(t, "")
+	cfg, err := c.setup(context.Background())
+	if err != nil || !cfg.Has(config.RoleServe) || cfg.Has(config.RoleRunner) {
+		t.Fatalf("%#v %v", cfg, err)
+	}
+}
+
+func TestCommandTree(t *testing.T) {
+	c, out, _ := testCLI(t, "")
+	if err := c.dispatch(context.Background(), []string{"help"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, cmd := range []string{"oversire daemon run", "oversire daemon install", "oversire daemon uninstall", "oversire daemon status",
+		"oversire hub pair", "oversire digest", "oversire version"} {
+		if !strings.Contains(out.String(), cmd) {
+			t.Errorf("help has no %q", cmd)
+		}
+	}
+	for old, want := range renamed {
+		err := c.dispatch(context.Background(), []string{old})
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: %v", old, err)
+		}
+	}
+	if err := c.dispatch(context.Background(), []string{"nope"}); err == nil {
+		t.Fatal("unknown command passed")
 	}
 }
