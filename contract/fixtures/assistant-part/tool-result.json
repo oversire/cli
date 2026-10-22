@@ -1,0 +1,1 @@
+{"type": "toolResult", "call": "call_1", "status": "ok", "summary": "OVERSIRE-153 · 2 PRs · 1 open question", "data": {"key": "OVERSIRE-153", "prs": [{"number": 214, "state": "open", "ci": "running"}]}}

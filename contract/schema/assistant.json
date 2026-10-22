@@ -1,0 +1,237 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oversire.dev/contract/assistant.json",
+  "title": "OverSire assistant",
+  "description": "The chat of the assistant: threads, messages with parts, the events of one turn and the tool specs. The app keeps threads and messages in the store (collections assistant-threads and assistant-messages). Blobs stay on the Mac, in ~/.config/oversire/assistant/blobs/<sha256>.",
+  "x-oversire-schema": 1,
+  "$defs": {
+    "Date": { "type": "string", "format": "date-time" },
+    "ToolSpec": {
+      "description": "A tool that the model can call. The name is the action id with _ in place of ., for example item_setStatus: the model APIs allow only [A-Za-z0-9_-] in a tool name.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$" },
+        "title": { "type": "string" },
+        "description": { "description": "For the model and for the command palette.", "type": "string" },
+        "kind": { "$ref": "actions.json#/$defs/ActionKind" },
+        "input": { "description": "A JSON Schema object for the args.", "type": "object" }
+      },
+      "required": ["name", "title", "description", "kind", "input"],
+      "additionalProperties": false
+    },
+    "ToolCall": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "tool": { "type": "string", "minLength": 1 },
+        "args": { "type": "object" },
+        "kind": { "description": "Set by the app from the tool spec.", "$ref": "actions.json#/$defs/ActionKind" }
+      },
+      "required": ["id", "tool", "args"],
+      "additionalProperties": false
+    },
+    "ToolResult": {
+      "type": "object",
+      "properties": {
+        "call": { "description": "The ToolCall id.", "type": "string" },
+        "status": { "enum": ["ok", "failed", "denied", "skipped"] },
+        "summary": { "description": "One line for the chip.", "type": "string" },
+        "data": { "description": "The data for the model. The app removes secrets first." }
+      },
+      "required": ["call", "status", "summary"],
+      "additionalProperties": false
+    },
+    "Approval": {
+      "type": "object",
+      "properties": {
+        "call": { "type": "string" },
+        "decision": { "enum": ["approved", "denied", "allowedByRule"] },
+        "by": { "description": "user, or the rule: kind:<kind> or chat:<action id>.", "type": "string" }
+      },
+      "required": ["call", "decision"],
+      "additionalProperties": false
+    },
+    "AssistantPart": {
+      "oneOf": [
+        { "type": "object", "properties": { "type": { "const": "text" }, "text": { "type": "string" } }, "required": ["type", "text"], "additionalProperties": false },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "thought" },
+            "text": { "type": "string" },
+            "signature": { "description": "Anthropic thinking signature. The next turn sends it back.", "type": "string" }
+          },
+          "required": ["type", "text"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "image" },
+            "blob": { "description": "The sha256 of the bytes, in hex.", "type": "string" },
+            "mime": { "type": "string" },
+            "width": { "type": "integer" },
+            "height": { "type": "integer" }
+          },
+          "required": ["type", "blob", "mime"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "file" },
+            "blob": { "type": "string" },
+            "name": { "type": "string" },
+            "mime": { "type": "string" },
+            "bytes": { "type": "integer", "minimum": 0 }
+          },
+          "required": ["type", "blob", "name", "mime", "bytes"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "mention" },
+            "subject": { "$ref": "refs.json#/$defs/SubjectRef" },
+            "label": { "description": "The text of the chip, for example OVERSIRE-153.", "type": "string" }
+          },
+          "required": ["type", "subject"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "toolCall" },
+            "id": { "type": "string" },
+            "tool": { "type": "string" },
+            "args": { "type": "object" },
+            "kind": { "$ref": "actions.json#/$defs/ActionKind" }
+          },
+          "required": ["type", "id", "tool", "args"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "toolResult" },
+            "call": { "type": "string" },
+            "status": { "enum": ["ok", "failed", "denied", "skipped"] },
+            "summary": { "type": "string" },
+            "data": {}
+          },
+          "required": ["type", "call", "status", "summary"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "approval" },
+            "call": { "type": "string" },
+            "decision": { "enum": ["approved", "denied", "allowedByRule"] },
+            "by": { "type": "string" }
+          },
+          "required": ["type", "call", "decision"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "navigation" },
+            "route": { "description": "The path form of the app Route, for example item/OVERSIRE-153/session.", "type": "string" },
+            "focus": { "description": "A row id or a section anchor on the page.", "type": "string" },
+            "from": { "description": "The route before the move, for Go back.", "type": "string" }
+          },
+          "required": ["type", "route"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "notice" },
+            "code": { "description": "Open set, for example machineOffline, noImages, cut.", "type": "string" },
+            "text": { "type": "string" }
+          },
+          "required": ["type", "code", "text"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "AssistantThread": {
+      "description": "Store collection assistant-threads.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "title": { "type": "string" },
+        "createdAt": { "$ref": "#/$defs/Date" },
+        "updatedAt": { "$ref": "#/$defs/Date" },
+        "engine": { "description": "The EngineID of the chat: local-cli, api-key, later cloud.", "type": "string" },
+        "pinned": { "type": "boolean" },
+        "subjects": { "description": "The items, PRs, runs and sessions that the chat touched.", "type": "array", "items": { "$ref": "refs.json#/$defs/SubjectRef" } },
+        "allow": { "description": "Action ids that the user allowed for this chat.", "type": "array", "items": { "type": "string" } },
+        "machines": { "description": "The group machines that the chat touched.", "type": "array", "items": { "type": "string" } },
+        "follow": { "description": "Follow along. Missing: the default of the settings.", "type": "boolean" },
+        "engineSession": { "description": "The session id of the local CLI, for resume.", "type": "string" }
+      },
+      "required": ["id", "title", "createdAt", "updatedAt", "engine", "pinned", "subjects", "allow"],
+      "additionalProperties": false
+    },
+    "AssistantMessage": {
+      "description": "Store collection assistant-messages.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "thread": { "type": "string" },
+        "role": { "enum": ["user", "assistant"] },
+        "at": { "$ref": "#/$defs/Date" },
+        "parts": { "type": "array", "items": { "$ref": "#/$defs/AssistantPart" } },
+        "engine": { "description": "With role assistant.", "type": "string" },
+        "usage": { "$ref": "ai-task.json#/$defs/AIUsage" }
+      },
+      "required": ["id", "thread", "role", "at", "parts"],
+      "additionalProperties": false
+    },
+    "ChatEvent": {
+      "description": "One event of a turn, from a ChatEngine or the assistant loop to the UI.",
+      "oneOf": [
+        { "type": "object", "properties": { "type": { "const": "textDelta" }, "text": { "type": "string" } }, "required": ["type", "text"], "additionalProperties": false },
+        {
+          "type": "object",
+          "properties": { "type": { "const": "thoughtDelta" }, "text": { "type": "string" }, "signature": { "type": "string" } },
+          "required": ["type", "text"],
+          "additionalProperties": false
+        },
+        { "type": "object", "properties": { "type": { "const": "toolCall" }, "call": { "$ref": "#/$defs/ToolCall" } }, "required": ["type", "call"], "additionalProperties": false },
+        { "type": "object", "properties": { "type": { "const": "toolResult" }, "result": { "$ref": "#/$defs/ToolResult" } }, "required": ["type", "result"], "additionalProperties": false },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "approvalNeeded" },
+            "call": { "$ref": "#/$defs/ToolCall" },
+            "note": { "description": "Set when text from a tool result asked for the call.", "type": "string" }
+          },
+          "required": ["type", "call"],
+          "additionalProperties": false
+        },
+        { "type": "object", "properties": { "type": { "const": "usage" }, "usage": { "$ref": "ai-task.json#/$defs/AIUsage" } }, "required": ["type", "usage"], "additionalProperties": false },
+        {
+          "type": "object",
+          "properties": { "type": { "const": "engineChanged" }, "from": { "type": "string" }, "to": { "type": "string" }, "reason": { "type": "string" } },
+          "required": ["type", "to"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": { "type": { "const": "end" }, "reason": { "enum": ["done", "cancelled", "error", "maxTurns"] } },
+          "required": ["type", "reason"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": { "type": { "const": "error" }, "code": { "type": "string" }, "message": { "type": "string" } },
+          "required": ["type", "code", "message"],
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

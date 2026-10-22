@@ -5,6 +5,10 @@
   "description": "Typed writes that the app or the cloud sends to an adapter.",
   "x-oversire-schema": 1,
   "$defs": {
+    "ActionKind": {
+      "description": "The risk of an action in the action catalog. read: allow. change: ask once in each chat. outward: ask each time. settings: the assistant never runs it.",
+      "enum": ["read", "change", "outward", "settings"]
+    },
     "ItemPatch": {
       "description": "A write to a tracker item. A missing field stays as it is.",
       "type": "object",

@@ -1,0 +1,1 @@
+{"type": "toolCall", "call": {"id": "call_2", "tool": "pr_merge", "args": {"repo": "oversire/oversire", "number": 214, "method": "squash"}, "kind": "outward"}}

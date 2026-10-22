@@ -36,9 +36,22 @@
         "task": { "type": "string" },
         "engine": { "description": "Open set: api-key, and later agentbinder and cloud.", "type": "string" },
         "text": { "type": "string" },
-        "at": { "type": "string", "format": "date-time" }
+        "at": { "type": "string", "format": "date-time" },
+        "usage": { "$ref": "#/$defs/AIUsage" }
       },
       "required": ["schema", "task", "engine", "text", "at"],
+      "additionalProperties": false
+    },
+    "AIUsage": {
+      "description": "Tokens of one call or one turn.",
+      "type": "object",
+      "properties": {
+        "input": { "type": "integer", "minimum": 0 },
+        "output": { "type": "integer", "minimum": 0 },
+        "cached": { "description": "Input tokens read from the cache.", "type": "integer", "minimum": 0 },
+        "costUSD": { "description": "When the engine knows the price.", "type": "number", "minimum": 0 }
+      },
+      "required": ["input", "output"],
       "additionalProperties": false
     }
   }

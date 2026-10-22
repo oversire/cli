@@ -1,0 +1,1 @@
+{"schema": 1, "task": "status:OVERSIRE-153", "engine": "local-cli", "text": "Waits for the manual check.", "at": "2026-10-22T18:00:00Z", "usage": {"input": 900, "output": 120}}

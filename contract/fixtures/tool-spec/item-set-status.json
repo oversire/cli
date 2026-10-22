@@ -1,0 +1,1 @@
+{"name": "item_setStatus", "title": "Set status", "description": "Set the status of an item.", "kind": "change", "input": {"type": "object", "properties": {"key": {"type": "string"}, "status": {"type": "string"}}, "required": ["key", "status"]}}
