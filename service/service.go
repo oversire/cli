@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // Names are the names of one service install.
@@ -36,10 +37,11 @@ type Manager struct {
 	uid   int
 	exe   string
 	run   Runner
+	sleep func(time.Duration)
 }
 
 func NewManager(goos, home string, uid int, exe string, run Runner) *Manager {
-	return &Manager{names: Current, goos: goos, home: home, uid: uid, exe: exe, run: run}
+	return &Manager{names: Current, goos: goos, home: home, uid: uid, exe: exe, run: run, sleep: time.Sleep}
 }
 
 // Legacy is a manager for the oversire-runner install, to find and remove it.
@@ -77,7 +79,15 @@ func (m *Manager) Install(ctx context.Context) error {
 		}
 		_ = os.MkdirAll(filepath.Dir(m.LogPath()), 0o755)
 		_, _, _ = m.run.Run(ctx, "launchctl", []string{"bootout", m.domain() + "/" + m.names.Label}, nil)
-		return m.do(ctx, "launchctl", "bootstrap", m.domain(), m.PlistPath())
+		// launchd can still remove the old job after bootout returns. Then bootstrap fails with "5: Input/output error".
+		var err error
+		for range 10 {
+			if err = m.do(ctx, "launchctl", "bootstrap", m.domain(), m.PlistPath()); err == nil {
+				return nil
+			}
+			m.sleep(500 * time.Millisecond)
+		}
+		return err
 	case "linux":
 		if err := writeFile(m.UnitPath(), SystemdUnit(m.exe)); err != nil {
 			return err

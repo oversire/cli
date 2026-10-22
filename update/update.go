@@ -10,7 +10,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -23,7 +22,8 @@ import (
 )
 
 const (
-	LatestURL = "https://api.github.com/repos/oversire/cli/releases/latest"
+	// LatestURL redirects to releases/tag/<tag>. It is not an API call, so the limit of 60 calls in one hour does not apply.
+	LatestURL = "https://github.com/oversire/cli/releases/latest"
 	TeamID    = "Q56WK6TB88"
 	maxSize   = 200 << 20
 )
@@ -53,46 +53,27 @@ func NewUpdater(http Doer, run Runner, api, version, goos, goarch, exe string) *
 	return &Updater{http: http, run: run, api: api, version: version, goos: goos, goarch: goarch, exe: exe}
 }
 
-type release struct {
-	Tag    string `json:"tag_name"`
-	Assets []struct {
-		Name string `json:"name"`
-		URL  string `json:"browser_download_url"`
-	} `json:"assets"`
-}
-
 // Check installs a newer release and gives its version, or "" when this build is the latest.
 func (u *Updater) Check(ctx context.Context) (string, error) {
 	if u.version == "dev" || u.version == "" {
 		return "", nil
 	}
-	var rel release
-	body, err := u.get(ctx, u.api)
+	tag, download, err := u.latest(ctx)
 	if err != nil {
 		return "", err
 	}
-	if err := json.Unmarshal(body, &rel); err != nil {
-		return "", fmt.Errorf("update: release feed: %w", err)
-	}
-	if !Newer(rel.Tag, u.version) {
+	if !Newer(tag, u.version) {
 		return "", nil
 	}
-	version := strings.TrimPrefix(rel.Tag, "v")
+	version := strings.TrimPrefix(tag, "v")
 	name := ArchiveName(version, u.goos, u.goarch)
-	urls := map[string]string{}
-	for _, a := range rel.Assets {
-		urls[a.Name] = a.URL
-	}
-	if urls[name] == "" || urls["checksums.txt"] == "" {
-		return "", fmt.Errorf("update: release %s has no %s or checksums.txt", rel.Tag, name)
-	}
-	sums, err := u.get(ctx, urls["checksums.txt"])
+	sums, err := u.get(ctx, download+"checksums.txt")
 	if err != nil {
 		return "", err
 	}
-	archive, err := u.get(ctx, urls[name])
+	archive, err := u.get(ctx, download+name)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("update: release %s has no %s: %w", tag, name, err)
 	}
 	if err := VerifyChecksum(sums, name, archive); err != nil {
 		return "", err
@@ -109,6 +90,29 @@ func (u *Updater) binaryName() string {
 		return "oversire.exe"
 	}
 	return "oversire"
+}
+
+// latest follows the redirect of the latest URL to .../releases/tag/<tag>. download is the folder of the release files.
+func (u *Updater) latest(ctx context.Context) (tag, download string, err error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, u.api, nil)
+	if err != nil {
+		return "", "", err
+	}
+	req.Header.Set("User-Agent", "oversire-cli/"+u.version)
+	resp, err := u.http.Do(req)
+	if err != nil {
+		return "", "", fmt.Errorf("update: %w", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || resp.Request == nil {
+		return "", "", fmt.Errorf("update: HEAD %s: %s", u.api, resp.Status)
+	}
+	final := resp.Request.URL.String()
+	base, tag, ok := strings.Cut(final, "/releases/tag/")
+	if !ok || tag == "" || strings.Contains(tag, "/") {
+		return "", "", fmt.Errorf("update: %s gave no release tag (%s)", u.api, final)
+	}
+	return tag, base + "/releases/download/" + tag + "/", nil
 }
 
 func (u *Updater) get(ctx context.Context, url string) ([]byte, error) {

@@ -2,16 +2,25 @@ package service
 
 import (
 	"context"
+	"errors"
 	"os"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
-type record struct{ calls [][]string }
+type record struct {
+	calls     [][]string
+	bootFails int // bootstrap fails this many times
+}
 
 func (r *record) Run(_ context.Context, exe string, args []string, _ []byte) ([]byte, []byte, error) {
 	r.calls = append(r.calls, append([]string{exe}, args...))
+	if exe == "launchctl" && args[0] == "bootstrap" && r.bootFails > 0 {
+		r.bootFails--
+		return nil, []byte("Bootstrap failed: 5: Input/output error"), errors.New("exit status 5")
+	}
 	if exe == "launchctl" && args[0] == "print" {
 		return []byte("\tstate = running\n"), nil, nil
 	}
@@ -123,5 +132,19 @@ func TestWindows(t *testing.T) {
 	}
 	if !r.has("schtasks", "/Delete", "/TN", "OverSireDaemon", "/F") {
 		t.Fatalf("calls %q", r.calls)
+	}
+}
+
+func TestDarwinBootstrapAgain(t *testing.T) {
+	r := &record{bootFails: 2}
+	m := NewManager("darwin", t.TempDir(), 501, "/x/oversire", r)
+	var slept int
+	m.sleep = func(time.Duration) { slept++ }
+	if err := m.Install(context.Background()); err != nil || slept != 2 {
+		t.Fatal(err, slept)
+	}
+	r.bootFails = 99
+	if err := m.Install(context.Background()); err == nil || !strings.Contains(err.Error(), "Input/output error") {
+		t.Fatal(err)
 	}
 }

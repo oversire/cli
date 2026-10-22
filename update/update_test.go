@@ -9,7 +9,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -80,24 +79,34 @@ func sha(b []byte) string {
 	return hex.EncodeToString(s[:])
 }
 
-// feed serves a release feed and its assets from memory.
+// feed serves the latest redirect and the release files from memory.
 type feed struct {
-	files map[string][]byte
-	gets  []string
+	files     map[string][]byte
+	redirects map[string]string
+	gets      []string
 }
 
 func (f *feed) Do(r *http.Request) (*http.Response, error) {
 	f.gets = append(f.gets, r.URL.String())
+	if to, ok := f.redirects[r.URL.String()]; ok {
+		final, _ := http.NewRequest(r.Method, to, nil)
+		return &http.Response{StatusCode: 200, Status: "200 OK", Body: io.NopCloser(strings.NewReader("")), Request: final}, nil
+	}
 	b, ok := f.files[r.URL.String()]
 	if !ok {
-		return &http.Response{StatusCode: 404, Status: "404 Not Found", Body: io.NopCloser(strings.NewReader(""))}, nil
+		return &http.Response{StatusCode: 404, Status: "404 Not Found", Body: io.NopCloser(strings.NewReader("")), Request: r}, nil
 	}
-	return &http.Response{StatusCode: 200, Status: "200 OK", Body: io.NopCloser(bytes.NewReader(b))}, nil
+	return &http.Response{StatusCode: 200, Status: "200 OK", Body: io.NopCloser(bytes.NewReader(b)), Request: r}, nil
 }
 
+const latestURL = "https://gh/o/cli/releases/latest"
+
 func newFeed(tag, archiveName string, archive []byte, sums string) *feed {
-	rel := fmt.Sprintf(`{"tag_name":%q,"assets":[{"name":%q,"browser_download_url":"https://dl/a"},{"name":"checksums.txt","browser_download_url":"https://dl/sums"}]}`, tag, archiveName)
-	return &feed{files: map[string][]byte{"https://api/latest": []byte(rel), "https://dl/a": archive, "https://dl/sums": []byte(sums)}}
+	dl := "https://gh/o/cli/releases/download/" + tag + "/"
+	return &feed{
+		redirects: map[string]string{latestURL: "https://gh/o/cli/releases/tag/" + tag},
+		files:     map[string][]byte{dl + archiveName: archive, dl + "checksums.txt": []byte(sums)},
+	}
 }
 
 type codesign struct {
@@ -129,7 +138,7 @@ func TestUpdateReplacesTheBinary(t *testing.T) {
 	f := newFeed("v0.2.0", name, archive, sha(archive)+"  "+name+"\n")
 	cs := &codesign{team: TeamID, valid: true}
 	exe := exeFile(t)
-	got, err := NewUpdater(f, cs, "https://api/latest", "0.1.0", "darwin", "arm64", exe).Check(context.Background())
+	got, err := NewUpdater(f, cs, latestURL, "0.1.0", "darwin", "arm64", exe).Check(context.Background())
 	if err != nil || got != "0.2.0" {
 		t.Fatal(got, err)
 	}
@@ -146,7 +155,7 @@ func TestUpdateWindowsZip(t *testing.T) {
 	archive := zipped(t, "oversire.exe", []byte("new"))
 	f := newFeed("v0.2.0", name, archive, sha(archive)+"  "+name+"\n")
 	exe := exeFile(t)
-	if _, err := NewUpdater(f, &codesign{}, "https://api/latest", "0.1.0", "windows", "amd64", exe).Check(context.Background()); err != nil {
+	if _, err := NewUpdater(f, &codesign{}, latestURL, "0.1.0", "windows", "amd64", exe).Check(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	if b, _ := os.ReadFile(exe); string(b) != "new" {
@@ -170,7 +179,7 @@ func TestUpdateRefusals(t *testing.T) {
 	for _, c := range cases {
 		exe := exeFile(t)
 		f := newFeed("v0.2.0", name, archive, c.sums)
-		_, err := NewUpdater(f, c.cs, "https://api/latest", c.version, "darwin", "arm64", exe).Check(context.Background())
+		_, err := NewUpdater(f, c.cs, latestURL, c.version, "darwin", "arm64", exe).Check(context.Background())
 		if err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%s: got %v", c.label, err)
 		}
@@ -187,12 +196,20 @@ func TestNoUpdate(t *testing.T) {
 	name := ArchiveName("0.1.0", "linux", "amd64")
 	for _, version := range []string{"0.1.0", "dev"} {
 		f := newFeed("v0.1.0", name, nil, "")
-		got, err := NewUpdater(f, &codesign{}, "https://api/latest", version, "linux", "amd64", exeFile(t)).Check(context.Background())
+		got, err := NewUpdater(f, &codesign{}, latestURL, version, "linux", "amd64", exeFile(t)).Check(context.Background())
 		if err != nil || got != "" {
 			t.Fatal(version, got, err)
 		}
 		if len(f.gets) > 1 || (version == "dev" && len(f.gets) != 0) {
 			t.Fatalf("%s: gets %q", version, f.gets)
 		}
+	}
+}
+
+func TestLatestWithoutTag(t *testing.T) {
+	f := &feed{redirects: map[string]string{latestURL: "https://gh/o/cli/releases"}}
+	_, err := NewUpdater(f, &codesign{}, latestURL, "0.1.0", "linux", "amd64", exeFile(t)).Check(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "no release tag") {
+		t.Fatal(err)
 	}
 }
