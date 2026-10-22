@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"os"
 	"os/exec"
 	"path/filepath"
 	goruntime "runtime"
@@ -13,6 +14,7 @@ import (
 	"github.com/oversire/cli/hooks"
 	"github.com/oversire/cli/orcawatch"
 	"github.com/oversire/cli/proc"
+	"github.com/oversire/cli/questions"
 	"github.com/oversire/cli/runtime"
 	"github.com/oversire/cli/runtime/orca"
 	"github.com/oversire/cli/secret"
@@ -34,8 +36,13 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	if !ok {
 		exe = orca.MacPath // Reachable is false, and the watcher waits and tries again
 	}
-	watcher := orcawatch.NewWatcher(orca.New(exe, proc.Local{}), book, nil)
-	ingest := hooks.NewIngest(book, nil).WithHinter(watcher)
+	orcaCLI := orca.New(exe, proc.Local{})
+	watcher := orcawatch.NewWatcher(orcaCLI, book, nil)
+	screen := orca.NewScreen(orcaCLI)
+	userHome, _ := os.UserHomeDir()
+	files := questions.NewFiles(filepath.Join(userHome, ".claude", "projects"), screen)
+	asks := questions.NewChannel(book, screen, files, events, time.Now)
+	ingest := hooks.NewIngest(book, asks).WithHinter(watcher)
 	installer := c.installer()
 	spool := hooks.SpoolPath(data)
 	if err := ingest.DrainSpool(spool); err != nil {
@@ -88,6 +95,8 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	}
 	srv.Handle(joins.Routes()...)
 	srv.Handle(syncer.Routes()...)
+	srv.Handle(asks.Routes()...)
+	srv.Handle(installer.Routes()...)
 
 	drain := func(ctx context.Context) error {
 		t := time.NewTicker(spoolInterval)
@@ -103,7 +112,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 			}
 		}
 	}
-	return []func(context.Context) error{srv.Run, book.Run, watcher.Run, syncer.Run, drain}, nil
+	return []func(context.Context) error{srv.Run, book.Run, watcher.Run, syncer.Run, asks.Run, drain}, nil
 }
 
 // hookHealth is "live" when a harness has our hooks, else "off".

@@ -247,6 +247,9 @@ func (w *Watcher) patch(c orca.WorktreeCard, a orca.AgentCard, terminal string, 
 		Runtime: str(wire.RuntimeOrca), Workspace: str(c.ID), Cwd: str(c.Path), Repo: str(c.Repo), Branch: str(c.BranchName()),
 		Tool: str(a.ToolName), ToolInput: str(a.ToolInput),
 	}
+	if a.StateStartedAt > 0 {
+		p.Since = time.UnixMilli(a.StateStartedAt)
+	}
 	if a.AgentType != "" {
 		p.Harness = str(a.AgentType)
 	}

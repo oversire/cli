@@ -49,6 +49,8 @@ type Patch struct {
 	Prompt          *string
 	LastMessage     *string
 	End             bool // the source says the session is gone
+	// Since is when the source saw the state start. Zero means At.
+	Since time.Time
 }
 
 type Appender interface{ Append(e wire.ProviderEvent) }
@@ -115,6 +117,9 @@ func (b *Book) Apply(p Patch) {
 	}
 	if e.s.State != before.State || e.s.Reason != before.Reason {
 		e.s.StateSince = p.At
+		if !p.Since.IsZero() && p.Since.Before(p.At) {
+			e.s.StateSince = p.Since
+		}
 		b.watch.notify(p.ID)
 	}
 	if !reflect.DeepEqual(e.s, before) {

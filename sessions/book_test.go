@@ -227,3 +227,20 @@ func TestRun(t *testing.T) {
 		t.Fatal("not saved at stop")
 	}
 }
+
+func TestSince(t *testing.T) {
+	b, _ := newBook("")
+	p := orca("s", time.Minute, wire.PhaseWaiting)
+	p.Since = at(10 * time.Second)
+	b.Apply(p)
+	if s, _ := b.Get("s"); !s.StateSince.Equal(at(10 * time.Second)) {
+		t.Fatalf("got %v", s.StateSince)
+	}
+	// The same state keeps its start. A start after At is not trusted.
+	p = orca("s", 2*time.Minute, wire.PhaseWorking)
+	p.Since = at(3 * time.Minute)
+	b.Apply(p)
+	if s, _ := b.Get("s"); !s.StateSince.Equal(at(2 * time.Minute)) {
+		t.Fatalf("got %v", s.StateSince)
+	}
+}
