@@ -74,6 +74,7 @@ type Book struct {
 	path    string
 	dirty   bool
 	saved   time.Time
+	watch   watchers
 }
 
 // NewBook reads path when it exists. An empty path keeps the sessions in memory only.
@@ -114,6 +115,7 @@ func (b *Book) Apply(p Patch) {
 	}
 	if e.s.State != before.State || e.s.Reason != before.Reason {
 		e.s.StateSince = p.At
+		b.watch.notify(p.ID)
 	}
 	if !reflect.DeepEqual(e.s, before) {
 		e.s.UpdatedAt = p.At
@@ -225,6 +227,7 @@ func (b *Book) flush(now time.Time) {
 func (b *Book) remove(e *entry, now time.Time) {
 	delete(b.byID, e.s.ID)
 	b.dirty = true
+	b.watch.notify(e.s.ID)
 	b.send(e.s, "removed", now)
 }
 

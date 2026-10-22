@@ -1,0 +1,18 @@
+{
+  "transcript": "ask-flow-open.jsonl",
+  "answer": [
+    { "id": "q1", "choices": ["JSON"] },
+    { "id": "q2", "choices": ["Unit"], "other": "perf" }
+  ],
+  "sends": ["2", "1", "4", "\u001b[B", "\u001b[B", "\u001b[B", "perf", "\u001b[B", "\r", "1"],
+  "pages": [
+    { "first": 0, "last": 1, "answer": [{ "id": "q1", "choices": ["JSON"] }], "sends": ["2"] },
+    {
+      "first": 1,
+      "last": 9,
+      "answer": [{ "id": "q1", "choices": ["Unit"], "other": "perf" }],
+      "sends": ["1", "4", "\u001b[B", "\u001b[B", "\u001b[B", "perf", "\u001b[B", "\r"]
+    },
+    { "first": 9, "last": 10, "answer": [{ "id": "review", "choices": ["Submit answers"] }], "sends": ["1"] }
+  ]
+}
