@@ -196,12 +196,13 @@ func (m *Migrator) binary(ctx context.Context) (bool, []string) {
 	return true, nil
 }
 
-// Layouts gives the default layout of this machine. With a home override, the folders do not move.
+// Layouts gives the default layout of this machine. With a home override, nothing moves:
+// the old binary and the old service belong to the whole machine.
 func Layouts() (Layout, error) {
-	l := Layout{Binary: LegacyBinary}
 	if config.Home() != "" {
-		return l, nil
+		return Layout{}, nil
 	}
+	l := Layout{Binary: LegacyBinary}
 	var err error
 	for _, p := range []struct {
 		dst *string

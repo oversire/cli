@@ -87,6 +87,19 @@ func (c *cli) run(ctx context.Context) error {
 		}
 		tasks = append(tasks, c.hubTask(client))
 	}
+	if cfg.Has(config.RoleServe) {
+		hubHealth := func() string {
+			if client == nil {
+				return "off"
+			}
+			return "on"
+		}
+		serve, err := c.serveTasks(ctx, cfg, reg, data, hubHealth)
+		if err != nil {
+			return err
+		}
+		tasks = append(tasks, serve...)
+	}
 	if len(tasks) == 0 {
 		tasks = append(tasks, func(ctx context.Context) error { <-ctx.Done(); return nil })
 	}

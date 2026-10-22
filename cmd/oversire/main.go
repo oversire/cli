@@ -34,6 +34,14 @@ Usage:
   oversire daemon status [--json]                      show the state (short form: oversire status)
   oversire hub pair <code> [--hub URL] [--name NAME]   pair with the cloud hub as a runner
   oversire hub pair - [--hub URL] [--name NAME]        read the code from stdin
+  oversire hooks install [--harness claude,codex]      add or update the OverSire agent hooks
+  oversire hooks remove [--harness claude,codex]       remove only the OverSire agent hooks
+  oversire hooks status [--json]                       show the hook state of each harness
+  oversire group show [--json]                         show the machines and apps of the group
+  oversire group invite | requests | approve <id> | deny <id>
+  oversire group request-code | admit <machine> <code>
+  oversire group remove <machine|deviceId> | home <machine> | rotate
+  oversire join <host> <code>|-                        join the group of the member at host
   oversire digest --harness claude --session <id or file> [--markers]
                   [--source S] [--earlier N] [--full N] [--max-chars N]
                                                        print the history digest of a session
@@ -77,6 +85,11 @@ func main() {
 		fmt.Fprint(os.Stderr, usage)
 		os.Exit(2)
 	}
+	if os.Args[1] == "hook" {
+		// The hook of an agent CLI: it must be fast and always exit 0.
+		_ = hookCLI().hook(context.Background(), os.Args[2:])
+		os.Exit(0)
+	}
 	if os.Args[1] == "digest" {
 		// digest also runs on hosts without a daemon setup, so it makes no config folder.
 		exit(digestCLI().digest(os.Args[2:]))
@@ -108,6 +121,12 @@ func (c *cli) dispatch(ctx context.Context, args []string) error {
 		return c.status(ctx, rest[1:])
 	case cmd == "status":
 		return c.status(ctx, rest)
+	case cmd == "hooks":
+		return c.hooks(ctx, rest)
+	case cmd == "group":
+		return c.group(ctx, rest)
+	case cmd == "join":
+		return c.join(ctx, rest)
 	case cmd == "hub" && sub == "pair":
 		return c.pair(ctx, rest[1:])
 	case cmd == "version" || cmd == "--version" || cmd == "-v":
@@ -169,6 +188,10 @@ func newCLI() (*cli, error) {
 		service: service.NewManager(goruntime.GOOS, home, os.Getuid(), exe, run),
 		exe:     exe,
 		home:    home,
+	}
+	if config.Home() != "" {
+		// A home override runs beside the real install. It must not change the machine service.
+		return c, os.MkdirAll(dir, 0o700)
 	}
 	c.migrate = func(ctx context.Context) (migrate.Report, error) {
 		layout, err := migrate.Layouts()

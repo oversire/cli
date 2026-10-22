@@ -1,0 +1,117 @@
+package main
+
+import (
+	"context"
+	"os/exec"
+	"path/filepath"
+	goruntime "runtime"
+	"time"
+
+	"github.com/oversire/cli/config"
+	"github.com/oversire/cli/eventlog"
+	"github.com/oversire/cli/group"
+	"github.com/oversire/cli/hooks"
+	"github.com/oversire/cli/orcawatch"
+	"github.com/oversire/cli/proc"
+	"github.com/oversire/cli/runtime"
+	"github.com/oversire/cli/runtime/orca"
+	"github.com/oversire/cli/secret"
+	"github.com/oversire/cli/server"
+	"github.com/oversire/cli/sessions"
+	"github.com/oversire/cli/wire"
+)
+
+// spoolInterval is how often the daemon reads the hook spool.
+const spoolInterval = 10 * time.Second
+
+// serveTasks builds the serve role: the event log, the session book, the hooks, the Orca watcher, the group and the server.
+func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Registry, data string, hub func() string) ([]func(context.Context) error, error) {
+	serveCfg := cfg.ServeOrDefault()
+	events := eventlog.New(eventlog.DefaultCapacity)
+	book := sessions.NewBook(cfg.Machine(), filepath.Join(data, "sessions.json"), events, time.Now)
+
+	exe, ok := orca.FindCLI()
+	if !ok {
+		exe = orca.MacPath // Reachable is false, and the watcher waits and tries again
+	}
+	watcher := orcawatch.NewWatcher(orca.New(exe, proc.Local{}), book, nil)
+	ingest := hooks.NewIngest(book, nil).WithHinter(watcher)
+	installer := c.installer()
+	spool := hooks.SpoolPath(data)
+	if err := ingest.DrainSpool(spool); err != nil {
+		c.log.Warn("hook spool", "err", err)
+	}
+
+	tailnet := server.NewTailnet(proc.Local{})
+	var srv *server.Server
+	// A home override can run more daemons on one machine. Each keeps its group secret in its own folder.
+	goos := goruntime.GOOS
+	if config.Home() != "" {
+		goos = ""
+	}
+	groupSecrets := secret.New(proc.Local{}, goos, secret.Group, filepath.Join(c.paths.Dir, "group.secret"), exec.LookPath)
+	store := group.NewStore(filepath.Join(c.paths.Dir, "group.json"), groupSecrets, time.Now, func() {
+		if srv != nil {
+			srv.Notify(false, map[string]string{"type": "group"})
+		}
+	})
+	if err := store.Load(); err != nil {
+		return nil, err
+	}
+	self := wire.GroupMember{Machine: cfg.Machine(), Host: cfg.Machine(), Addrs: []string{}, Port: serveCfg.ListenPort(), Roles: cfg.Roles}
+	if serveCfg.UseTailscale() {
+		if addrs, err := tailnet.Addrs(ctx); err == nil {
+			for _, a := range addrs {
+				self.Addrs = append(self.Addrs, a.String())
+			}
+		}
+	}
+	if err := store.EnsureCreated(self); err != nil {
+		return nil, err
+	}
+	joins := group.NewJoins(store, func(m any) {
+		if srv != nil {
+			srv.Notify(true, m)
+		}
+	}, time.Now)
+	syncer := group.NewSyncer(store, tailnet.Peers, c.log)
+
+	info := func() wire.DaemonInfo {
+		d := wire.DaemonInfo{Machine: cfg.Machine(), Version: version, Contract: 1, Roles: cfg.Roles, Runtimes: reg.IDs(), Harnesses: installer.Status()}
+		d.Group, d.Home = store.Info()
+		return d
+	}
+	srv = server.NewServer(serveCfg, info, store, events, book, ingest)
+	srv.Log = c.log
+	srv.Health = func() server.HealthSources {
+		return server.HealthSources{Hooks: hookHealth(installer.Status()), Orca: watcher.Health(), Hub: hub()}
+	}
+	srv.Handle(joins.Routes()...)
+	srv.Handle(syncer.Routes()...)
+
+	drain := func(ctx context.Context) error {
+		t := time.NewTicker(spoolInterval)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-t.C:
+				if err := ingest.DrainSpool(spool); err != nil {
+					c.log.Warn("hook spool", "err", err)
+				}
+			}
+		}
+	}
+	return []func(context.Context) error{srv.Run, book.Run, watcher.Run, syncer.Run, drain}, nil
+}
+
+// hookHealth is "live" when a harness has our hooks, else "off".
+func hookHealth(st []wire.HarnessHooks) string {
+	for _, h := range st {
+		if h.Hooks == wire.HooksInstalled {
+			return "live"
+		}
+	}
+	return "off"
+}
