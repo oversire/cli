@@ -200,7 +200,7 @@ The daemon looks for the tailnet addresses again each 30 s. It never binds `0.0.
 
 ### Hooks and questions
 
-The agent hooks call `oversire hook <harness> <event>`. The command posts the event to `POST /v1/hooks/{harness}` and ends at once. When the daemon does not answer, it writes the event to a spool file, and the daemon reads the spool each 10 s. The app reads, installs and removes the hooks with `GET`, `POST` and `DELETE /v1/hooks/install`, body `{"harnesses":[...]}` (loopback only).
+The agent hooks call `oversire hook <harness>` with the event on stdin. The command posts it to `POST /v1/hooks/{harness}` and ends at once. When the daemon does not answer, it writes the event to a spool file, and the daemon reads the spool each 10 s. The app reads, installs and removes the hooks with `GET`, `POST` and `DELETE /v1/hooks/install`, body `{"harnesses":[...]}` (loopback only).
 
 The daemon finds the open questions of the agent sessions: forms and permission prompts on the Orca screen, and a turn that ends with a question. `GET /v1/questions` lists them. `POST /v1/questions/{id}/answer` types the answer into the terminal. `GET /v1/questions/{id}/given` tells the answer that the user gave in the terminal.
 
