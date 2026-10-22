@@ -1,6 +1,11 @@
 package wire
 
-import "time"
+import (
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+)
 
 // SessionPhase is the state of a DaemonSession. The same values as AgentSession.Phase in the app.
 type SessionPhase string
@@ -300,3 +305,73 @@ type DaemonAnswerResult struct {
 
 // CodeFormChanged: the form in the terminal changed after the question was read.
 const CodeFormChanged = "form_changed"
+
+// Limits and defaults of a SessionAsk and a SessionAskReply, in characters and seconds.
+const (
+	MaxAskText        = 8000
+	MaxAskReply       = 16000
+	MaxAskScreenTail  = 8000
+	DefaultAskTimeout = 180
+	MaxAskTimeout     = 600
+)
+
+// AskReadOnlyLine is the line that a read-only ask adds to the text.
+const AskReadOnlyLine = "Answer only. Do not change files."
+
+// SessionAsk is the body of POST /v1/sessions/{id}/ask.
+type SessionAsk struct {
+	Text       string `json:"text"`
+	TimeoutSec int    `json:"timeoutSec,omitempty"`
+	ReadOnly   *bool  `json:"readOnly,omitempty"`
+}
+
+// Check fails on an empty or long text and on a negative timeout.
+func (a SessionAsk) Check() error {
+	n := len([]rune(a.Text))
+	switch {
+	case strings.TrimSpace(a.Text) == "":
+		return errors.New("text is empty")
+	case n > MaxAskText:
+		return fmt.Errorf("text has %d characters, the limit is %d", n, MaxAskText)
+	case a.TimeoutSec < 0:
+		return errors.New("timeoutSec is negative")
+	}
+	return nil
+}
+
+// Timeout is TimeoutSec, else the default, at most MaxAskTimeout.
+func (a SessionAsk) Timeout() time.Duration {
+	sec := a.TimeoutSec
+	if sec <= 0 {
+		sec = DefaultAskTimeout
+	}
+	return time.Duration(min(sec, MaxAskTimeout)) * time.Second
+}
+
+// Prompt is the text for the agent. Read-only is the default: it adds AskReadOnlyLine.
+func (a SessionAsk) Prompt() string {
+	if a.ReadOnly != nil && !*a.ReadOnly {
+		return a.Text
+	}
+	return strings.TrimRight(a.Text, "\n") + "\n" + AskReadOnlyLine
+}
+
+// Values of SessionAskReply.Error. Open set.
+const (
+	AskBusy        = "busy"        // 409: a turn is active and the runtime takes no steering
+	AskTimeout     = "timeout"     // 504
+	AskBadRequest  = "badRequest"  // 400
+	AskNoSession   = "noSession"   // 404
+	AskUnsupported = "unsupported" // 409: the session has no input path
+	AskSendFailed  = "sendFailed"  // 502
+	AskGone        = "gone"        // 410: the session went away during the wait
+)
+
+// SessionAskReply is the answer of POST /v1/sessions/{id}/ask. 200 has Reply, an error status has Error and Message.
+type SessionAskReply struct {
+	Reply       string     `json:"reply,omitempty"`
+	TurnEndedAt *time.Time `json:"turnEndedAt,omitempty"`
+	ScreenTail  string     `json:"screenTail,omitempty"`
+	Error       string     `json:"error,omitempty"`
+	Message     string     `json:"message,omitempty"`
+}

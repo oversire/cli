@@ -8,6 +8,7 @@ import (
 	goruntime "runtime"
 	"time"
 
+	"github.com/oversire/cli/ask"
 	"github.com/oversire/cli/config"
 	"github.com/oversire/cli/eventlog"
 	"github.com/oversire/cli/group"
@@ -108,6 +109,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	srv.Handle(syncer.Routes()...)
 	srv.Handle(storeRoutes.Routes()...)
 	srv.Handle(asks.Routes()...)
+	srv.Handle(ask.NewAsker(book, screen, reg, time.Now).Routes()...)
 	srv.Handle(installer.Routes()...)
 	srv.Handle(updates.Routes()...)
 	direct := orders.NewDirect(runner, func(m any) { srv.Notify(false, m) }, time.Now)

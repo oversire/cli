@@ -313,6 +313,29 @@
       },
       "required": ["result"],
       "additionalProperties": false
+    },
+    "SessionAsk": {
+      "description": "The body of POST /v1/sessions/{id}/ask (Member). The daemon sends the text to the session and waits for the end of the turn.",
+      "type": "object",
+      "properties": {
+        "text": { "type": "string", "minLength": 1, "maxLength": 8000 },
+        "timeoutSec": { "description": "Default 180, at most 600.", "type": "integer", "minimum": 1, "maximum": 600 },
+        "readOnly": { "description": "Default true. The daemon adds one line to the text: Answer only. Do not change files.", "type": "boolean" }
+      },
+      "required": ["text"],
+      "additionalProperties": false
+    },
+    "SessionAskReply": {
+      "description": "The answer of POST /v1/sessions/{id}/ask. HTTP 200 has reply. HTTP 409 (a turn is active and the session takes no steering) and 504 (timeout) have error and screenTail.",
+      "type": "object",
+      "properties": {
+        "reply": { "description": "The last agent message of the turn.", "type": "string", "maxLength": 16000 },
+        "turnEndedAt": { "$ref": "#/$defs/Date" },
+        "screenTail": { "description": "The last lines of the screen, when the runtime has a screen.", "type": "string", "maxLength": 8000 },
+        "error": { "description": "With 409 and 504. Open set: busy, timeout.", "type": "string" },
+        "message": { "description": "With error. Text for the user.", "type": "string" }
+      },
+      "additionalProperties": false
     }
   }
 }

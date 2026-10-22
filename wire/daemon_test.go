@@ -2,7 +2,9 @@ package wire
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
+	"time"
 )
 
 func roundTrip[T any](t *testing.T, kind string) {
@@ -33,6 +35,8 @@ func TestDaemonFixtures(t *testing.T) {
 	roundTrip[JoinPending](t, "join-pending")
 	roundTrip[JoinResult](t, "join-result")
 	roundTrip[ProviderEvent](t, "provider-event")
+	roundTrip[SessionAsk](t, "session-ask")
+	roundTrip[SessionAskReply](t, "session-ask-reply")
 }
 
 func TestSessionSubject(t *testing.T) {
@@ -65,5 +69,29 @@ func TestHookEnvIsStrict(t *testing.T) {
 	}
 	if err := Decode([]byte(`{"pane":"x"}`), &e); err == nil {
 		t.Fatal("an unknown field must fail")
+	}
+}
+
+func TestSessionAsk(t *testing.T) {
+	no := false
+	cases := []struct {
+		a       SessionAsk
+		ok      bool
+		timeout time.Duration
+		prompt  string
+	}{
+		{SessionAsk{Text: "why?"}, true, 180 * time.Second, "why?\n" + AskReadOnlyLine},
+		{SessionAsk{Text: "why?\n", TimeoutSec: 900, ReadOnly: &no}, true, 600 * time.Second, "why?\n"},
+		{SessionAsk{Text: " \n"}, false, 0, ""},
+		{SessionAsk{Text: strings.Repeat("é", MaxAskText+1)}, false, 0, ""},
+		{SessionAsk{Text: "x", TimeoutSec: -1}, false, 0, ""},
+	}
+	for i, c := range cases {
+		if err := c.a.Check(); (err == nil) != c.ok {
+			t.Errorf("%d: check %v", i, err)
+		}
+		if c.ok && (c.a.Timeout() != c.timeout || c.a.Prompt() != c.prompt) {
+			t.Errorf("%d: %v %q", i, c.a.Timeout(), c.a.Prompt())
+		}
 	}
 }

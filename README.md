@@ -205,6 +205,18 @@ The agent hooks call `oversire hook <harness>` with the event on stdin. The comm
 
 The daemon finds the open questions of the agent sessions: forms and permission prompts on the Orca screen, and a turn that ends with a question. `GET /v1/questions` lists them. `POST /v1/questions/{id}/answer` types the answer into the terminal. `GET /v1/questions/{id}/given` tells the answer that the user gave in the terminal.
 
+`POST /v1/sessions/{id}/ask` (member access) sends a question to a session and waits for the end of its turn. The body is a `SessionAsk` `{text, timeoutSec?, readOnly?}` and the answer a `SessionAskReply` of `contract/schema/daemon.json`. With `readOnly` (the default) the daemon adds the line "Answer only. Do not change files." The daemon types the text into the Orca terminal, or gives it to an `oversire` session as a `sessionSend`. The turn ends when the session book shows the session out of `working` after the send (a `Stop` hook or a runtime report). The wait is `timeoutSec`, default 180 s, at most 600 s.
+
+| Status | Body |
+|---|---|
+| 200 | `{reply, turnEndedAt, screenTail?}`. `reply` is the last agent message (at most 16000 characters). `screenTail` is the last 40 lines of the screen or transcript (at most 8000 characters). |
+| 400 | `error: badRequest`. |
+| 404 | `error: noSession`. |
+| 409 | `error: busy`, with `screenTail`: a turn is active and the runtime takes no steering (Orca). An `oversire` session adds the text to the active turn. `error: unsupported`: the session has no input path (a `cli` session, or an Orca session with no terminal). |
+| 410 | `error: gone`: the session went away during the wait. |
+| 502 | `error: sendFailed`. |
+| 504 | `error: timeout`, with `screenTail`. |
+
 ### Group
 
 The machines of one user form a group. Each member keeps the roster and the group secret. A member that joins gets a group credential for the Tailscale listener. The roster syncs between members each 60 s, and at once after a `poke`. The home member keeps the shared store (see below).
@@ -270,7 +282,7 @@ Set `OVERSIRE_DAEMON_HOME` to use another config folder, for example for a test 
 
 `contract/` is a copy of `Contract/` from [oversire/oversire](https://github.com/oversire/oversire): `schema/`, `fixtures/` and `prompts/`.
 Do not edit it here. Change the contract in the app first, then copy it again and run the tests.
-The `wire` tests decode and encode each fixture of `work-order/`, `runner-message/`, `runner-session/` and `launch-request/`.
+The `wire` tests decode and encode each fixture of `work-order/`, `runner-message/`, `runner-session/`, `launch-request/`, the daemon types and `session-ask/` and `session-ask-reply/`.
 The `digest` tests read each `session-digest/claude/<case>.jsonl` and compare the digest with `session-digest/<case>.json`.
 
 The layout:
@@ -280,6 +292,7 @@ The layout:
 | `cmd/oversire` | The commands. |
 | `wire` | The Go types of the wire contract. |
 | `hub` | The WebSocket client and the journal of finished orders. |
+| `ask` | The route `POST /v1/sessions/{id}/ask`: it sends a question to a session and waits for the turn end. |
 | `orders` | The one run path of each order (`Runner`), and the direct orders from the apps of the group (`Direct`). |
 | `runtime` | The `Runtime` interface and the registry. `runtime/orca` is the Orca driver. `runtime/oversire` is the agent-wire driver. |
 | `digest` | The transcript readers that make a `SessionDigest`. |

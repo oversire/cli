@@ -1,0 +1,1 @@
+{ "error": "timeout", "message": "The agent did not end its turn in 180 s.", "screenTail": "⏺ Running go test ./connectors/...\n  ✶ Thinking…" }
