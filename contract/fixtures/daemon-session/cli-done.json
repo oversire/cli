@@ -1,0 +1,17 @@
+{
+  "id": "cli:7c6b5a49-3e2d-4c1b-8a09-f8e7d6c5b4a3",
+  "machine": "mba",
+  "runtime": "cli",
+  "harness": "claude",
+  "harnessSession": "7c6b5a49-3e2d-4c1b-8a09-f8e7d6c5b4a3",
+  "cwd": "/Users/dev/code/agent-binder",
+  "repo": "oversire/agent-binder",
+  "branch": "main",
+  "state": "done",
+  "reason": "turnEnd",
+  "prompt": "Explain the Codex app-server handshake.",
+  "lastMessage": "The client sends initialize, then the server answers with its capabilities.",
+  "stateSince": "2026-10-22T08:45:10Z",
+  "updatedAt": "2026-10-22T08:45:10Z",
+  "sources": ["hook"]
+}

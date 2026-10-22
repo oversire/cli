@@ -1,0 +1,16 @@
+{
+  "id": "9f3c1a2b7d4e5f60",
+  "name": "My machines",
+  "home": "mbp",
+  "version": 3,
+  "members": [
+    { "machine": "mbp", "host": "mbp", "addrs": ["100.97.81.23"], "port": 7690, "roles": ["serve", "runner"], "joinedAt": "2026-10-20T08:00:00Z", "lastSeen": "2026-10-22T10:05:00Z" },
+    { "machine": "mba", "host": "mba", "addrs": ["100.70.1.9"], "port": 7690, "roles": ["serve"], "joinedAt": "2026-10-20T08:12:40Z", "lastSeen": "2026-10-22T10:04:52Z" }
+  ],
+  "devices": [
+    { "deviceId": "0A1B2C3D4E5F6071", "name": "oversire on mbp", "kind": "daemon", "machine": "mbp", "issuedBy": "mbp", "issuedAt": "2026-10-20T08:00:00Z" },
+    { "deviceId": "8E9F0A1B2C3D4E5F", "name": "oversire on mba", "kind": "daemon", "machine": "mba", "issuedBy": "mbp", "issuedAt": "2026-10-20T08:12:40Z" }
+  ],
+  "revoked": [],
+  "removed": []
+}

@@ -1,0 +1,20 @@
+{
+  "id": "tab-3:leaf-2",
+  "machine": "mbp",
+  "runtime": "orca",
+  "harness": "claude",
+  "workspace": "wt-runner-12",
+  "terminal": "term_5a6b7c8d",
+  "harnessSession": "1f2e3d4c-5b6a-4978-8a9b-0c1d2e3f4a5b",
+  "cwd": "/Users/dev/code/runner/.wt/runner-12",
+  "repo": "oversire/runner",
+  "branch": "runner-12",
+  "state": "waiting",
+  "reason": "permission",
+  "question": "form:toolu_01Qm4Zr8Lp2Ks6Tn0Wv3Xy5A",
+  "prompt": "Run the tests and fix what fails.",
+  "lastMessage": "I run the full test suite now.",
+  "stateSince": "2026-10-22T09:31:45Z",
+  "updatedAt": "2026-10-22T09:31:45Z",
+  "sources": ["hook", "orca"]
+}

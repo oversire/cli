@@ -1,0 +1,24 @@
+{
+  "id": "form:tab-2:leaf-1:3f9a1c7e",
+  "session": "tab-2:leaf-1",
+  "terminal": "term_0c4e8b12",
+  "harness": "claude",
+  "via": "form",
+  "items": [
+    {
+      "id": "q2",
+      "header": "Migration",
+      "text": "Which data should the migration copy?",
+      "kind": "multi",
+      "options": [
+        { "label": "Event log" },
+        { "label": "Work orders" },
+        { "label": "Suggestions" }
+      ],
+      "allowsOther": false
+    }
+  ],
+  "answerable": true,
+  "source": "screen",
+  "askedAt": "2026-10-22T09:21:03Z"
+}

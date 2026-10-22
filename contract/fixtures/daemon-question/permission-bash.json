@@ -1,0 +1,21 @@
+{
+  "id": "form:toolu_01Qm4Zr8Lp2Ks6Tn0Wv3Xy5A",
+  "session": "tab-3:leaf-2",
+  "terminal": "term_5a6b7c8d",
+  "harness": "claude",
+  "via": "permission",
+  "items": [
+    {
+      "id": "permission",
+      "header": "Bash",
+      "text": "go test ./... -count=1",
+      "kind": "approve",
+      "options": [{ "label": "Allow" }, { "label": "Deny" }],
+      "allowsOther": false
+    }
+  ],
+  "answerable": true,
+  "source": "hook",
+  "askedAt": "2026-10-22T09:31:45Z",
+  "expiresAt": "2026-10-22T09:41:45Z"
+}

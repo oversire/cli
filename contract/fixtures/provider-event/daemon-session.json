@@ -1,0 +1,14 @@
+{
+  "id": "mbp-tab-2:leaf-1-waiting-1792660811",
+  "schema": 1,
+  "provider": "orca",
+  "account": { "provider": "orca", "id": "mbp" },
+  "kind": "session",
+  "action": "waiting",
+  "subject": {
+    "kind": "session",
+    "ref": { "workspace": { "account": { "provider": "orca", "id": "mbp" }, "id": "wt-cloud-88" }, "id": "tab-2:leaf-1" }
+  },
+  "at": "2026-10-22T09:20:11Z",
+  "summary": { "title": "oversire/cloud", "status": "waiting", "actor": "claude" }
+}

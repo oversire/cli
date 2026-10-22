@@ -1,0 +1,16 @@
+{
+  "machine": "mbp",
+  "version": "0.4.0",
+  "contract": 1,
+  "roles": ["serve", "runner"],
+  "runtimes": ["orca", "oversire"],
+  "harnesses": [
+    { "name": "claude", "hooks": "installed" },
+    { "name": "codex", "hooks": "untrusted" },
+    { "name": "opencode", "hooks": "unsupported" }
+  ],
+  "group": "9f3c1a2b7d4e5f60",
+  "home": "mbp",
+  "device": "0A1B2C3D4E5F6071",
+  "listen": { "loopback": "127.0.0.1:7690", "tailscale": "100.97.81.23:7690" }
+}

@@ -1,0 +1,48 @@
+{
+  "sessions": [
+    {
+      "id": "tab-2:leaf-1",
+      "machine": "mbp",
+      "runtime": "orca",
+      "harness": "claude",
+      "workspace": "wt-cloud-88",
+      "terminal": "term_0c4e8b12",
+      "harnessSession": "9d2f6a1b-3c4e-4f5a-8b7c-6d5e4f3a2b1c",
+      "cwd": "/Users/dev/code/cloud/.wt/cloud-88",
+      "repo": "oversire/cloud",
+      "branch": "cloud-88",
+      "state": "waiting",
+      "reason": "question",
+      "question": "form:toolu_01HJ8kq2Vx3mN7pR4sT6wY9z",
+      "prompt": "Move the hub store to D1.",
+      "lastMessage": "I need two choices from you before I change the schema.",
+      "stateSince": "2026-10-22T09:20:11Z",
+      "updatedAt": "2026-10-22T09:20:11Z",
+      "sources": [
+        "hook",
+        "orca"
+      ]
+    },
+    {
+      "id": "s-4f8a2c1e",
+      "machine": "mbp",
+      "runtime": "oversire",
+      "harness": "claude",
+      "workspace": "oversire-wt-oversire-260",
+      "harnessSession": "3a4b5c6d-7e8f-4091-a2b3-c4d5e6f7a8b9",
+      "cwd": "/Users/dev/.local/share/oversire/worktrees/oversire-260",
+      "repo": "oversire/oversire",
+      "branch": "oversire-260",
+      "state": "waiting",
+      "reason": "turnEnd",
+      "question": "turn:s-4f8a2c1e:1792663320000",
+      "prompt": "Make the status light blink when a session waits.",
+      "lastMessage": "Should the light blink for all waits, or only for questions?",
+      "stateSince": "2026-10-22T10:02:00Z",
+      "updatedAt": "2026-10-22T10:02:00Z",
+      "sources": [
+        "wire"
+      ]
+    }
+  ]
+}

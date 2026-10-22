@@ -1,0 +1,17 @@
+{
+  "id": "tab-1:leaf-1",
+  "machine": "mbp",
+  "runtime": "orca",
+  "harness": "claude",
+  "workspace": "wt-oversire-241",
+  "terminal": "term_7f3a9c21",
+  "harnessSession": "5b1e2c4d-8f7a-4c3b-9e2d-1a0b9c8d7e6f",
+  "cwd": "/Users/dev/code/oversire/.wt/oversire-241",
+  "repo": "oversire/oversire",
+  "branch": "oversire-241",
+  "state": "working",
+  "prompt": "Add the daemon schema to the contract.",
+  "stateSince": "2026-10-22T09:14:02Z",
+  "updatedAt": "2026-10-22T09:15:40Z",
+  "sources": ["hook", "orca"]
+}

@@ -1,0 +1,1 @@
+{ "code": "K7Q2-M9XD", "machine": "mba", "host": "mba", "addrs": ["100.70.1.9"], "port": 7690, "roles": ["serve"], "kind": "daemon", "nonce": "3f9c2a7b1e4d6c80" }

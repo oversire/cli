@@ -1,0 +1,18 @@
+{
+  "id": "turn:cli:7c6b5a49-3e2d-4c1b-8a09-f8e7d6c5b4a3:1792658710000",
+  "session": "cli:7c6b5a49-3e2d-4c1b-8a09-f8e7d6c5b4a3",
+  "harness": "claude",
+  "via": "turn",
+  "items": [
+    {
+      "id": "reply",
+      "text": "Do you also want the notes on the Claude stream-json handshake?",
+      "kind": "free",
+      "options": [],
+      "allowsOther": false
+    }
+  ],
+  "answerable": false,
+  "source": "transcript",
+  "askedAt": "2026-10-22T08:45:10Z"
+}

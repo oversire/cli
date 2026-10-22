@@ -1,0 +1,19 @@
+{
+  "id": "s-4f8a2c1e",
+  "machine": "mbp",
+  "runtime": "oversire",
+  "harness": "claude",
+  "workspace": "oversire-wt-oversire-260",
+  "harnessSession": "3a4b5c6d-7e8f-4091-a2b3-c4d5e6f7a8b9",
+  "cwd": "/Users/dev/.local/share/oversire/worktrees/oversire-260",
+  "repo": "oversire/oversire",
+  "branch": "oversire-260",
+  "state": "waiting",
+  "reason": "turnEnd",
+  "question": "turn:s-4f8a2c1e:1792663320000",
+  "prompt": "Make the status light blink when a session waits.",
+  "lastMessage": "Should the light blink for all waits, or only for questions?",
+  "stateSince": "2026-10-22T10:02:00Z",
+  "updatedAt": "2026-10-22T10:02:00Z",
+  "sources": ["wire"]
+}

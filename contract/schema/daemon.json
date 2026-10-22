@@ -1,0 +1,304 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oversire.dev/contract/daemon.json",
+  "title": "OverSire daemon",
+  "description": "The HTTP API of the oversire daemon on a machine, and the group of the machines of one user. Events use provider-event.json (kind session), the home store uses store.json and work orders use work-order.json.",
+  "x-oversire-schema": 1,
+  "$defs": {
+    "Date": { "type": "string", "format": "date-time" },
+    "MachineName": {
+      "description": "The daemon name (config name, default the host name). Unique in a group.",
+      "type": "string",
+      "minLength": 1
+    },
+    "DaemonRole": { "description": "Open set.", "enum": ["serve", "runner"] },
+    "SessionPhase": {
+      "description": "The same values as AgentSession.Phase.",
+      "enum": ["starting", "working", "waiting", "done", "failed"]
+    },
+    "SessionReason": {
+      "description": "Why the session waits or stopped. monitoring: the session works, but only a background shell runs.",
+      "enum": ["question", "permission", "turnEnd", "interrupted", "error", "monitoring"]
+    },
+    "DaemonSession": {
+      "description": "One agent session on the machine, merged from all sources.",
+      "type": "object",
+      "properties": {
+        "id": { "description": "Stable on the machine. Orca: the pane key <tabId>:<leafId>. CLI: cli:<harness session id>. oversire runtime: the session id s-….", "type": "string", "minLength": 1 },
+        "machine": { "$ref": "#/$defs/MachineName" },
+        "runtime": { "description": "orca, oversire or cli (a harness outside a runtime). Open set.", "type": "string", "minLength": 1 },
+        "harness": { "description": "An agent-wire or AgentBinder harness name, for example claude or codex.", "type": "string", "minLength": 1 },
+        "workspace": { "description": "The Orca worktreeId, or the oversire workspace id.", "type": "string" },
+        "terminal": { "description": "The Orca terminal handle (term_…).", "type": "string" },
+        "harnessSession": { "description": "The harness session id (Claude session_id).", "type": "string" },
+        "cwd": { "description": "The working folder of the agent.", "type": "string", "minLength": 1 },
+        "repo": { "type": "string" },
+        "branch": { "type": "string" },
+        "state": { "$ref": "#/$defs/SessionPhase" },
+        "reason": { "$ref": "#/$defs/SessionReason" },
+        "question": { "description": "The id of the open DaemonQuestion of the session.", "type": "string" },
+        "prompt": { "description": "The last user prompt.", "type": "string", "maxLength": 2000 },
+        "lastMessage": { "description": "The last agent message.", "type": "string", "maxLength": 4000 },
+        "stateSince": { "description": "The start of the current state.", "$ref": "#/$defs/Date" },
+        "updatedAt": { "description": "The last change of any field.", "$ref": "#/$defs/Date" },
+        "sources": { "description": "The sources that gave data.", "type": "array", "items": { "enum": ["hook", "orca", "wire"] } }
+      },
+      "required": ["id", "machine", "runtime", "harness", "cwd", "state", "stateSince", "updatedAt", "sources"],
+      "additionalProperties": false
+    },
+    "DaemonSessionsPage": {
+      "description": "The answer of GET /v1/sessions.",
+      "type": "object",
+      "properties": { "sessions": { "type": "array", "items": { "$ref": "#/$defs/DaemonSession" } } },
+      "required": ["sessions"],
+      "additionalProperties": false
+    },
+    "EventsPage": {
+      "description": "The answer of GET /v1/events?after=<seq>, on the cloud hub and on a daemon. The app reads it as CloudEventsPage.",
+      "type": "object",
+      "properties": {
+        "events": { "type": "array", "items": { "$ref": "provider-event.json" } },
+        "head": { "description": "The newest seq.", "type": "integer", "minimum": 0 },
+        "next": { "description": "The after value of the next call.", "type": "integer", "minimum": 0 },
+        "more": { "type": "boolean" },
+        "truncated": { "description": "The log lost events after the after value. The reader does a full read.", "type": "boolean" }
+      },
+      "required": ["events", "head", "next", "more", "truncated"],
+      "additionalProperties": false
+    },
+    "HookEnv": {
+      "description": "The environment of the agent process. The oversire hook command sends it with each hook call.",
+      "type": "object",
+      "properties": {
+        "paneKey": { "description": "The Orca pane key <tabId>:<leafId>.", "type": "string" },
+        "tabId": { "type": "string" },
+        "worktreeId": { "description": "The Orca worktreeId.", "type": "string" },
+        "terminalHandle": { "description": "The Orca terminal handle (term_…).", "type": "string" },
+        "worktreePath": { "type": "string" },
+        "pwd": { "type": "string" },
+        "ppid": { "description": "The parent process id of the hook command.", "type": "integer" },
+        "oversireSession": { "description": "The session id of the oversire runtime (s-…).", "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "HarnessHooks": {
+      "description": "The hook state of one harness on the machine. untrusted: Codex did not approve the hooks yet.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "hooks": { "enum": ["installed", "missing", "untrusted", "outdated", "unsupported"] }
+      },
+      "required": ["name", "hooks"],
+      "additionalProperties": false
+    },
+    "DaemonInfo": {
+      "description": "The answer of GET /v1/whoami on a daemon. device is set only on a call with a credential. group is absent before the machine has a group.",
+      "type": "object",
+      "properties": {
+        "machine": { "$ref": "#/$defs/MachineName" },
+        "version": { "type": "string" },
+        "contract": { "description": "The x-oversire-schema number of daemon.json.", "type": "integer" },
+        "roles": { "type": "array", "items": { "$ref": "#/$defs/DaemonRole" } },
+        "runtimes": { "type": "array", "items": { "$ref": "refs.json#/$defs/ProviderID" } },
+        "harnesses": { "type": "array", "items": { "$ref": "#/$defs/HarnessHooks" } },
+        "group": { "description": "The group id.", "type": "string" },
+        "home": { "description": "The home machine of the group.", "$ref": "#/$defs/MachineName" },
+        "device": { "description": "The device id of the credential of the call.", "type": "string" },
+        "listen": {
+          "type": "object",
+          "properties": {
+            "loopback": { "description": "host:port", "type": "string" },
+            "tailscale": { "description": "host:port", "type": "string" }
+          },
+          "required": ["loopback"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["machine", "version", "contract", "roles", "runtimes", "harnesses", "listen"],
+      "additionalProperties": false
+    },
+    "GroupMember": {
+      "description": "One machine (daemon) of the group.",
+      "type": "object",
+      "properties": {
+        "machine": { "$ref": "#/$defs/MachineName" },
+        "host": { "description": "The host name.", "type": "string" },
+        "addrs": { "description": "The addresses that other members dial, for example Tailscale addresses.", "type": "array", "items": { "type": "string" } },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "roles": { "type": "array", "items": { "$ref": "#/$defs/DaemonRole" } },
+        "joinedAt": { "$ref": "#/$defs/Date" },
+        "lastSeen": { "$ref": "#/$defs/Date" }
+      },
+      "required": ["machine", "host", "addrs", "port", "roles", "joinedAt"],
+      "additionalProperties": false
+    },
+    "DeviceKind": { "description": "daemon: a machine of the group. app: an app on a machine without a daemon.", "enum": ["daemon", "app"] },
+    "GroupDevice": {
+      "description": "One credential holder.",
+      "type": "object",
+      "properties": {
+        "deviceId": { "type": "string", "minLength": 1 },
+        "name": { "type": "string" },
+        "kind": { "$ref": "#/$defs/DeviceKind" },
+        "machine": { "$ref": "#/$defs/MachineName" },
+        "issuedBy": { "description": "The member that issued the credential.", "$ref": "#/$defs/MachineName" },
+        "issuedAt": { "$ref": "#/$defs/Date" }
+      },
+      "required": ["deviceId", "name", "kind", "machine", "issuedBy", "issuedAt"],
+      "additionalProperties": false
+    },
+    "Group": {
+      "description": "The My machines group. It never holds the secret. Only a JoinResult holds it.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string" },
+        "home": { "description": "The member that keeps the home store.", "$ref": "#/$defs/MachineName" },
+        "version": { "description": "Increases on each change.", "type": "integer", "minimum": 1 },
+        "members": { "type": "array", "items": { "$ref": "#/$defs/GroupMember" } },
+        "devices": { "type": "array", "items": { "$ref": "#/$defs/GroupDevice" } },
+        "revoked": { "description": "The revoked device ids.", "type": "array", "items": { "type": "string" } },
+        "removed": {
+          "description": "The removed members.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": { "machine": { "$ref": "#/$defs/MachineName" }, "at": { "$ref": "#/$defs/Date" } },
+            "required": ["machine", "at"],
+            "additionalProperties": false
+          }
+        },
+        "cloud": {
+          "description": "The cloud hub of the group, when the group uses one.",
+          "type": "object",
+          "properties": {
+            "hub": { "description": "The hub URL.", "type": "string", "minLength": 1 },
+            "account": { "description": "The OverSire account id.", "type": "string", "minLength": 1 }
+          },
+          "required": ["hub", "account"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "name", "home", "version", "members", "devices", "revoked", "removed"],
+      "additionalProperties": false
+    },
+    "GroupInvite": {
+      "description": "A join code that a member made.",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "via": { "description": "The member that made the code.", "$ref": "#/$defs/MachineName" },
+        "expiresAt": { "$ref": "#/$defs/Date" }
+      },
+      "required": ["code", "via", "expiresAt"],
+      "additionalProperties": false
+    },
+    "JoinRequest": {
+      "description": "The body of POST /v1/group/join and POST /v1/group/requests. code is absent for a request that waits for approval.",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "machine": { "$ref": "#/$defs/MachineName" },
+        "host": { "type": "string" },
+        "addrs": { "type": "array", "items": { "type": "string" } },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "roles": { "type": "array", "items": { "$ref": "#/$defs/DaemonRole" } },
+        "kind": { "$ref": "#/$defs/DeviceKind" },
+        "nonce": { "description": "16 hex characters.", "type": "string", "pattern": "^[0-9a-f]{16}$" }
+      },
+      "required": ["machine", "host", "kind", "nonce"],
+      "additionalProperties": false
+    },
+    "JoinPending": {
+      "description": "The answer of a join request that waits for approval. Both sides show confirm.",
+      "type": "object",
+      "properties": {
+        "request": { "type": "string", "minLength": 1 },
+        "confirm": { "type": "string", "minLength": 1 },
+        "expiresAt": { "$ref": "#/$defs/Date" }
+      },
+      "required": ["request", "confirm", "expiresAt"],
+      "additionalProperties": false
+    },
+    "DeviceCredential": {
+      "description": "The token is opaque to clients.",
+      "type": "object",
+      "properties": {
+        "deviceId": { "type": "string", "minLength": 1 },
+        "token": { "type": "string", "minLength": 1 }
+      },
+      "required": ["deviceId", "token"],
+      "additionalProperties": false
+    },
+    "JoinResult": {
+      "description": "The answer of an accepted join. Only a result for kind daemon holds the secret.",
+      "type": "object",
+      "properties": {
+        "group": { "$ref": "#/$defs/Group" },
+        "secret": { "description": "Base64 of 32 bytes.", "type": "string" },
+        "credential": { "$ref": "#/$defs/DeviceCredential" }
+      },
+      "required": ["group", "credential"],
+      "additionalProperties": false
+    },
+    "DaemonQuestionItem": {
+      "description": "The same shape as RunnerQuestionItem (work-order.json), plus the kind approve. An approve item has the options Allow and Deny.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "header": { "type": "string" },
+        "text": { "type": "string", "maxLength": 2000 },
+        "why": { "type": "string" },
+        "kind": { "enum": ["single", "multi", "free", "approve"] },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": { "label": { "type": "string", "minLength": 1 }, "detail": { "type": "string" } },
+            "required": ["label"],
+            "additionalProperties": false
+          }
+        },
+        "allowsOther": { "type": "boolean" }
+      },
+      "required": ["id", "text", "kind", "options", "allowsOther"],
+      "additionalProperties": false
+    },
+    "DaemonQuestion": {
+      "description": "One open pause of a session. The fields match SessionQuestion of the app.",
+      "type": "object",
+      "properties": {
+        "id": { "description": "Stable for one pause: form:<tool_use_id>, form:<session>:<page hash>, turn:<session>:<stateSince ms> or wait:<session>:<stateSince ms>.", "type": "string", "minLength": 1 },
+        "session": { "description": "The DaemonSession id.", "type": "string", "minLength": 1 },
+        "terminal": { "description": "The Orca terminal handle.", "type": "string" },
+        "harness": { "type": "string", "minLength": 1 },
+        "via": { "description": "The same values as SessionQuestion.Via.", "enum": ["form", "permission", "turn", "waiting"] },
+        "items": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/DaemonQuestionItem" } },
+        "answerable": { "description": "False for waiting, and for a session with no terminal.", "type": "boolean" },
+        "source": { "description": "Where the items came from.", "enum": ["hook", "screen", "transcript"] },
+        "askedAt": { "description": "The start of the pause.", "$ref": "#/$defs/Date" },
+        "expiresAt": { "description": "Permissions only.", "$ref": "#/$defs/Date" }
+      },
+      "required": ["id", "session", "harness", "via", "items", "answerable", "source", "askedAt"],
+      "additionalProperties": false
+    },
+    "DaemonQuestionsPage": {
+      "description": "The answer of GET /v1/questions.",
+      "type": "object",
+      "properties": { "questions": { "type": "array", "items": { "$ref": "#/$defs/DaemonQuestion" } } },
+      "required": ["questions"],
+      "additionalProperties": false
+    },
+    "DaemonAnswerResult": {
+      "description": "The answer of POST /v1/questions/{id}/answer. The body of the call is a RunnerAnswer (work-order.json).",
+      "type": "object",
+      "properties": {
+        "result": { "enum": ["sent", "alreadyAnswered", "gone", "error"] },
+        "code": { "description": "With error. Open set, for example form_changed.", "type": "string" },
+        "message": { "description": "With error. Text for the user.", "type": "string" }
+      },
+      "required": ["result"],
+      "additionalProperties": false
+    }
+  }
+}

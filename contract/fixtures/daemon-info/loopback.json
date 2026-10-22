@@ -1,0 +1,12 @@
+{
+  "machine": "mba",
+  "version": "0.4.0",
+  "contract": 1,
+  "roles": ["serve"],
+  "runtimes": ["orca"],
+  "harnesses": [
+    { "name": "claude", "hooks": "installed" },
+    { "name": "codex", "hooks": "missing" }
+  ],
+  "listen": { "loopback": "127.0.0.1:7690" }
+}

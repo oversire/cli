@@ -1,0 +1,20 @@
+{
+  "id": "tab-2:leaf-1",
+  "machine": "mbp",
+  "runtime": "orca",
+  "harness": "claude",
+  "workspace": "wt-cloud-88",
+  "terminal": "term_0c4e8b12",
+  "harnessSession": "9d2f6a1b-3c4e-4f5a-8b7c-6d5e4f3a2b1c",
+  "cwd": "/Users/dev/code/cloud/.wt/cloud-88",
+  "repo": "oversire/cloud",
+  "branch": "cloud-88",
+  "state": "waiting",
+  "reason": "question",
+  "question": "form:toolu_01HJ8kq2Vx3mN7pR4sT6wY9z",
+  "prompt": "Move the hub store to D1.",
+  "lastMessage": "I need two choices from you before I change the schema.",
+  "stateSince": "2026-10-22T09:20:11Z",
+  "updatedAt": "2026-10-22T09:20:11Z",
+  "sources": ["hook", "orca"]
+}

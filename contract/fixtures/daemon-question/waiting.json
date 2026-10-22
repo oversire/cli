@@ -1,0 +1,19 @@
+{
+  "id": "wait:tab-4:leaf-1:1792662630000",
+  "session": "tab-4:leaf-1",
+  "terminal": "term_1d2c3b4a",
+  "harness": "codex",
+  "via": "waiting",
+  "items": [
+    {
+      "id": "wait",
+      "text": "The session waits. Open it in Orca to see the question.",
+      "kind": "free",
+      "options": [],
+      "allowsOther": false
+    }
+  ],
+  "answerable": false,
+  "source": "screen",
+  "askedAt": "2026-10-22T09:50:30Z"
+}

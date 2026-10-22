@@ -1,0 +1,17 @@
+{
+  "id": "tab-1:leaf-3",
+  "machine": "mba",
+  "runtime": "orca",
+  "harness": "codex",
+  "workspace": "wt-oversire-250",
+  "terminal": "term_9e8d7c6b",
+  "cwd": "/Users/dev/code/oversire/.wt/oversire-250",
+  "repo": "oversire/oversire",
+  "branch": "oversire-250",
+  "state": "working",
+  "reason": "monitoring",
+  "lastMessage": "The build runs in the background. I check it when it ends.",
+  "stateSince": "2026-10-22T10:02:00Z",
+  "updatedAt": "2026-10-22T10:04:30Z",
+  "sources": ["orca"]
+}

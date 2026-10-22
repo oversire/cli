@@ -1,0 +1,292 @@
+package wire
+
+import "time"
+
+// SessionPhase is the state of a DaemonSession. The same values as AgentSession.Phase in the app.
+type SessionPhase string
+
+const (
+	PhaseStarting SessionPhase = "starting"
+	PhaseWorking  SessionPhase = "working"
+	PhaseWaiting  SessionPhase = "waiting"
+	PhaseDone     SessionPhase = "done"
+	PhaseFailed   SessionPhase = "failed"
+)
+
+// SessionReason tells why a session waits or stopped. ReasonMonitoring: the session works, but only a background shell runs.
+type SessionReason string
+
+const (
+	ReasonQuestion    SessionReason = "question"
+	ReasonPermission  SessionReason = "permission"
+	ReasonTurnEnd     SessionReason = "turnEnd"
+	ReasonInterrupted SessionReason = "interrupted"
+	ReasonError       SessionReason = "error"
+	ReasonMonitoring  SessionReason = "monitoring"
+)
+
+// Values of DaemonSession.Sources.
+const (
+	SessionSourceHook = "hook"
+	SessionSourceOrca = "orca"
+	SessionSourceWire = "wire"
+)
+
+// Values of DaemonSession.Runtime. Open set.
+const (
+	RuntimeOrca     = "orca"
+	RuntimeOversire = "oversire"
+	RuntimeCLI      = "cli"
+)
+
+// DaemonSession is one agent session on the machine, merged from all sources.
+type DaemonSession struct {
+	ID             string        `json:"id"`
+	Machine        string        `json:"machine"`
+	Runtime        string        `json:"runtime"`
+	Harness        string        `json:"harness"`
+	Workspace      string        `json:"workspace,omitempty"`
+	Terminal       string        `json:"terminal,omitempty"`
+	HarnessSession string        `json:"harnessSession,omitempty"`
+	Cwd            string        `json:"cwd"`
+	Repo           string        `json:"repo,omitempty"`
+	Branch         string        `json:"branch,omitempty"`
+	State          SessionPhase  `json:"state"`
+	Reason         SessionReason `json:"reason,omitempty"`
+	Question       string        `json:"question,omitempty"`
+	Prompt         string        `json:"prompt,omitempty"`
+	LastMessage    string        `json:"lastMessage,omitempty"`
+	StateSince     time.Time     `json:"stateSince"`
+	UpdatedAt      time.Time     `json:"updatedAt"`
+	Sources        []string      `json:"sources"`
+}
+
+// Limits of DaemonSession text fields, in characters.
+const (
+	MaxSessionPrompt      = 2000
+	MaxSessionLastMessage = 4000
+)
+
+// DaemonSessionsPage is the answer of GET /v1/sessions.
+type DaemonSessionsPage struct {
+	Sessions []DaemonSession `json:"sessions"`
+}
+
+// HookEnv is the environment of the agent process. The oversire hook command sends it with each hook call.
+type HookEnv struct {
+	PaneKey         string `json:"paneKey,omitempty"`
+	TabID           string `json:"tabId,omitempty"`
+	WorktreeID      string `json:"worktreeId,omitempty"`
+	TerminalHandle  string `json:"terminalHandle,omitempty"`
+	WorktreePath    string `json:"worktreePath,omitempty"`
+	Pwd             string `json:"pwd,omitempty"`
+	PPID            int    `json:"ppid,omitempty"`
+	OversireSession string `json:"oversireSession,omitempty"`
+}
+
+// HookState is the hook state of a harness. HooksUntrusted: Codex did not approve the hooks yet.
+type HookState string
+
+const (
+	HooksInstalled   HookState = "installed"
+	HooksMissing     HookState = "missing"
+	HooksUntrusted   HookState = "untrusted"
+	HooksOutdated    HookState = "outdated"
+	HooksUnsupported HookState = "unsupported"
+)
+
+type HarnessHooks struct {
+	Name  string    `json:"name"`
+	Hooks HookState `json:"hooks"`
+}
+
+// Values of the roles of a daemon. Open set.
+const (
+	RoleServe  = "serve"
+	RoleRunner = "runner"
+)
+
+// DaemonInfo is the answer of GET /v1/whoami on a daemon.
+// Device is set only on a call with a credential. Group is empty before the machine has a group.
+type DaemonInfo struct {
+	Machine   string         `json:"machine"`
+	Version   string         `json:"version"`
+	Contract  int            `json:"contract"`
+	Roles     []string       `json:"roles"`
+	Runtimes  []string       `json:"runtimes"`
+	Harnesses []HarnessHooks `json:"harnesses"`
+	Group     string         `json:"group,omitempty"`
+	Home      string         `json:"home,omitempty"`
+	Device    string         `json:"device,omitempty"`
+	Listen    DaemonListen   `json:"listen"`
+}
+
+// DaemonListen holds host:port addresses.
+type DaemonListen struct {
+	Loopback  string `json:"loopback"`
+	Tailscale string `json:"tailscale,omitempty"`
+}
+
+// DeviceKind: DeviceDaemon is a machine of the group, DeviceApp an app on a machine without a daemon.
+type DeviceKind string
+
+const (
+	DeviceDaemon DeviceKind = "daemon"
+	DeviceApp    DeviceKind = "app"
+)
+
+// GroupMember is one machine (daemon) of the group.
+type GroupMember struct {
+	Machine  string     `json:"machine"`
+	Host     string     `json:"host"`
+	Addrs    []string   `json:"addrs"`
+	Port     int        `json:"port"`
+	Roles    []string   `json:"roles"`
+	JoinedAt time.Time  `json:"joinedAt"`
+	LastSeen *time.Time `json:"lastSeen,omitempty"`
+}
+
+// GroupDevice is one credential holder: a daemon or an app.
+type GroupDevice struct {
+	DeviceID string     `json:"deviceId"`
+	Name     string     `json:"name"`
+	Kind     DeviceKind `json:"kind"`
+	Machine  string     `json:"machine"`
+	IssuedBy string     `json:"issuedBy"`
+	IssuedAt time.Time  `json:"issuedAt"`
+}
+
+type RemovedMember struct {
+	Machine string    `json:"machine"`
+	At      time.Time `json:"at"`
+}
+
+// GroupCloud is the cloud hub of a group.
+type GroupCloud struct {
+	Hub     string `json:"hub"`
+	Account string `json:"account"`
+}
+
+// Group is the "My machines" group. It never holds the secret. Only a JoinResult holds it.
+type Group struct {
+	ID      string          `json:"id"`
+	Name    string          `json:"name"`
+	Home    string          `json:"home"`
+	Version int             `json:"version"`
+	Members []GroupMember   `json:"members"`
+	Devices []GroupDevice   `json:"devices"`
+	Revoked []string        `json:"revoked"`
+	Removed []RemovedMember `json:"removed"`
+	Cloud   *GroupCloud     `json:"cloud,omitempty"`
+}
+
+// GroupInvite is a join code that a member made.
+type GroupInvite struct {
+	Code      string    `json:"code"`
+	Via       string    `json:"via"`
+	ExpiresAt time.Time `json:"expiresAt"`
+}
+
+// JoinRequest is the body of POST /v1/group/join and POST /v1/group/requests.
+// Code is empty for a request that waits for approval.
+type JoinRequest struct {
+	Code    string     `json:"code,omitempty"`
+	Machine string     `json:"machine"`
+	Host    string     `json:"host"`
+	Addrs   []string   `json:"addrs,omitempty"`
+	Port    int        `json:"port,omitempty"`
+	Roles   []string   `json:"roles,omitempty"`
+	Kind    DeviceKind `json:"kind"`
+	Nonce   string     `json:"nonce"`
+}
+
+// JoinPending is a join request that waits for approval. Both sides show Confirm.
+type JoinPending struct {
+	Request   string    `json:"request"`
+	Confirm   string    `json:"confirm"`
+	ExpiresAt time.Time `json:"expiresAt"`
+}
+
+// DeviceCredential holds a token that is opaque to clients.
+type DeviceCredential struct {
+	DeviceID string `json:"deviceId"`
+	Token    string `json:"token"`
+}
+
+// JoinResult is an accepted join. Only a result for DeviceDaemon holds Secret (base64 of 32 bytes).
+type JoinResult struct {
+	Group      Group            `json:"group"`
+	Secret     string           `json:"secret,omitempty"`
+	Credential DeviceCredential `json:"credential"`
+}
+
+// QuestionVia has the same values as SessionQuestion.Via in the app.
+type QuestionVia string
+
+const (
+	ViaForm       QuestionVia = "form"
+	ViaPermission QuestionVia = "permission"
+	ViaTurn       QuestionVia = "turn"
+	ViaWaiting    QuestionVia = "waiting"
+)
+
+// QuestionSource tells where the items of a question came from.
+type QuestionSource string
+
+const (
+	SourceHook       QuestionSource = "hook"
+	SourceScreen     QuestionSource = "screen"
+	SourceTranscript QuestionSource = "transcript"
+)
+
+// QuestionApprove is for daemon questions only. Its options are Allow and Deny.
+const QuestionApprove QuestionKind = "approve"
+
+// Option labels of a QuestionApprove item.
+const (
+	OptionAllow = "Allow"
+	OptionDeny  = "Deny"
+)
+
+// DaemonQuestionItem has the shape of RunnerQuestionItem. Its kind can also be QuestionApprove.
+type DaemonQuestionItem RunnerQuestionItem
+
+// DaemonQuestion is one open pause of a session.
+type DaemonQuestion struct {
+	ID         string               `json:"id"`
+	Session    string               `json:"session"`
+	Terminal   string               `json:"terminal,omitempty"`
+	Harness    string               `json:"harness"`
+	Via        QuestionVia          `json:"via"`
+	Items      []DaemonQuestionItem `json:"items"`
+	Answerable bool                 `json:"answerable"`
+	Source     QuestionSource       `json:"source"`
+	AskedAt    time.Time            `json:"askedAt"`
+	ExpiresAt  *time.Time           `json:"expiresAt,omitempty"`
+}
+
+// DaemonQuestionsPage is the answer of GET /v1/questions.
+type DaemonQuestionsPage struct {
+	Questions []DaemonQuestion `json:"questions"`
+}
+
+// AnswerOutcome is the result of an answer.
+type AnswerOutcome string
+
+const (
+	AnswerSent            AnswerOutcome = "sent"
+	AnswerAlreadyAnswered AnswerOutcome = "alreadyAnswered"
+	AnswerGone            AnswerOutcome = "gone"
+	AnswerError           AnswerOutcome = "error"
+)
+
+// DaemonAnswerResult is the answer of POST /v1/questions/{id}/answer. The body of the call is a QuestionAnswer (RunnerAnswer).
+// Code and Message are set with AnswerError.
+type DaemonAnswerResult struct {
+	Result  AnswerOutcome `json:"result"`
+	Code    string        `json:"code,omitempty"`
+	Message string        `json:"message,omitempty"`
+}
+
+// CodeFormChanged: the form in the terminal changed after the question was read.
+const CodeFormChanged = "form_changed"

@@ -1,0 +1,18 @@
+{
+  "id": "turn:s-4f8a2c1e:1792663320000",
+  "session": "s-4f8a2c1e",
+  "harness": "claude",
+  "via": "turn",
+  "items": [
+    {
+      "id": "reply",
+      "text": "Should the light blink for all waits, or only for questions?",
+      "kind": "free",
+      "options": [],
+      "allowsOther": false
+    }
+  ],
+  "answerable": true,
+  "source": "transcript",
+  "askedAt": "2026-10-22T10:02:00Z"
+}

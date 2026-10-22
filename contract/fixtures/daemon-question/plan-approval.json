@@ -1,0 +1,20 @@
+{
+  "id": "form:toolu_01Bc7Dn9Ef1Gh3Ij5Kl7Mn9P",
+  "session": "tab-1:leaf-1",
+  "terminal": "term_7f3a9c21",
+  "harness": "claude",
+  "via": "permission",
+  "items": [
+    {
+      "id": "plan",
+      "header": "Plan",
+      "text": "1. Add Contract/schema/daemon.json.\n2. Add the fixtures.\n3. Add the Swift and Go types and the round-trip tests.",
+      "kind": "approve",
+      "options": [{ "label": "Allow" }, { "label": "Deny" }],
+      "allowsOther": true
+    }
+  ],
+  "answerable": true,
+  "source": "hook",
+  "askedAt": "2026-10-22T09:12:30Z"
+}

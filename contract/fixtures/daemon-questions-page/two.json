@@ -1,0 +1,79 @@
+{
+  "questions": [
+    {
+      "id": "form:toolu_01HJ8kq2Vx3mN7pR4sT6wY9z",
+      "session": "tab-2:leaf-1",
+      "terminal": "term_0c4e8b12",
+      "harness": "claude",
+      "via": "form",
+      "items": [
+        {
+          "id": "q1",
+          "header": "Store",
+          "text": "Which store should the hub use?",
+          "kind": "single",
+          "options": [
+            {
+              "label": "D1",
+              "detail": "SQL tables, one database for each account."
+            },
+            {
+              "label": "Durable Object storage",
+              "detail": "Keep the current key-value store."
+            }
+          ],
+          "allowsOther": true
+        },
+        {
+          "id": "q2",
+          "header": "Migration",
+          "text": "Which data should the migration copy?",
+          "kind": "multi",
+          "options": [
+            {
+              "label": "Event log"
+            },
+            {
+              "label": "Work orders"
+            },
+            {
+              "label": "Suggestions"
+            }
+          ],
+          "allowsOther": false
+        }
+      ],
+      "answerable": true,
+      "source": "hook",
+      "askedAt": "2026-10-22T09:20:11Z"
+    },
+    {
+      "id": "form:toolu_01Qm4Zr8Lp2Ks6Tn0Wv3Xy5A",
+      "session": "tab-3:leaf-2",
+      "terminal": "term_5a6b7c8d",
+      "harness": "claude",
+      "via": "permission",
+      "items": [
+        {
+          "id": "permission",
+          "header": "Bash",
+          "text": "go test ./... -count=1",
+          "kind": "approve",
+          "options": [
+            {
+              "label": "Allow"
+            },
+            {
+              "label": "Deny"
+            }
+          ],
+          "allowsOther": false
+        }
+      ],
+      "answerable": true,
+      "source": "hook",
+      "askedAt": "2026-10-22T09:31:45Z",
+      "expiresAt": "2026-10-22T09:41:45Z"
+    }
+  ]
+}
