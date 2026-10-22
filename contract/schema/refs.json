@@ -29,6 +29,20 @@
       "required": ["id", "name"],
       "additionalProperties": false
     },
+    "PersonDetail": {
+      "description": "One person, joined from trackers, code hosts and machines. Empty lists stay out.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "login": { "type": "string" },
+        "email": { "type": "string" },
+        "sources": { "description": "The accounts that know the person: <provider>:<account>.", "type": "array", "items": { "type": "string" } },
+        "machines": { "description": "The machines of the person, by name.", "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["id", "name"],
+      "additionalProperties": false
+    },
     "ProjectRef": {
       "type": "object",
       "properties": {

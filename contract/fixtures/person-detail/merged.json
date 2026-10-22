@@ -1,0 +1,8 @@
+{
+  "id": "6008c025",
+  "name": "Ada Lovelace",
+  "login": "ada",
+  "email": "ada@example.com",
+  "sources": ["plane:ocral", "github:acme"],
+  "machines": ["studio", "air"]
+}
