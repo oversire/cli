@@ -8,7 +8,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	goruntime "runtime"
+	"slices"
 	"strconv"
+	"sync"
 	"time"
 
 	agentwire "github.com/trebi-ai/agent-wire"
@@ -16,6 +18,7 @@ import (
 	"github.com/oversire/cli/allow"
 	"github.com/oversire/cli/config"
 	"github.com/oversire/cli/hub"
+	"github.com/oversire/cli/orders"
 	"github.com/oversire/cli/proc"
 	"github.com/oversire/cli/runtime"
 	"github.com/oversire/cli/runtime/orca"
@@ -53,8 +56,8 @@ func (c *cli) run(ctx context.Context) error {
 	agents := agentwire.New(agentwire.Options{ClientName: "oversire", ClientVersion: version, LedgerPath: filepath.Join(data, "agents.json"), Logger: c.log})
 	_ = agents.Reconcile()
 	var client *hub.Client
-	ov := oversire.New(oversire.Options{Runner: cfg.Device, DataDir: data, Slots: cfg.Sessions()}, agents, proc.Local{},
-		lateReporter{&client})
+	reps := &reports{}
+	ov := oversire.New(oversire.Options{Runner: cfg.Device, DataDir: data, Slots: cfg.Sessions()}, agents, proc.Local{}, reps)
 	defer func() {
 		ctx, done := context.WithTimeout(context.Background(), 30*time.Second)
 		defer done()
@@ -71,14 +74,20 @@ func (c *cli) run(ctx context.Context) error {
 	go c.updateLoop(ctx, checks, updated)
 
 	var tasks []func(context.Context) error
+	// One allow list, journal and order runner for the hub path and the direct path.
+	allowList := allow.File{Path: c.paths.Allow()}
+	journal := hub.OpenJournal(c.paths.Journal())
+	runner := orders.NewRunner(reg, allowList, journal, time.Now)
 	if cfg.Has(config.RoleRunner) && cfg.Paired() {
 		token, err := c.secrets.Get(ctx, cfg.Device)
 		if err != nil {
 			return &exitError{2, err}
 		}
 		state := config.NewStateFile(c.paths.State(), config.State{Device: cfg.Device, Hub: cfg.Hub, Version: version})
-		client = hub.NewClient(cfg.Hub, token, version, reg, allow.File{Path: c.paths.Allow()}, hub.OpenJournal(c.paths.Journal()), state)
+		client = hub.NewClient(cfg.Hub, token, version, reg, allowList, journal, state)
 		client.Log = c.log
+		runner = client.Runner()
+		reps.add(client)
 		client.OnUpdate = func(string) {
 			select {
 			case checks <- struct{}{}:
@@ -94,7 +103,7 @@ func (c *cli) run(ctx context.Context) error {
 			}
 			return "on"
 		}
-		serve, err := c.serveTasks(ctx, cfg, reg, data, hubHealth)
+		serve, err := c.serveTasks(ctx, cfg, reg, data, hubHealth, runner, reps)
 		if err != nil {
 			return err
 		}
@@ -169,17 +178,35 @@ func (c *cli) updateLoop(ctx context.Context, hints <-chan struct{}, updated cha
 	}
 }
 
-// lateReporter passes the reports to the hub client, which the daemon makes after the runtime. Without a hub, it drops them.
-type lateReporter struct{ c **hub.Client }
+// reports passes the session reports of the oversire runtime to the sinks that the daemon makes after the runtime:
+// the hub client, the session book and the direct orders. Without a sink, it drops them.
+type reports struct {
+	mu    sync.Mutex
+	sinks []oversire.Reporter
+}
 
-func (r lateReporter) Report(s wire.RunnerSession) {
-	if *r.c != nil {
-		(*r.c).Report(s)
+func (r *reports) add(s oversire.Reporter) {
+	r.mu.Lock()
+	r.sinks = append(r.sinks, s)
+	r.mu.Unlock()
+}
+
+func (r *reports) all() []oversire.Reporter {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return slices.Clone(r.sinks)
+}
+
+func (r *reports) Report(s wire.RunnerSession) {
+	for _, sink := range r.all() {
+		sink.Report(s)
 	}
 }
 
-func (r lateReporter) ReportPaths(order string, p wire.ChangedPaths) {
-	if *r.c != nil {
-		(*r.c).ReportPaths(order, p)
+func (r *reports) ReportPaths(order string, p wire.ChangedPaths) {
+	for _, sink := range r.all() {
+		if pr, ok := sink.(oversire.PathsReporter); ok {
+			pr.ReportPaths(order, p)
+		}
 	}
 }

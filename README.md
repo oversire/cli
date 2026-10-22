@@ -189,6 +189,19 @@ The daemon looks for the tailnet addresses again each 30 s. It never binds `0.0.
 
 `GET /v1/connect` is a WebSocket with the frames of the cloud hub: `ping` gets `pong`, and `{"type":"poke"}` and `{"type":"store"}` tell the client to read again. A revoked credential closes its socket with code 4001.
 
+### Direct orders
+
+An app of the group can give work orders to the daemon without the cloud hub. The bodies are `WorkOrder` and `WorkOrderResult` of `contract/schema/work-order.json`. The orders go through the same allow list, expiry and journal (`orders.json`) as the hub orders. A daemon credential gets 403: daemons do not order each other.
+
+| Route | What it does |
+|---|---|
+| `POST /v1/orders` | Takes a `WorkOrder` and answers 202 `{order}`. The order runs in the background. A known order id does not run again: the daemon answers 200 `{state, result?}` and sends the `result` frame again. |
+| `GET /v1/orders/{id}` | Answers `{state, result?}`. `state` is `queued` or `acked` while the order runs, then `done`, `failed` or `expired`. An unknown id gets 404. |
+| `POST /v1/runner-sessions/{id}/permission` | Body `{permission, allow}`. Answers the pending permission prompt of an `oversire` session with a `sessionSend` order, and answers 200 with that order. 404: no such session. 409: no such prompt is pending. 410: the prompt has expired. |
+| `POST /v1/runner-sessions/{id}/answer` | Body: a `RunnerAnswer` `{id, items, note?}`. Answers the open question of an `oversire` session with a `sessionSend` order that expires in 60 min, and answers 200 with that order. 404: no such session. 409: no such question is open. |
+
+`GET /v1/connect` also sends the `runner.json` frames `{"type":"ack","order":…}`, `{"type":"result","order":…,"state":…,"result":…}` and `{"type":"session","session":…}`. Each change of an `oversire` session goes out as a `session` frame, and into the session book (`/v1/sessions`, source `wire`).
+
 ## Service
 
 `daemon install` starts `oversire daemon run` at login and restarts it after a failure:
@@ -208,7 +221,7 @@ On macOS, `daemon install --keep-awake` keeps the Mac awake while the daemon run
 - **Checked start command.** A `sessionStart` order can carry `command`, the start command that the user set in OverSire (Settings › Runtime). The `orca` runtime types it into the terminal in place of its default. It accepts the command only if the first word is the agent of the order (or a path that ends in `/<agent>`), and the text has no shell operator (`;` `|` `&` `` ` `` `$(` `>` `<` or a newline). Else the order fails with the reason. An empty field gives the default command. The `oversire` runtime starts the agent over agent-wire, without a command line, and ignores the field.
 - **Local allow list.** The machine owner decides which runtimes, repos, agents and environments the hub can use. The hub cannot change the list.
 - **Expiry.** Each order has an expiry time. The daemon never does an expired order.
-- **At most once.** The daemon keeps the last 500 finished orders in `orders.json`. An order that the hub sends again does not run again. The daemon only sends its result again.
+- **At most once.** The daemon keeps the last 500 finished orders in `orders.json`. An order that the hub or an app sends again does not run again. The daemon only sends its result again.
 - **Secrets on stdin.** The token goes to `security` and `secret-tool` on stdin, never in argv.
 - **Signed updates.** `daemon run` checks the latest GitHub release one time each day and when the hub tells it about a new version. It verifies the sha256 checksum. On macOS it also verifies the code signature and the Team ID `Q56WK6TB88`. A `dev` build never updates.
 
@@ -235,6 +248,7 @@ The layout:
 | `cmd/oversire` | The commands. |
 | `wire` | The Go types of the wire contract. |
 | `hub` | The WebSocket client and the journal of finished orders. |
+| `orders` | The one run path of each order (`Runner`), and the direct orders from the apps of the group (`Direct`). |
 | `runtime` | The `Runtime` interface and the registry. `runtime/orca` is the Orca driver. `runtime/oversire` is the agent-wire driver. |
 | `digest` | The transcript readers that make a `SessionDigest`. |
 | `allow` | The allow list. |

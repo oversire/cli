@@ -16,6 +16,7 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/oversire/cli/orders"
 	"github.com/oversire/cli/wire"
 )
 
@@ -73,20 +74,23 @@ type Client struct {
 
 	sessions *sessionBox
 
-	mu      sync.Mutex
-	conn    *websocket.Conn
-	running map[string]bool
-	orders  sync.WaitGroup
+	runner *orders.Runner
+
+	mu     sync.Mutex
+	conn   *websocket.Conn
+	orders sync.WaitGroup
 }
 
 func NewClient(hub, token, version string, runtimes Runtimes, allow Allow, journal *Journal, status Status) *Client {
-	return &Client{
+	c := &Client{
 		hub: strings.TrimRight(hub, "/"), token: token, version: version,
 		runtimes: runtimes, allow: allow, journal: journal, status: status,
 		HTTPClient: http.DefaultClient, Log: slog.Default(), Now: time.Now,
 		PingEvery: 30 * time.Second, MinBackoff: time.Second, MaxBackoff: 5 * time.Minute, StableAfter: time.Minute,
-		running: map[string]bool{}, sessions: newSessionBox(),
+		sessions: newSessionBox(),
 	}
+	c.runner = orders.NewRunner(runtimes, allow, journal, func() time.Time { return c.Now() })
+	return c
 }
 
 // Report sends the session state to the hub. Without a connection, the state waits for the next welcome.
@@ -249,53 +253,39 @@ func (c *Client) handle(ctx context.Context, o wire.WorkOrder) {
 		c.Log.Warn("held order ignored", "order", o.ID)
 		return
 	}
-	c.mu.Lock()
-	// The journal first: a finished order is in it before it leaves running.
-	if r, ok := c.journal.Get(o.ID); ok {
-		c.mu.Unlock()
-		c.send(ctx, r)
-		return
-	}
-	if c.running[o.ID] {
-		c.mu.Unlock()
-		return
-	}
-	c.running[o.ID] = true
-	c.mu.Unlock()
-	defer func() {
-		c.mu.Lock()
-		delete(c.running, o.ID)
-		c.mu.Unlock()
-	}()
-	c.status.Order(o.ID)
 	log := c.Log.With("order", o.ID, "op", o.Payload.Op(), "runtime", o.Runtime)
+	accepted := false
+	res, out := c.runner.Run(ctx, o, orders.Hooks{
+		Claimed: func() { c.status.Order(o.ID) },
+		Accepted: func() {
+			accepted = true
+			c.sendMessage(ctx, wire.Ack{Order: o.ID})
+			log.Info("order started")
+		},
+	})
+	switch out {
+	case orders.Busy:
+		return
+	case orders.Ran:
+		logResult(log, res, accepted)
+	}
+	c.send(ctx, res)
+}
 
-	if !o.ExpiresAt.After(c.Now()) {
+// Runner is the order path of the client. Direct orders use it too, so that one journal and one running set hold.
+func (c *Client) Runner() *orders.Runner { return c.runner }
+
+func logResult(log *slog.Logger, r wire.Result, accepted bool) {
+	switch {
+	case r.State == wire.ResultExpired:
 		log.Info("order expired")
-		c.finish(ctx, wire.Result{Order: o.ID, State: wire.ResultExpired})
-		return
+	case r.State == wire.ResultFailed && !accepted:
+		log.Warn("order refused", "reason", r.Result.Error)
+	case r.State == wire.ResultFailed:
+		log.Warn("order failed", "err", r.Result.Error)
+	default:
+		log.Info("order done")
 	}
-	reason := ""
-	if !c.runtimes.Has(o.Runtime) {
-		reason = fmt.Sprintf("This runner has no runtime %s.", o.Runtime)
-	} else if err := c.allow.Check(o); err != nil {
-		reason = err.Error()
-	}
-	if reason != "" {
-		log.Warn("order refused", "reason", reason)
-		c.finish(ctx, wire.Result{Order: o.ID, State: wire.ResultFailed, Result: &wire.WorkOrderResult{Error: reason}})
-		return
-	}
-	c.sendMessage(ctx, wire.Ack{Order: o.ID})
-	log.Info("order started")
-	res, err := c.runtimes.Do(ctx, o)
-	if err != nil {
-		log.Warn("order failed", "err", err)
-		c.finish(ctx, wire.Result{Order: o.ID, State: wire.ResultFailed, Result: &wire.WorkOrderResult{Error: err.Error()}})
-		return
-	}
-	log.Info("order done")
-	c.finish(ctx, wire.Result{Order: o.ID, State: wire.ResultDone, Result: res})
 }
 
 func (c *Client) finish(ctx context.Context, r wire.Result) {
