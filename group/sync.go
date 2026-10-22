@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -29,6 +30,7 @@ type Syncer struct {
 	log     *slog.Logger
 	every   time.Duration
 	pokes   chan string
+	taker   HomeTaker
 }
 
 // NewSyncer makes a syncer. tailnet gives the peers for discovery (server.Tailnet.Peers); nil means no discovery.
@@ -173,6 +175,48 @@ func (s *Syncer) pushRekey(ctx context.Context) {
 	}
 }
 
+// HomeTaker copies the state of the old home to this machine before this machine becomes home (store.Routes).
+// offline is true when the old home does not answer; the move then goes on.
+type HomeTaker interface {
+	TakeHome(ctx context.Context, base, token string) (records int, offline bool, err error)
+}
+
+// WithHomeTaker sets the taker that POST /v1/group/home calls when this machine becomes home.
+func (s *Syncer) WithHomeTaker(t HomeTaker) *Syncer {
+	s.taker = t
+	return s
+}
+
+// homeMove is the answer of POST /v1/group/home.
+type homeMove struct {
+	OK      bool `json:"ok"`
+	Records int  `json:"records,omitempty"`
+	Offline bool `json:"offline,omitempty"`
+}
+
+// takeHome runs the taker when machine is this machine, the group has no cloud, and the old home is another member.
+func (s *Syncer) takeHome(ctx context.Context, machine string) (homeMove, error) {
+	out := homeMove{OK: true}
+	g, found := s.store.Snapshot()
+	if s.taker == nil || !found || g.Cloud != nil || machine != s.store.Self().Machine || g.Home == machine {
+		return out, nil
+	}
+	old, isMember := s.member(g.Home)
+	if !isMember {
+		return out, nil
+	}
+	token := ""
+	if t := s.store.Tokens(); len(t) > 0 {
+		token = t[0]
+	}
+	n, offline, err := s.taker.TakeHome(ctx, memberURL(old.Addrs, old.Host, old.Port), token)
+	if err != nil {
+		return out, fmt.Errorf("group: copy the store of %s: %w", old.Machine, err)
+	}
+	out.Records, out.Offline = n, offline
+	return out, nil
+}
+
 // Discover probes GET /v1/whoami on each online peer, with a time limit of ProbeTimeout. It gives the daemons that answer.
 func (s *Syncer) Discover(ctx context.Context, peers []server.Peer) []wire.DaemonInfo {
 	port := s.store.Self().Port
@@ -291,7 +335,12 @@ func (s *Syncer) Routes() []server.Route {
 				writeErr(w, err)
 				return
 			}
-			reply(w, ok, s.store.SetHome(in.Machine))
+			out, err := s.takeHome(r.Context(), in.Machine)
+			if err != nil {
+				writeJSON(w, http.StatusBadGateway, errorBody{Error: err.Error()})
+				return
+			}
+			reply(w, out, s.store.SetHome(in.Machine))
 		}},
 		{Pattern: "POST /v1/group/rotate", Access: server.LoopbackOnly, Handle: func(w http.ResponseWriter, r *http.Request) {
 			reply(w, ok, s.store.Rotate())

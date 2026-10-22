@@ -189,6 +189,12 @@ The daemon looks for the tailnet addresses again each 30 s. It never binds `0.0.
 
 `GET /v1/connect` is a WebSocket with the frames of the cloud hub: `ping` gets `pong`, and `{"type":"poke"}` and `{"type":"store"}` tell the client to read again. A revoked credential closes its socket with code 4001.
 
+### Home store
+
+The home member of a group without cloud keeps the synced store of the apps in `<data>/store.db` (SQLite). It has the API and the rules of the cloud hub: `POST /v1/store/ops` (at most 100 ops) and `GET /v1/store/ops?after=&limit=`. Last write wins for each collection and id, by HLC. A delete is a tombstone for 30 days, and the daemon prunes each day. The collections that only the hub writes get 400. An accepted op sends `{"type":"store","head":N}`.
+
+A member that is not home answers 409 `{"error":"<machine> is home","home":"<machine>"}`. When the group has cloud, each member answers 409 `{"error":"the cloud is home","cloud":{...}}`. `POST /v1/group/home` with this machine copies all records of the old home before it sets home. When the old home does not answer, the move goes on and the answer has `"offline":true`.
+
 ### Direct orders
 
 An app of the group can give work orders to the daemon without the cloud hub. The bodies are `WorkOrder` and `WorkOrderResult` of `contract/schema/work-order.json`. The orders go through the same allow list, expiry and journal (`orders.json`) as the hub orders. A daemon credential gets 403: daemons do not order each other.
@@ -251,6 +257,7 @@ The layout:
 | `orders` | The one run path of each order (`Runner`), and the direct orders from the apps of the group (`Direct`). |
 | `runtime` | The `Runtime` interface and the registry. `runtime/orca` is the Orca driver. `runtime/oversire` is the agent-wire driver. |
 | `digest` | The transcript readers that make a `SessionDigest`. |
+| `store` | The home store: the op log in SQLite and the `/v1/store/ops` routes. |
 | `allow` | The allow list. |
 | `config` | The config folder, `config.json` and `state.json`. |
 | `secret` | The token storage. |

@@ -21,6 +21,7 @@ import (
 	"github.com/oversire/cli/secret"
 	"github.com/oversire/cli/server"
 	"github.com/oversire/cli/sessions"
+	homestore "github.com/oversire/cli/store"
 	"github.com/oversire/cli/wire"
 )
 
@@ -84,6 +85,12 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 		}
 	}, time.Now)
 	syncer := group.NewSyncer(store, tailnet.Peers, c.log)
+	oplog, err := homestore.Open(filepath.Join(data, "store.db"), time.Now)
+	if err != nil {
+		return nil, err
+	}
+	storeRoutes := homestore.NewRoutes(oplog, store, func(m any) { srv.Notify(false, m) }, c.log)
+	syncer.WithHomeTaker(storeRoutes)
 
 	info := func() wire.DaemonInfo {
 		d := wire.DaemonInfo{Machine: cfg.Machine(), Version: version, Contract: 1, Roles: cfg.Roles, Runtimes: reg.IDs(), Harnesses: installer.Status()}
@@ -97,6 +104,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	}
 	srv.Handle(joins.Routes()...)
 	srv.Handle(syncer.Routes()...)
+	srv.Handle(storeRoutes.Routes()...)
 	srv.Handle(asks.Routes()...)
 	srv.Handle(installer.Routes()...)
 	direct := orders.NewDirect(runner, func(m any) { srv.Notify(false, m) }, time.Now)
@@ -119,7 +127,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 			}
 		}
 	}
-	return []func(context.Context) error{srv.Run, book.Run, watcher.Run, syncer.Run, asks.Run, drain}, nil
+	return []func(context.Context) error{srv.Run, book.Run, watcher.Run, syncer.Run, asks.Run, drain, c.pruneStore(oplog)}, nil
 }
 
 // hookHealth is "live" when a harness has our hooks, else "off".
@@ -130,4 +138,22 @@ func hookHealth(st []wire.HarnessHooks) string {
 		}
 	}
 	return "off"
+}
+
+// pruneStore drops old tombstones from the home store at the start and then each day.
+func (c *cli) pruneStore(l *homestore.OpLog) func(context.Context) error {
+	return func(ctx context.Context) error {
+		t := time.NewTicker(24 * time.Hour)
+		defer t.Stop()
+		for {
+			if err := l.Prune(time.Now()); err != nil {
+				c.log.Warn("store prune", "err", err)
+			}
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-t.C:
+			}
+		}
+	}
 }
