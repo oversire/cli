@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -294,7 +295,7 @@ func TestOpenMakesTheFolder(t *testing.T) {
 		t.Fatal(err)
 	}
 	l.Close()
-	if st, err := os.Stat(dir); err != nil || st.Mode().Perm() != 0o700 {
+	if st, err := os.Stat(dir); err != nil || (runtime.GOOS != "windows" && st.Mode().Perm() != 0o700) {
 		t.Fatalf("folder: %v %v", st, err)
 	}
 }

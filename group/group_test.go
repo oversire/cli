@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -96,7 +97,7 @@ func TestCreate(t *testing.T) {
 	}
 	// The file has mode 0600 and no secret.
 	st, err := os.Stat(s.path)
-	if err != nil || st.Mode().Perm() != 0o600 {
+	if err != nil || (runtime.GOOS != "windows" && st.Mode().Perm() != 0o600) {
 		t.Fatal(st, err)
 	}
 	b, _ := os.ReadFile(s.path)

@@ -2,6 +2,7 @@ package orca
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -295,10 +296,13 @@ func TestAgentCommand(t *testing.T) {
 func TestHistory(t *testing.T) {
 	o, r := setup()
 	o.digests = func(h string) (digest.Reader, error) { return digest.ForHarness(h, t.TempDir()) }
-	file, err := filepath.Abs("../../contract/fixtures/session-digest/claude/basic.jsonl")
+	abs, err := filepath.Abs("../../contract/fixtures/session-digest/claude/basic.jsonl")
 	if err != nil {
 		t.Fatal(err)
 	}
+	// A Windows path has backslashes, so it must be a JSON string.
+	q, _ := json.Marshal(abs)
+	file := strings.Trim(string(q), `"`)
 	r.on("terminal show", `{"ok":true,"result":{"terminal":{"handle":"h1","title":"✳ ENG-4","worktreePath":"/w/eng-4","agentIdentity":"claude"}}}`)
 	r.on("search --query", `{"ok":true,"result":{"kind":"results","hits":[`+
 		`{"agent":"claude","sessionId":"x","title":"Other","source":{"presence":"present","filePath":"/nope.jsonl"}},`+

@@ -164,7 +164,7 @@ func (m memFS) WriteFile(p string, b []byte) error {
 }
 
 func TestInstaller(t *testing.T) {
-	fs := memFS{"/h/.claude/settings.json": read(t, "claude/settings.json")}
+	fs := memFS{filepath.Join("/h", ".claude", "settings.json"): read(t, "claude/settings.json")}
 	i := NewInstaller("/h", testExe).WithFS(fs)
 	st := i.Status()
 	if len(st) != 2 || st[0] != (wire.HarnessHooks{Name: "claude", Hooks: wire.HooksMissing}) || st[1].Hooks != wire.HooksMissing {
@@ -177,7 +177,7 @@ func TestInstaller(t *testing.T) {
 	if st[0].Hooks != wire.HooksInstalled || st[1].Hooks != wire.HooksMissing {
 		t.Fatalf("after install: %+v", st)
 	}
-	if _, ok := fs["/h/.codex/hooks.json"]; ok {
+	if _, ok := fs[filepath.Join("/h", ".codex", "hooks.json")]; ok {
 		t.Fatal("codex was written")
 	}
 	if _, err := i.Install("cursor"); err == nil {
@@ -189,16 +189,16 @@ func TestInstaller(t *testing.T) {
 	if i.Status()[1].Hooks != wire.HooksUntrusted {
 		t.Fatalf("codex: %+v", i.Status())
 	}
-	if _, ok := fs["/h/.codex/config.toml"]; ok {
+	if _, ok := fs[filepath.Join("/h", ".codex", "config.toml")]; ok {
 		t.Fatal("the installer wrote the Codex trust")
 	}
 	if err := i.Remove(); err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(fs["/h/.claude/settings.json"], read(t, "claude/settings.json")) {
+	if !bytes.Equal(fs[filepath.Join("/h", ".claude", "settings.json")], read(t, "claude/settings.json")) {
 		t.Fatal("remove did not restore the claude config")
 	}
-	if string(fs["/h/.codex/hooks.json"]) != "{}\n" {
-		t.Fatalf("codex: %s", fs["/h/.codex/hooks.json"])
+	if string(fs[filepath.Join("/h", ".codex", "hooks.json")]) != "{}\n" {
+		t.Fatalf("codex: %s", fs[filepath.Join("/h", ".codex", "hooks.json")])
 	}
 }
