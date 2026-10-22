@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oversire/runner/runtime"
-	"github.com/oversire/runner/wire"
+	"github.com/oversire/cli/runtime"
+	"github.com/oversire/cli/wire"
 )
 
 // TestConformance runs the cases of RuntimeConformance in the app (OverSireTestKit) that apply to

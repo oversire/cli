@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/oversire/runner/wire"
+	"github.com/oversire/cli/wire"
 )
 
 // Claude is the AgentBinder harness name of Claude Code.

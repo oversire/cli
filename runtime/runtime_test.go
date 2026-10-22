@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oversire/runner/wire"
+	"github.com/oversire/cli/wire"
 )
 
 type fake struct {

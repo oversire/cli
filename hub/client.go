@@ -16,7 +16,7 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/oversire/runner/wire"
+	"github.com/oversire/cli/wire"
 )
 
 // ErrUnauthorized means the hub does not know the token. Pair the runner again.

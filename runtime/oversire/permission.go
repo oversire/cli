@@ -7,7 +7,7 @@ import (
 
 	agentwire "github.com/trebi-ai/agent-wire"
 
-	"github.com/oversire/runner/wire"
+	"github.com/oversire/cli/wire"
 )
 
 // expiredReason goes to the agent with a deny at the expiry time.

@@ -4,7 +4,7 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/oversire/runner/wire"
+	"github.com/oversire/cli/wire"
 )
 
 // sessionBox keeps the latest state of each session until the hub has it.

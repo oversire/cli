@@ -1,4 +1,4 @@
-module github.com/oversire/runner
+module github.com/oversire/cli
 
 go 1.25.0
 

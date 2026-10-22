@@ -13,9 +13,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/oversire/runner/config"
-	"github.com/oversire/runner/secret"
-	"github.com/oversire/runner/service"
+	"github.com/oversire/cli/config"
+	"github.com/oversire/cli/secret"
+	"github.com/oversire/cli/service"
 )
 
 type noRun struct{ calls [][]string }

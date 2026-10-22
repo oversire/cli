@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/oversire/runner/config"
+	"github.com/oversire/cli/config"
 )
 
 type pairResult struct {

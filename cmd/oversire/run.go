@@ -13,15 +13,15 @@ import (
 
 	agentwire "github.com/trebi-ai/agent-wire"
 
-	"github.com/oversire/runner/allow"
-	"github.com/oversire/runner/config"
-	"github.com/oversire/runner/hub"
-	"github.com/oversire/runner/proc"
-	"github.com/oversire/runner/runtime"
-	"github.com/oversire/runner/runtime/orca"
-	"github.com/oversire/runner/runtime/oversire"
-	"github.com/oversire/runner/update"
-	"github.com/oversire/runner/wire"
+	"github.com/oversire/cli/allow"
+	"github.com/oversire/cli/config"
+	"github.com/oversire/cli/hub"
+	"github.com/oversire/cli/proc"
+	"github.com/oversire/cli/runtime"
+	"github.com/oversire/cli/runtime/orca"
+	"github.com/oversire/cli/runtime/oversire"
+	"github.com/oversire/cli/update"
+	"github.com/oversire/cli/wire"
 )
 
 // stopWait is the wait after a refused token or hello, so that the service does not retry fast.

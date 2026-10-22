@@ -10,7 +10,7 @@ import (
 
 	agentwire "github.com/trebi-ai/agent-wire"
 
-	"github.com/oversire/runner/wire"
+	"github.com/oversire/cli/wire"
 )
 
 // askTool is the Claude Code tool that asks the user. agent-wire sends it as a permission request.

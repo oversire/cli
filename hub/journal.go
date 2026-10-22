@@ -5,8 +5,8 @@ import (
 	"os"
 	"sync"
 
-	"github.com/oversire/runner/config"
-	"github.com/oversire/runner/wire"
+	"github.com/oversire/cli/config"
+	"github.com/oversire/cli/wire"
 )
 
 // JournalSize is the number of finished orders that the journal keeps.

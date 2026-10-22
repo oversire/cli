@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/oversire/runner/config"
-	"github.com/oversire/runner/runtime/oversire"
-	"github.com/oversire/runner/service"
+	"github.com/oversire/cli/config"
+	"github.com/oversire/cli/runtime/oversire"
+	"github.com/oversire/cli/service"
 )
 
 type statusReport struct {

@@ -10,8 +10,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/oversire/runner/digest"
-	"github.com/oversire/runner/wire"
+	"github.com/oversire/cli/digest"
+	"github.com/oversire/cli/wire"
 )
 
 const digestUsage = "usage: oversire-runner digest --harness claude --session <id or file> [--markers] [--source S] [--earlier N] [--full N] [--max-chars N]"

@@ -22,9 +22,9 @@ import (
 
 	agentwire "github.com/trebi-ai/agent-wire"
 
-	"github.com/oversire/runner/digest"
-	"github.com/oversire/runner/runtime"
-	"github.com/oversire/runner/wire"
+	"github.com/oversire/cli/digest"
+	"github.com/oversire/cli/runtime"
+	"github.com/oversire/cli/wire"
 )
 
 const (

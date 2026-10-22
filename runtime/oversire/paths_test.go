@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oversire/runner/proc"
-	"github.com/oversire/runner/runtime"
-	"github.com/oversire/runner/wire"
+	"github.com/oversire/cli/proc"
+	"github.com/oversire/cli/runtime"
+	"github.com/oversire/cli/wire"
 )
 
 func write(t *testing.T, path, text string) {

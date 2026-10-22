@@ -10,7 +10,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/oversire/runner/wire"
+	"github.com/oversire/cli/wire"
 )
 
 // List is the content of allow.json.

@@ -14,10 +14,10 @@ import (
 	goruntime "runtime"
 	"syscall"
 
-	"github.com/oversire/runner/config"
-	"github.com/oversire/runner/proc"
-	"github.com/oversire/runner/secret"
-	"github.com/oversire/runner/service"
+	"github.com/oversire/cli/config"
+	"github.com/oversire/cli/proc"
+	"github.com/oversire/cli/secret"
+	"github.com/oversire/cli/service"
 )
 
 // version is set at build time with -ldflags "-X main.version=...".

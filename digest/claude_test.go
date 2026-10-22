@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oversire/runner/wire"
+	"github.com/oversire/cli/wire"
 )
 
 func sameJSON(t *testing.T, name string, want []byte, got any) {

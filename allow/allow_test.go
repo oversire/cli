@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/oversire/runner/wire"
+	"github.com/oversire/cli/wire"
 )
 
 func abs(p string) string {

@@ -9,9 +9,9 @@ import (
 
 	agentwire "github.com/trebi-ai/agent-wire"
 
-	"github.com/oversire/runner/proc"
-	"github.com/oversire/runner/runtime"
-	"github.com/oversire/runner/wire"
+	"github.com/oversire/cli/proc"
+	"github.com/oversire/cli/runtime"
+	"github.com/oversire/cli/wire"
 )
 
 // TestLive runs a real harness. Set OVERSIRE_LIVE=1, and OVERSIRE_LIVE_AGENT for an agent other than claude.

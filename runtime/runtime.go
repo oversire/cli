@@ -7,7 +7,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/oversire/runner/wire"
+	"github.com/oversire/cli/wire"
 )
 
 // MaxReadLines caps the lines of one sessionRead.
