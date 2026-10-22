@@ -80,6 +80,7 @@ type Store struct {
 }
 
 // NewStore makes a store for path (group.json). notify runs after each change of the group, also after a merge.
+// It runs with the store lock held, so it must not call the store.
 func NewStore(path string, secrets Secrets, clock func() time.Time, notify func()) *Store {
 	if clock == nil {
 		clock = time.Now
