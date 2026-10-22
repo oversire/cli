@@ -22,6 +22,7 @@ import (
 	"github.com/oversire/cli/server"
 	"github.com/oversire/cli/sessions"
 	homestore "github.com/oversire/cli/store"
+	"github.com/oversire/cli/update"
 	"github.com/oversire/cli/wire"
 )
 
@@ -30,7 +31,7 @@ const spoolInterval = 10 * time.Second
 
 // serveTasks builds the serve role: the event log, the session book, the hooks, the Orca watcher, the group, the direct orders and the server.
 // runner runs the direct orders. reports gets the book and the direct orders as sinks of the oversire runtime.
-func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Registry, data string, hub func() string, runner *orders.Runner, reports *reports) ([]func(context.Context) error, error) {
+func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Registry, data string, hub func() string, runner *orders.Runner, reports *reports, updates *update.Loop) ([]func(context.Context) error, error) {
 	serveCfg := cfg.ServeOrDefault()
 	events := eventlog.New(eventlog.DefaultCapacity)
 	book := sessions.NewBook(cfg.Machine(), filepath.Join(data, "sessions.json"), events, time.Now)
@@ -68,7 +69,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	if err := store.Load(); err != nil {
 		return nil, err
 	}
-	self := wire.GroupMember{Machine: cfg.Machine(), Host: cfg.Machine(), Addrs: []string{}, Port: serveCfg.ListenPort(), Roles: cfg.Roles}
+	self := wire.GroupMember{Machine: cfg.Machine(), Host: cfg.Machine(), Addrs: []string{}, Port: serveCfg.ListenPort(), Roles: cfg.Roles, Version: version}
 	if serveCfg.UseTailscale() {
 		if addrs, err := tailnet.Addrs(ctx); err == nil {
 			for _, a := range addrs {
@@ -95,6 +96,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	info := func() wire.DaemonInfo {
 		d := wire.DaemonInfo{Machine: cfg.Machine(), Version: version, Contract: 1, Roles: cfg.Roles, Runtimes: reg.IDs(), Harnesses: installer.Status()}
 		d.Group, d.Home = store.Info()
+		d.Update = updates.Status()
 		return d
 	}
 	srv = server.NewServer(serveCfg, info, store, events, book, ingest)
@@ -107,6 +109,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	srv.Handle(storeRoutes.Routes()...)
 	srv.Handle(asks.Routes()...)
 	srv.Handle(installer.Routes()...)
+	srv.Handle(updates.Routes()...)
 	direct := orders.NewDirect(runner, func(m any) { srv.Notify(false, m) }, time.Now)
 	direct.Log = c.log
 	srv.Handle(direct.Routes()...)

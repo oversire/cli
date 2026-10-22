@@ -118,7 +118,16 @@ type DaemonInfo struct {
 	Group     string         `json:"group,omitempty"`
 	Home      string         `json:"home,omitempty"`
 	Device    string         `json:"device,omitempty"`
+	Update    *UpdateStatus  `json:"update,omitempty"`
 	Listen    DaemonListen   `json:"listen"`
+}
+
+// UpdateStatus is the last self-update check of a daemon.
+type UpdateStatus struct {
+	CheckedAt time.Time `json:"checkedAt"`
+	Latest    string    `json:"latest,omitempty"`
+	Installed string    `json:"installed,omitempty"` // the daemon restarts with it
+	Error     string    `json:"error,omitempty"`
 }
 
 // DaemonListen holds host:port addresses.
@@ -144,6 +153,7 @@ type GroupMember struct {
 	Roles    []string   `json:"roles"`
 	JoinedAt time.Time  `json:"joinedAt"`
 	LastSeen *time.Time `json:"lastSeen,omitempty"`
+	Version  string     `json:"version,omitempty"` // the CLI version; each member writes its own entry
 }
 
 // GroupDevice is one credential holder: a daemon or an app.

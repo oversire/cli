@@ -177,7 +177,7 @@ func clone(g wire.Group) wire.Group {
 }
 
 func sameMember(a, b wire.GroupMember) bool {
-	return a.Machine == b.Machine && a.Host == b.Host && a.Port == b.Port &&
+	return a.Machine == b.Machine && a.Host == b.Host && a.Port == b.Port && a.Version == b.Version &&
 		slices.Equal(a.Addrs, b.Addrs) && slices.Equal(a.Roles, b.Roles)
 }
 

@@ -151,6 +151,7 @@ The budget of the order has caps: 50 earlier turns, 10 last turns and 20000 char
 | `oversire group request-code`, `admit <machine> <code>` | Join the other way: the new machine shows a code, and a member admits it. |
 | `oversire group remove <machine or device>`, `home <machine>`, `rotate` | Remove a member or an app, move home, or make a new group secret. |
 | `oversire join <host> <code>` | Join the group of the member at host. `-` reads the code from stdin. |
+| `oversire update` | Install the latest release now. The running daemon does the update and restarts. Without a daemon, the command updates the binary itself. |
 | `oversire version` | Show the version. |
 
 `digest` reads a session id (the newest transcript with that id) or the path of a transcript file.
@@ -208,6 +209,12 @@ The daemon finds the open questions of the agent sessions: forms and permission 
 
 The machines of one user form a group. Each member keeps the roster and the group secret. A member that joins gets a group credential for the Tailscale listener. The roster syncs between members each 60 s, and at once after a `poke`. The home member keeps the shared store (see below).
 
+Each member writes its CLI version into its own roster entry (`version`). The app compares the versions of the members.
+
+### Updates
+
+`GET /v1/whoami` has `update`, the last self-update check: `checkedAt`, `latest`, `installed` and `error`. It is absent before the first check. `POST /v1/update` (member access) checks and installs now, and answers the same object. After an install, the daemon restarts with the new version.
+
 ### Home store
 
 The home member of a group without cloud keeps the synced store of the apps in `<data>/store.db` (SQLite). It has the API and the rules of the cloud hub: `POST /v1/store/ops` (at most 100 ops) and `GET /v1/store/ops?after=&limit=`. Last write wins for each collection and id, by HLC. A delete is a tombstone for 30 days, and the daemon prunes each day. The collections that only the hub writes get 400. An accepted op sends `{"type":"store","head":N}`.
@@ -248,7 +255,7 @@ On macOS, `daemon install --keep-awake` keeps the Mac awake while the daemon run
 - **Expiry.** Each order has an expiry time. The daemon never does an expired order.
 - **At most once.** The daemon keeps the last 500 finished orders in `orders.json`. An order that the hub or an app sends again does not run again. The daemon only sends its result again.
 - **Secrets on stdin.** The token goes to `security` and `secret-tool` on stdin, never in argv.
-- **Signed updates.** `daemon run` checks the latest GitHub release one time each day and when the hub tells it about a new version. It verifies the sha256 checksum. On macOS it also verifies the code signature and the Team ID `Q56WK6TB88`. A `dev` build never updates.
+- **Signed updates.** `daemon run` checks the latest GitHub release one minute after the start, then each 6 hours, on `POST /v1/update` and when the hub tells it about a new version. It reads the release tag from the redirect of `github.com/oversire/cli/releases/latest`, so the limit of the GitHub API does not apply. It verifies the sha256 checksum. On macOS it also verifies the code signature and the Team ID `Q56WK6TB88`. A `dev` build never updates.
 
 ## Development
 

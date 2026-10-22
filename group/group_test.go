@@ -127,6 +127,12 @@ func TestCreate(t *testing.T) {
 	if g3, _ := s2.Snapshot(); g3.Version != g.Version+1 || g3.Members[0].Addrs[0] != "100.64.0.9" {
 		t.Fatalf("%+v", g3)
 	}
+	// A new CLI version also increases it, so the roster sync sends it to the members.
+	m.Version = "0.2.2"
+	_ = s2.EnsureCreated(m)
+	if g4, _ := s2.Snapshot(); g4.Version != g.Version+2 || g4.Members[0].Version != "0.2.2" {
+		t.Fatalf("%+v", g4)
+	}
 
 	// Without the secret, the group is not loaded and a new one is made.
 	sec.Delete(context.Background(), secretAccount)

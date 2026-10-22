@@ -1,0 +1,13 @@
+{
+  "id": "9f3c1a2b7d4e5f60",
+  "name": "My machines",
+  "home": "mbp",
+  "version": 4,
+  "members": [
+    { "machine": "mba", "host": "mba", "addrs": ["100.70.1.9"], "port": 7690, "roles": ["serve"], "joinedAt": "2026-10-20T08:12:40Z", "version": "0.2.2" },
+    { "machine": "mbp", "host": "mbp", "addrs": ["100.97.81.23"], "port": 7690, "roles": ["serve", "runner"], "joinedAt": "2026-10-20T08:00:00Z", "lastSeen": "2026-10-22T10:05:00Z", "version": "0.2.1" }
+  ],
+  "devices": [],
+  "revoked": [],
+  "removed": []
+}

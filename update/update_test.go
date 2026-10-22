@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -139,7 +140,7 @@ func TestUpdateReplacesTheBinary(t *testing.T) {
 	cs := &codesign{team: TeamID, valid: true}
 	exe := exeFile(t)
 	got, err := NewUpdater(f, cs, latestURL, "0.1.0", "darwin", "arm64", exe).Check(context.Background())
-	if err != nil || got != "0.2.0" {
+	if err != nil || got != (Result{Latest: "0.2.0", Installed: "0.2.0"}) {
 		t.Fatal(got, err)
 	}
 	if b, _ := os.ReadFile(exe); string(b) != "new" {
@@ -194,15 +195,33 @@ func TestUpdateRefusals(t *testing.T) {
 
 func TestNoUpdate(t *testing.T) {
 	name := ArchiveName("0.1.0", "linux", "amd64")
-	for _, version := range []string{"0.1.0", "dev"} {
-		f := newFeed("v0.1.0", name, nil, "")
-		got, err := NewUpdater(f, &codesign{}, latestURL, version, "linux", "amd64", exeFile(t)).Check(context.Background())
-		if err != nil || got != "" {
-			t.Fatal(version, got, err)
-		}
-		if len(f.gets) > 1 || (version == "dev" && len(f.gets) != 0) {
-			t.Fatalf("%s: gets %q", version, f.gets)
-		}
+	f := newFeed("v0.1.0", name, nil, "")
+	got, err := NewUpdater(f, &codesign{}, latestURL, "0.1.0", "linux", "amd64", exeFile(t)).Check(context.Background())
+	if err != nil || got != (Result{Latest: "0.1.0"}) {
+		t.Fatal(got, err)
+	}
+	if len(f.gets) > 1 {
+		t.Fatalf("gets %q", f.gets)
+	}
+	f = newFeed("v0.1.0", name, nil, "")
+	if _, err := NewUpdater(f, &codesign{}, latestURL, "dev", "linux", "amd64", exeFile(t)).Check(context.Background()); !errors.Is(err, ErrDev) || len(f.gets) != 0 {
+		t.Fatal(err, f.gets)
+	}
+}
+
+func TestUpdateWithoutWriteAccess(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Getuid() == 0 {
+		t.Skip("folder modes")
+	}
+	name := ArchiveName("0.2.0", "linux", "amd64")
+	archive := targz(t, "oversire", []byte("new"))
+	f := newFeed("v0.2.0", name, archive, sha(archive)+"  "+name+"\n")
+	exe := exeFile(t)
+	os.Chmod(filepath.Dir(exe), 0o555)
+	t.Cleanup(func() { os.Chmod(filepath.Dir(exe), 0o755) })
+	got, err := NewUpdater(f, &codesign{}, latestURL, "0.1.0", "linux", "amd64", exe).Check(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "no write access to "+filepath.Dir(exe)) || got.Latest != "0.2.0" {
+		t.Fatal(got, err)
 	}
 }
 

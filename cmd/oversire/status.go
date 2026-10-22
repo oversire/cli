@@ -32,10 +32,11 @@ type statusReport struct {
 
 // serveStatus comes from GET /v1/whoami of the running daemon. It is empty when the daemon does not answer.
 type serveStatus struct {
-	Loopback  string `json:"loopback"`
-	Tailscale string `json:"tailscale"`
-	Group     string `json:"group"`
-	Home      string `json:"home"`
+	Loopback  string             `json:"loopback"`
+	Tailscale string             `json:"tailscale"`
+	Group     string             `json:"group"`
+	Home      string             `json:"home"`
+	Update    *wire.UpdateStatus `json:"update,omitempty"`
 }
 
 func readServe(ctx context.Context, cfg config.Config) serveStatus {
@@ -56,7 +57,7 @@ func readServe(ctx context.Context, cfg config.Config) serveStatus {
 	if resp.StatusCode != http.StatusOK || json.NewDecoder(resp.Body).Decode(&d) != nil {
 		return serveStatus{}
 	}
-	return serveStatus{Loopback: d.Listen.Loopback, Tailscale: d.Listen.Tailscale, Group: d.Group, Home: d.Home}
+	return serveStatus{Loopback: d.Listen.Loopback, Tailscale: d.Listen.Tailscale, Group: d.Group, Home: d.Home, Update: d.Update}
 }
 
 func (c *cli) status(ctx context.Context, args []string) error {
@@ -114,6 +115,13 @@ func (c *cli) status(ctx context.Context, args []string) error {
 	}
 	if r.Serve.Group != "" {
 		fmt.Fprintf(c.out, "group:     %s (home %s)\n", r.Serve.Group, r.Serve.Home)
+	}
+	if u := r.Serve.Update; u != nil {
+		line := "latest " + u.Latest
+		if u.Error != "" {
+			line = "failed: " + u.Error
+		}
+		fmt.Fprintf(c.out, "update:    %s (checked %s)\n", line, u.CheckedAt.Local().Format(time.DateTime))
 	}
 	return nil
 }

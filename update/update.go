@@ -13,9 +13,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -53,36 +55,50 @@ func NewUpdater(http Doer, run Runner, api, version, goos, goarch, exe string) *
 	return &Updater{http: http, run: run, api: api, version: version, goos: goos, goarch: goarch, exe: exe}
 }
 
-// Check installs a newer release and gives its version, or "" when this build is the latest.
-func (u *Updater) Check(ctx context.Context) (string, error) {
+// Result is one check. Installed is empty when this build is the latest.
+type Result struct {
+	Latest    string
+	Installed string
+}
+
+// ErrDev: a dev build does not update.
+var ErrDev = errors.New("update: a dev build does not update")
+
+// Check installs a newer release. Latest is set also when the install fails.
+func (u *Updater) Check(ctx context.Context) (Result, error) {
 	if u.version == "dev" || u.version == "" {
-		return "", nil
+		return Result{}, ErrDev
 	}
 	tag, download, err := u.latest(ctx)
 	if err != nil {
-		return "", err
-	}
-	if !Newer(tag, u.version) {
-		return "", nil
+		return Result{}, err
 	}
 	version := strings.TrimPrefix(tag, "v")
+	r := Result{Latest: version}
+	if !Newer(tag, u.version) {
+		return r, nil
+	}
 	name := ArchiveName(version, u.goos, u.goarch)
 	sums, err := u.get(ctx, download+"checksums.txt")
 	if err != nil {
-		return "", err
+		return r, err
 	}
 	archive, err := u.get(ctx, download+name)
 	if err != nil {
-		return "", fmt.Errorf("update: release %s has no %s: %w", tag, name, err)
+		return r, fmt.Errorf("update: release %s has no %s: %w", tag, name, err)
 	}
 	if err := VerifyChecksum(sums, name, archive); err != nil {
-		return "", err
+		return r, err
 	}
 	bin, err := extract(archive, u.binaryName(), u.goos == "windows")
 	if err != nil {
-		return "", err
+		return r, err
 	}
-	return version, u.replace(ctx, bin)
+	if err := u.replace(ctx, bin); err != nil {
+		return r, err
+	}
+	r.Installed = version
+	return r, nil
 }
 
 func (u *Updater) binaryName() string {
@@ -101,11 +117,11 @@ func (u *Updater) latest(ctx context.Context) (tag, download string, err error) 
 	req.Header.Set("User-Agent", "oversire-cli/"+u.version)
 	resp, err := u.http.Do(req)
 	if err != nil {
-		return "", "", fmt.Errorf("update: %w", err)
+		return "", "", fmt.Errorf("update: cannot reach GitHub: %w", err)
 	}
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK || resp.Request == nil {
-		return "", "", fmt.Errorf("update: HEAD %s: %s", u.api, resp.Status)
+		return "", "", fmt.Errorf("update: GitHub answered %s for %s. Try again later", resp.Status, u.api)
 	}
 	final := resp.Request.URL.String()
 	base, tag, ok := strings.Cut(final, "/releases/tag/")
@@ -136,6 +152,9 @@ func (u *Updater) get(ctx context.Context, url string) ([]byte, error) {
 func (u *Updater) replace(ctx context.Context, bin []byte) error {
 	next := u.exe + ".new"
 	if err := os.WriteFile(next, bin, 0o755); err != nil {
+		if errors.Is(err, fs.ErrPermission) {
+			return fmt.Errorf("update: no write access to %s. Give your user write access to it, or remove %s and install the CLI again from the OverSire app", filepath.Dir(u.exe), u.exe)
+		}
 		return fmt.Errorf("update: %w", err)
 	}
 	if u.goos == "darwin" {

@@ -69,9 +69,9 @@ func (c *cli) run(ctx context.Context) error {
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	checks := make(chan struct{}, 1)
-	updated := make(chan string, 1)
-	go c.updateLoop(ctx, checks, updated)
+	updates := update.NewLoop(update.NewUpdater(&http.Client{Timeout: 5 * time.Minute}, proc.Local{}, update.LatestURL, version, goruntime.GOOS, goruntime.GOARCH, c.exe), time.Now)
+	updates.Log = c.log
+	go updates.Run(ctx)
 
 	var tasks []func(context.Context) error
 	// One allow list, journal and order runner for the hub path and the direct path.
@@ -88,12 +88,7 @@ func (c *cli) run(ctx context.Context) error {
 		client.Log = c.log
 		runner = client.Runner()
 		reps.add(client)
-		client.OnUpdate = func(string) {
-			select {
-			case checks <- struct{}{}:
-			default:
-			}
-		}
+		client.OnUpdate = func(string) { updates.Hint() }
 		tasks = append(tasks, c.hubTask(client))
 	}
 	if cfg.Has(config.RoleServe) {
@@ -103,7 +98,7 @@ func (c *cli) run(ctx context.Context) error {
 			}
 			return "on"
 		}
-		serve, err := c.serveTasks(ctx, cfg, reg, data, hubHealth, runner, reps)
+		serve, err := c.serveTasks(ctx, cfg, reg, data, hubHealth, runner, reps, updates)
 		if err != nil {
 			return err
 		}
@@ -118,7 +113,7 @@ func (c *cli) run(ctx context.Context) error {
 		go func() { done <- t(ctx) }()
 	}
 	select {
-	case v := <-updated:
+	case v := <-updates.Installed():
 		c.log.Info("daemon updated, restart", "version", v)
 		cancel()
 		for range tasks {
@@ -150,31 +145,6 @@ func (c *cli) hubTask(client *hub.Client) func(context.Context) error {
 			}
 		}
 		return err
-	}
-}
-
-// updateLoop checks the release feed one minute after the start, each day, and on each hub hint.
-func (c *cli) updateLoop(ctx context.Context, hints <-chan struct{}, updated chan<- string) {
-	u := update.NewUpdater(&http.Client{Timeout: 5 * time.Minute}, proc.Local{}, update.LatestURL, version, goruntime.GOOS, goruntime.GOARCH, c.exe)
-	timer := time.NewTimer(time.Minute)
-	defer timer.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-timer.C:
-			timer.Reset(24 * time.Hour)
-		case <-hints:
-		}
-		v, err := u.Check(ctx)
-		if err != nil {
-			c.log.Warn("update check failed", "err", err)
-			continue
-		}
-		if v != "" {
-			updated <- v
-			return
-		}
 	}
 }
 

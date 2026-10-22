@@ -1,0 +1,16 @@
+{
+  "machine": "mbp",
+  "version": "0.2.1",
+  "contract": 1,
+  "roles": ["serve"],
+  "runtimes": ["oversire"],
+  "harnesses": [],
+  "group": "9f3c1a2b7d4e5f60",
+  "home": "mbp",
+  "update": {
+    "checkedAt": "2026-10-22T10:05:00Z",
+    "latest": "0.2.2",
+    "error": "update: no write access to /usr/local/bin. Install again from the OverSire app, or run: sudo oversire update"
+  },
+  "listen": { "loopback": "127.0.0.1:7690", "tailscale": "100.97.81.23:7690" }
+}

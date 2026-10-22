@@ -45,6 +45,7 @@ Usage:
   oversire digest --harness claude --session <id or file> [--markers]
                   [--source S] [--earlier N] [--full N] [--max-chars N]
                                                        print the history digest of a session
+  oversire update                                      install the latest release now
   oversire version                                     show the version
 `
 
@@ -129,6 +130,8 @@ func (c *cli) dispatch(ctx context.Context, args []string) error {
 		return c.join(ctx, rest)
 	case cmd == "hub" && sub == "pair":
 		return c.pair(ctx, rest[1:])
+	case cmd == "update":
+		return c.update(ctx)
 	case cmd == "version" || cmd == "--version" || cmd == "-v":
 		fmt.Fprintln(c.out, version)
 		return nil

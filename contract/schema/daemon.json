@@ -104,6 +104,7 @@
         "group": { "description": "The group id.", "type": "string" },
         "home": { "description": "The home machine of the group.", "$ref": "#/$defs/MachineName" },
         "device": { "description": "The device id of the credential of the call.", "type": "string" },
+        "update": { "$ref": "#/$defs/UpdateStatus" },
         "listen": {
           "type": "object",
           "properties": {
@@ -127,9 +128,22 @@
         "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
         "roles": { "type": "array", "items": { "$ref": "#/$defs/DaemonRole" } },
         "joinedAt": { "$ref": "#/$defs/Date" },
-        "lastSeen": { "$ref": "#/$defs/Date" }
+        "lastSeen": { "$ref": "#/$defs/Date" },
+        "version": { "description": "The CLI version of the member. Each member writes its own entry.", "type": "string" }
       },
       "required": ["machine", "host", "addrs", "port", "roles", "joinedAt"],
+      "additionalProperties": false
+    },
+    "UpdateStatus": {
+      "description": "The last self-update check of a daemon. Absent before the first check, and on a dev build.",
+      "type": "object",
+      "properties": {
+        "checkedAt": { "$ref": "#/$defs/Date" },
+        "latest": { "description": "The version of the latest release.", "type": "string" },
+        "installed": { "description": "The version that the check installed. The daemon restarts with it.", "type": "string" },
+        "error": { "description": "Why the check or the install failed, and what to do.", "type": "string" }
+      },
+      "required": ["checkedAt"],
       "additionalProperties": false
     },
     "DeviceKind": { "description": "daemon: a machine of the group. app: an app on a machine without a daemon.", "enum": ["daemon", "app"] },
