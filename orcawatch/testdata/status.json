@@ -1,0 +1,20 @@
+{
+  "id": "local-status",
+  "ok": true,
+  "result": {
+    "target": {
+      "kind": "local"
+    },
+    "app": {
+      "running": true,
+      "pid": 2628,
+      "desktopWindowStatus": "available"
+    },
+    "runtime": {
+      "state": "ready",
+      "reachable": true,
+      "connectionState": "connected",
+      "appVersion": "1.4.223"
+    }
+  }
+}
