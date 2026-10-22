@@ -67,17 +67,28 @@ func (nopStatus) Disconnected(error)  {}
 func (nopStatus) Order(string)        {}
 
 // fakeHub runs script for each connection. n counts from 1.
+// At the end of the test, it stops the scripts and waits for them. A script that runs later cannot fail the test.
 type fakeHub struct {
-	srv    *httptest.Server
-	mu     sync.Mutex
-	conns  int
-	header string
+	srv     *httptest.Server
+	mu      sync.Mutex
+	conns   int
+	header  string
+	closed  bool
+	scripts sync.WaitGroup
 }
 
 func newFakeHub(t *testing.T, status int, script func(ctx context.Context, c *websocket.Conn, n int)) *fakeHub {
 	h := &fakeHub{}
+	end, stop := context.WithCancel(context.Background())
 	h.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h.mu.Lock()
+		if h.closed {
+			h.mu.Unlock()
+			http.Error(w, "closed", http.StatusServiceUnavailable)
+			return
+		}
+		h.scripts.Add(1)
+		defer h.scripts.Done()
 		h.conns++
 		n := h.conns
 		h.header = r.Header.Get("Authorization")
@@ -95,9 +106,24 @@ func newFakeHub(t *testing.T, status int, script func(ctx context.Context, c *we
 			return
 		}
 		defer c.CloseNow()
-		script(r.Context(), c, n)
+		ctx, cancel := context.WithCancel(r.Context())
+		defer context.AfterFunc(end, cancel)()
+		defer cancel()
+		script(ctx, c, n)
 	}))
 	t.Cleanup(h.srv.Close)
+	t.Cleanup(func() {
+		h.mu.Lock()
+		h.closed = true
+		h.mu.Unlock()
+		stop()
+		done := make(chan struct{})
+		go func() { h.scripts.Wait(); close(done) }()
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second): // a script that blocks on a test channel
+		}
+	})
 	return h
 }
 
@@ -115,7 +141,9 @@ func next(t *testing.T, ctx context.Context, c *websocket.Conn) wire.Message {
 		_, data, err := c.Read(ctx)
 		cancel()
 		if err != nil {
-			t.Errorf("read: %v", err)
+			if ctx.Err() == nil {
+				t.Errorf("read: %v", err)
+			}
 			return nil
 		}
 		if string(data) == "ping" {
@@ -167,9 +195,13 @@ func start(t *testing.T, c *Client) (stop func() error) {
 
 func welcome(t *testing.T, ctx context.Context, c *websocket.Conn) wire.Hello {
 	m := next(t, ctx, c)
+	if m == nil {
+		return wire.Hello{}
+	}
 	hello, ok := m.(wire.Hello)
 	if !ok {
-		t.Fatalf("first message %#v", m)
+		t.Errorf("first message %#v", m)
+		return wire.Hello{}
 	}
 	send(ctx, c, wire.Welcome{Device: "r1", Contract: 1})
 	return hello
