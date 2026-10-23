@@ -75,6 +75,7 @@ type cli struct {
 	out     io.Writer
 	log     *slog.Logger
 	level   *slog.LevelVar
+	cmds    *proc.Logged // the runner of the daemon commands; it writes a line for each one
 	secrets *secret.Store
 	service *service.Manager
 	migrate func(context.Context) (migrate.Report, error)
@@ -190,6 +191,7 @@ func newCLI() (*cli, error) {
 		out:     os.Stdout,
 		log:     log,
 		level:   level,
+		cmds:    proc.NewLogged(log),
 		secrets: secret.New(run, goruntime.GOOS, secret.Daemon, paths.Token(), exec.LookPath),
 		service: service.NewManager(goruntime.GOOS, home, os.Getuid(), exe, run),
 		exe:     exe,

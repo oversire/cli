@@ -101,7 +101,7 @@ func (d *Direct) post(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, OrderState{State: wire.State(res.State), Result: res.Result})
 		return
 	}
-	d.start(o, loopback(r))
+	d.start(o, r)
 	writeJSON(w, http.StatusAccepted, Accepted{Order: o})
 }
 
@@ -154,7 +154,7 @@ func (d *Direct) permission(w http.ResponseWriter, r *http.Request) {
 	d.answered(s, now)
 	d.mu.Unlock()
 	d.send(wire.Session{Session: s})
-	d.start(o, loopback(r))
+	d.start(o, r)
 	writeJSON(w, http.StatusOK, o)
 }
 
@@ -190,7 +190,7 @@ func (d *Direct) answer(w http.ResponseWriter, r *http.Request) {
 	d.answered(s, now)
 	d.mu.Unlock()
 	d.send(wire.Session{Session: s})
-	d.start(o, loopback(r))
+	d.start(o, r)
 	writeJSON(w, http.StatusOK, o)
 }
 
@@ -214,14 +214,16 @@ func (d *Direct) ordersFrom(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
-func loopback(r *http.Request) bool {
-	c, ok := server.CallerFrom(r.Context())
-	return ok && c.Loopback
-}
-
-// start runs o in the background unless it runs already. The order outlives the request.
+// start runs o in the background unless it runs already. The order outlives the request r.
 // An order from loopback skips the allow list.
-func (d *Direct) start(o wire.WorkOrder, loopback bool) {
+func (d *Direct) start(o wire.WorkOrder, r *http.Request) {
+	c, ok := server.CallerFrom(r.Context())
+	loopback, caller := ok && c.Loopback, c.Name
+	if loopback {
+		caller = "loopback"
+	}
+	log := d.Log.With("order", o.ID, "op", o.Payload.Op(), "runtime", o.Runtime, "via", "direct")
+	log.Info("order received", "caller", caller, "id", r.Header.Get(server.RequestID))
 	d.mu.Lock()
 	if _, ok := d.states[o.ID]; ok {
 		d.mu.Unlock()
@@ -235,24 +237,25 @@ func (d *Direct) start(o wire.WorkOrder, loopback bool) {
 			delete(d.states, o.ID)
 			d.mu.Unlock()
 		}()
-		log := d.Log.With("order", o.ID, "op", o.Payload.Op(), "runtime", o.Runtime, "via", "direct")
 		ctx := context.Background()
 		if loopback {
 			ctx = server.WithCaller(ctx, server.Caller{Loopback: true})
 		}
+		start := d.clock()
+		accepted := false
 		res, out := d.runner.Run(ctx, o, Hooks{Accepted: func() {
+			accepted = true
 			d.mu.Lock()
 			d.states[o.ID] = wire.StateAcked
 			d.mu.Unlock()
 			d.send(wire.Ack{Order: o.ID})
+			log.Info("order started")
 		}})
-		if out == Busy {
+		switch out {
+		case Busy:
 			return
-		}
-		if res.State == wire.ResultDone {
-			log.Info("order done")
-		} else {
-			log.Warn("order not done", "state", res.State, "result", res.Result)
+		case Ran:
+			LogResult(log, res, accepted, d.clock().Sub(start))
 		}
 		d.send(res)
 		d.runner.MarkSent(o.ID)

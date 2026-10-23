@@ -43,7 +43,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	if !ok {
 		exe = orca.MacPath // Reachable is false, and the watcher waits and tries again
 	}
-	orcaCLI := orca.New(exe, proc.Local{})
+	orcaCLI := orca.New(exe, c.cmds)
 	// One driver for the registry, the watcher and the questions: it keeps the one coordinator of the workers.
 	rt, hasOrca := reg.Get(orca.ID)
 	if o, ok := rt.(*orca.Orca); ok {
@@ -65,7 +65,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 		c.log.Warn("hook spool", "err", err)
 	}
 
-	tailnet := server.NewTailnet(proc.Local{})
+	tailnet := server.NewTailnet(c.cmds)
 	var srv *server.Server
 	// A home override can run more daemons on one machine. Each keeps its group secret in its own folder.
 	goos := goruntime.GOOS
@@ -123,7 +123,9 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	srv.Handle(ask.NewAsker(book, screen, reg, time.Now).Routes()...)
 	srv.Handle(installer.Routes()...)
 	srv.Handle(updates.Routes()...)
-	srv.Handle(runtime.NewAPI(reg, filepath.Join(data, "files"), time.Now).Routes()...)
+	runtimeAPI := runtime.NewAPI(reg, filepath.Join(data, "files"), time.Now)
+	runtimeAPI.Log = c.log
+	srv.Handle(runtimeAPI.Routes()...)
 	srv.Handle(workerBook.Routes()...)
 	direct := orders.NewDirect(runner, func(m any) { srv.Notify(false, m) }, time.Now)
 	direct.Log = c.log

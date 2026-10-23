@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -408,3 +409,48 @@ type noSessions struct{}
 
 func (noSessions) All() []wire.DaemonSession             { return nil }
 func (noSessions) Get(string) (wire.DaemonSession, bool) { return wire.DaemonSession{}, false }
+
+type lockedBuf struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (l *lockedBuf) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.Write(p)
+}
+
+func (l *lockedBuf) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.String()
+}
+
+func TestDirectLogsTheOrderWithTheRequestID(t *testing.T) {
+	g := newRig(t)
+	var buf lockedBuf
+	g.d.Log = slog.New(slog.NewTextHandler(&buf, nil))
+	b, _ := json.Marshal(order("wo-1", "claude", now.Add(time.Hour)))
+	req, _ := http.NewRequest(http.MethodPost, g.srv.URL+"/v1/orders", bytes.NewReader(b))
+	req.Header.Set(server.RequestID, "0a1b2c3d")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	g.d.Wait()
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	want := []string{"msg=\"order received\"", "msg=\"order started\"", "msg=\"order done\""}
+	if len(lines) != len(want) {
+		t.Fatal(buf.String())
+	}
+	for i, w := range want {
+		if !strings.Contains(lines[i], w) || !strings.Contains(lines[i], "order=wo-1") {
+			t.Fatalf("line %d: %s", i, lines[i])
+		}
+	}
+	if !strings.Contains(lines[0], "id=0a1b2c3d") || !strings.Contains(lines[0], "caller=loopback") || !strings.Contains(lines[2], "ms=") {
+		t.Fatal(buf.String())
+	}
+}

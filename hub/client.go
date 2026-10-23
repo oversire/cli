@@ -254,6 +254,7 @@ func (c *Client) handle(ctx context.Context, o wire.WorkOrder) {
 		return
 	}
 	log := c.Log.With("order", o.ID, "op", o.Payload.Op(), "runtime", o.Runtime)
+	start := c.Now()
 	accepted := false
 	res, out := c.runner.Run(ctx, o, orders.Hooks{
 		Claimed: func() { c.status.Order(o.ID) },
@@ -267,26 +268,13 @@ func (c *Client) handle(ctx context.Context, o wire.WorkOrder) {
 	case orders.Busy:
 		return
 	case orders.Ran:
-		logResult(log, res, accepted)
+		orders.LogResult(log, res, accepted, c.Now().Sub(start))
 	}
 	c.send(ctx, res)
 }
 
 // Runner is the order path of the client. Direct orders use it too, so that one journal and one running set hold.
 func (c *Client) Runner() *orders.Runner { return c.runner }
-
-func logResult(log *slog.Logger, r wire.Result, accepted bool) {
-	switch {
-	case r.State == wire.ResultExpired:
-		log.Info("order expired")
-	case r.State == wire.ResultFailed && !accepted:
-		log.Warn("order refused", "reason", r.Result.Error)
-	case r.State == wire.ResultFailed:
-		log.Warn("order failed", "err", r.Result.Error)
-	default:
-		log.Info("order done")
-	}
-}
 
 func (c *Client) finish(ctx context.Context, r wire.Result) {
 	c.journal.Put(r)

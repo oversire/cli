@@ -7,10 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/oversire/cli/server"
@@ -26,14 +29,19 @@ const (
 
 // API serves the runtimes of the registry on the local API.
 type API struct {
+	Log *slog.Logger
+
 	reg   *Registry
 	files string // the folder of POST /v1/files
 	now   func() time.Time
+
+	mu      sync.Mutex
+	failing map[string]string // the last workspaces error of each runtime
 }
 
 // NewAPI gives the routes of reg. POST /v1/files writes into a new folder in files for each call.
 func NewAPI(reg *Registry, files string, now func() time.Time) *API {
-	return &API{reg: reg, files: files, now: now}
+	return &API{Log: slog.Default(), reg: reg, files: files, now: now, failing: map[string]string{}}
 }
 
 func (a *API) Routes() []server.Route {
@@ -57,7 +65,30 @@ func (a *API) repos(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) workspaces(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, a.reg.Workspaces(r.Context()))
+	page := a.reg.Workspaces(r.Context())
+	a.logErrors(page.Errors)
+	writeJSON(w, http.StatusOK, page)
+}
+
+// logErrors writes a runtime error of the workspaces page when it is new, and a line when the runtime works again.
+// The app asks for the page often, so the same error again writes nothing.
+func (a *API) logErrors(errs map[string]string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for id, e := range errs {
+		if a.failing[id] != e {
+			a.Log.Warn("runtime workspaces", "runtime", id, "err", e)
+		}
+	}
+	for id := range a.failing {
+		if _, ok := errs[id]; !ok {
+			a.Log.Info("runtime workspaces work again", "runtime", id)
+		}
+	}
+	a.failing = maps.Clone(errs)
+	if a.failing == nil {
+		a.failing = map[string]string{}
+	}
 }
 
 func (a *API) removeWorkspace(w http.ResponseWriter, r *http.Request) {

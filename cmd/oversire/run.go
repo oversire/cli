@@ -34,7 +34,7 @@ const stopWait = time.Hour
 func (c *cli) registry(ov runtime.Runtime) *runtime.Registry {
 	rts := []runtime.Runtime{ov}
 	if exe, ok := orca.FindCLI(); ok {
-		rts = append(rts, orca.New(exe, proc.Local{}))
+		rts = append(rts, orca.New(exe, c.cmds))
 	}
 	return runtime.NewRegistry(rts...)
 }
@@ -57,7 +57,7 @@ func (c *cli) run(ctx context.Context) error {
 	_ = agents.Reconcile()
 	var client *hub.Client
 	reps := &reports{}
-	ov := oversire.New(oversire.Options{Runner: cfg.Device, DataDir: data, Slots: cfg.Sessions()}, agents, proc.Local{}, reps)
+	ov := oversire.New(oversire.Options{Runner: cfg.Device, DataDir: data, Slots: cfg.Sessions()}, agents, c.cmds, reps)
 	defer func() {
 		ctx, done := context.WithTimeout(context.Background(), 30*time.Second)
 		defer done()

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -230,5 +231,21 @@ func TestAPIFiles(t *testing.T) {
 		if code := call(t, srv, "POST", "/v1/files", wire.WorkspaceFiles{Files: fs}, nil); code != 400 {
 			t.Fatal(len(fs), code)
 		}
+	}
+}
+
+func TestAPILogsAWorkspacesErrorWhenItChanges(t *testing.T) {
+	var buf bytes.Buffer
+	a := NewAPI(NewRegistry(), t.TempDir(), time.Now)
+	a.Log = slog.New(slog.NewTextHandler(&buf, nil))
+	down := map[string]string{"orca": "Orca is not running."}
+	a.logErrors(down)
+	a.logErrors(down)
+	a.logErrors(map[string]string{"orca": "timeout"})
+	a.logErrors(nil)
+	a.logErrors(nil)
+	got := buf.String()
+	if strings.Count(got, "level=WARN") != 2 || strings.Count(got, "work again") != 1 || !strings.Contains(got, `err="Orca is not running."`) {
+		t.Fatal(got)
 	}
 }

@@ -4,6 +4,7 @@ package orders
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -120,6 +121,21 @@ func (r *Runner) do(ctx context.Context, o wire.WorkOrder, h Hooks) wire.Result 
 		return failed(o.ID, err.Error())
 	}
 	return wire.Result{Order: o.ID, State: wire.ResultDone, Result: out}
+}
+
+// LogResult writes the end of an order that ran. An order that failed before the runtime started is refused.
+func LogResult(log *slog.Logger, r wire.Result, accepted bool, took time.Duration) {
+	log = log.With("ms", took.Milliseconds())
+	switch {
+	case r.State == wire.ResultExpired:
+		log.Info("order expired")
+	case r.State == wire.ResultFailed && !accepted:
+		log.Warn("order refused", "reason", r.Result.Error)
+	case r.State == wire.ResultFailed:
+		log.Warn("order failed", "err", r.Result.Error)
+	default:
+		log.Info("order done")
+	}
 }
 
 func failed(order, reason string) wire.Result {
