@@ -8,6 +8,7 @@ import (
 	goruntime "runtime"
 	"time"
 
+	"github.com/oversire/cli/allow"
 	"github.com/oversire/cli/ask"
 	"github.com/oversire/cli/config"
 	"github.com/oversire/cli/eventlog"
@@ -25,6 +26,7 @@ import (
 	homestore "github.com/oversire/cli/store"
 	"github.com/oversire/cli/update"
 	"github.com/oversire/cli/wire"
+	"github.com/oversire/cli/workers"
 )
 
 // spoolInterval is how often the daemon reads the hook spool.
@@ -42,11 +44,20 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 		exe = orca.MacPath // Reachable is false, and the watcher waits and tries again
 	}
 	orcaCLI := orca.New(exe, proc.Local{})
+	// One driver for the registry, the watcher and the questions: it keeps the one coordinator of the workers.
+	rt, hasOrca := reg.Get(orca.ID)
+	if o, ok := rt.(*orca.Orca); ok {
+		orcaCLI = o
+	}
 	watcher := orcawatch.NewWatcher(orcaCLI, book, nil)
 	screen := orca.NewScreen(orcaCLI)
 	userHome, _ := os.UserHomeDir()
 	files := questions.NewFiles(filepath.Join(userHome, ".claude", "projects"), screen)
 	asks := questions.NewChannel(book, screen, files, events, time.Now)
+	workerBook := workers.NewBook(reg, allow.File{Path: c.paths.Allow()}, filepath.Join(data, "workers.json"), time.Now)
+	if hasOrca {
+		asks.WithMail(orcaCLI, workerBook.Terminals)
+	}
 	ingest := hooks.NewIngest(book, asks).WithHinter(watcher)
 	installer := c.installer()
 	spool := hooks.SpoolPath(data)
@@ -113,6 +124,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	srv.Handle(installer.Routes()...)
 	srv.Handle(updates.Routes()...)
 	srv.Handle(runtime.NewAPI(reg, filepath.Join(data, "files"), time.Now).Routes()...)
+	srv.Handle(workerBook.Routes()...)
 	direct := orders.NewDirect(runner, func(m any) { srv.Notify(false, m) }, time.Now)
 	direct.Log = c.log
 	srv.Handle(direct.Routes()...)

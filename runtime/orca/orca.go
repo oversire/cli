@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -57,10 +58,14 @@ type Orca struct {
 	shellWait time.Duration
 	// digests gives the transcript reader of a harness.
 	digests func(harness string) (digest.Reader, error)
+	now     func() time.Time
+
+	coordMu sync.Mutex
+	coord   *coordinator
 }
 
 func New(exe string, run Runner) *Orca {
-	return &Orca{exe: exe, run: run, stat: os.Stat, shellWait: 300 * time.Millisecond, digests: digest.ForUser}
+	return &Orca{exe: exe, run: run, stat: os.Stat, shellWait: 300 * time.Millisecond, digests: digest.ForUser, now: time.Now}
 }
 
 func (o *Orca) ID() string { return ID }

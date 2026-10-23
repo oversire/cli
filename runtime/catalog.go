@@ -32,6 +32,9 @@ func Capabilities(rt Runtime) []string {
 	if _, ok := rt.(WorkspaceRemover); ok {
 		caps = append(caps, CapRemoveWorkspace)
 	}
+	if _, ok := rt.(Supervisor); ok {
+		caps = append(caps, CapWorkers)
+	}
 	return caps
 }
 
@@ -122,6 +125,18 @@ func (r *Registry) Reveal(ctx context.Context, s wire.SessionRef) error {
 		return ErrUnsupported
 	}
 	return rv.Reveal(ctx, s)
+}
+
+// Get gives the runtime with the id.
+func (r *Registry) Get(id string) (Runtime, bool) {
+	rt, ok := r.byID[id]
+	return rt, ok
+}
+
+// Supervisor gives the runtime with the id when it runs workers.
+func (r *Registry) Supervisor(id string) (Supervisor, bool) {
+	s, ok := r.byID[id].(Supervisor)
+	return s, ok
 }
 
 // each calls f for each runtime of ids at the same time.

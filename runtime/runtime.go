@@ -85,6 +85,37 @@ type Revealer interface {
 	Reveal(ctx context.Context, s wire.SessionRef) error
 }
 
+// Supervisor runs supervised workers. A worker sends its result in a worker_done.
+type Supervisor interface {
+	StartWorker(ctx context.Context, w wire.WorkerStart) (WorkerHandle, error)
+	WorkerState(ctx context.Context, h WorkerHandle) (wire.WorkerState, error)
+	StopWorker(ctx context.Context, h WorkerHandle) error
+	// ReleaseWorker closes the terminal of a settled worker.
+	ReleaseWorker(ctx context.Context, h WorkerHandle) error
+}
+
+// WorkerHandle names a worker in its runtime.
+type WorkerHandle struct {
+	Dispatch string `json:"dispatch"`
+	Task     string `json:"task,omitempty"`
+	Terminal string `json:"terminal,omitempty"`
+}
+
+// Ask is a question that a supervised worker sent to the coordinator.
+type Ask struct {
+	ID       string
+	Terminal string
+	Body     string
+	At       time.Time
+	Reply    *string // the body of the reply; nil while the ask is open
+}
+
+// Mail is the mail of the coordinator: the newest ask of each terminal, and the terminals of the workers.
+type Mail struct {
+	Asks    []Ask
+	Workers map[string]bool
+}
+
 // ErrNoRuntime is the error of a call for a runtime that the registry does not have.
 var ErrNoRuntime = errors.New("no such runtime")
 

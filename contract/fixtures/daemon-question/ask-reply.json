@@ -1,5 +1,5 @@
 {
-  "id": "ask:w-3b9d:msg_5",
+  "id": "ask:msg_5",
   "session": "tab-9:leaf-1",
   "terminal": "term_91aa",
   "harness": "claude",
@@ -14,6 +14,6 @@
     }
   ],
   "answerable": true,
-  "source": "transcript",
+  "source": "mail",
   "askedAt": "2026-10-22T10:07:00Z"
 }

@@ -252,6 +252,7 @@ const (
 	SourceHook       QuestionSource = "hook"
 	SourceScreen     QuestionSource = "screen"
 	SourceTranscript QuestionSource = "transcript"
+	SourceMail       QuestionSource = "mail" // an ask of a supervised worker
 )
 
 // QuestionApprove is for daemon questions only. Its options are Allow and Deny.

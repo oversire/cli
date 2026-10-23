@@ -259,6 +259,21 @@ The daemon owns the agent runtimes of this machine: `oversire`, and `orca` when 
 | `POST /v1/files` | Body `WorkspaceFiles` (1 to 20 files, 25 MB together, base64 data). Plain file names only: no `/`, no leading dot, no two files with the same name. The daemon writes the files into a new folder `<data>/files/<id>/` and answers `WorkspaceFilesResult` `{paths}`. It removes the folders older than 7 days. |
 | `POST /v1/reveal` | Loopback only. Body: a `SessionRef`. Shows the terminal in the runtime UI, and answers 204. 404: no such runtime or session. 501: the runtime cannot show it. |
 
+### Workers
+
+A worker is a supervised agent session for a short job, for example the intake Enhance of the app. It runs in the Orca of this machine. The daemon keeps one quiet coordinator terminal (`oversire-coordinator`) and its Orca Run. Each worker sends its result to the Run in a `worker_done`. The bodies are `WorkerStart`, `Worker` and `WorkerState` of `contract/schema/daemon.json`.
+
+| Route | What it does |
+|---|---|
+| `POST /v1/workers` | Body `WorkerStart` `{runtime?, spec, title, path, agent}`. The default runtime is `orca`. Answers the `Worker`. A caller that is not on loopback must pass the allow list for the agent and the path, as for a `sessionStart`: else 403. |
+| `GET /v1/workers/{id}` | Answers a `WorkerState`: `running`, `done` (with `outcome` and `body`) or `ended` (with `reason`). |
+| `POST /v1/workers/{id}/stop` | Stops the worker. Answers 204. |
+| `DELETE /v1/workers/{id}` | Closes the terminal of the worker and removes it. Answers 204. |
+
+The daemon keeps each worker in `<data>/workers.json`, so a worker and its settled state survive a restart. An unknown id gets 404.
+
+A worker can ask with `orchestration ask`. `GET /v1/questions` then shows the ask with `via` `askReply` and `source` `mail`, and `POST /v1/questions/{id}/answer` sends the reply. A worker does not ask the user at the end of its turn: no `turn` question comes from a worker terminal.
+
 ## Service
 
 `daemon install` starts `oversire daemon run` at login and restarts it after a failure:
@@ -310,6 +325,7 @@ The layout:
 | `runtime` | The `Runtime` interface, the registry and the runtime routes (`API`). `runtime/orca` is the Orca driver for the local Orca. `runtime/oversire` is the agent-wire driver. |
 | `digest` | The transcript readers that make a `SessionDigest`. |
 | `store` | The home store: the op log in SQLite and the `/v1/store/ops` routes. |
+| `workers` | The supervised workers, their journal and the `/v1/workers` routes. |
 | `allow` | The allow list. |
 | `config` | The config folder, `config.json` and `state.json`. |
 | `secret` | The token storage. |
