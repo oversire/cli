@@ -1,0 +1,7 @@
+{
+  "runtime": "orca",
+  "spec": "Read the code for the item OVERSIRE-301 and write a new description.",
+  "title": "Enhance OVERSIRE-301",
+  "path": "/Users/ada/Projects/oversire-workspace",
+  "agent": "claude"
+}

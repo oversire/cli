@@ -1,0 +1,12 @@
+{
+  "runtimes": [
+    {
+      "id": "orca",
+      "name": "Orca",
+      "installed": true,
+      "reachable": false,
+      "error": "Orca is not running.",
+      "capabilities": []
+    }
+  ]
+}

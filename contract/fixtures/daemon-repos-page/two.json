@@ -1,0 +1,18 @@
+{
+  "repos": [
+    {
+      "id": "r-oversire",
+      "runtime": "orca",
+      "name": "oversire-workspace",
+      "path": "/Users/ada/Projects/oversire-workspace",
+      "folder": true
+    },
+    {
+      "id": "r-towertail",
+      "runtime": "orca",
+      "name": "towertail",
+      "path": "/Users/ada/Projects/towertail",
+      "folder": false
+    }
+  ]
+}

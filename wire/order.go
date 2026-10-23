@@ -41,8 +41,9 @@ type StopPayload struct {
 }
 
 type ReadPayload struct {
-	Session SessionRef `json:"session"`
-	Lines   int        `json:"lines"`
+	Session    SessionRef `json:"session"`
+	Lines      int        `json:"lines"`
+	Scrollback bool       `json:"scrollback,omitempty"` // the scrollback with blank lines, not the visible screen
 }
 
 // SendPayload carries a user message, a permission answer or a question answer. With an answer, Text is "".
@@ -78,10 +79,12 @@ func (ReadPayload) Op() Op   { return OpSessionRead }
 func (SendPayload) Op() Op   { return OpSessionSend }
 
 type WorkOrderResult struct {
-	Session *SessionRef    `json:"session,omitempty"`
-	Lines   []string       `json:"lines,omitempty"`
-	Digest  *SessionDigest `json:"digest,omitempty"`
-	Error   string         `json:"error,omitempty"`
+	Session     *SessionRef    `json:"session,omitempty"`
+	Lines       []string       `json:"lines,omitempty"`
+	Digest      *SessionDigest `json:"digest,omitempty"`
+	PaneKey     string         `json:"paneKey,omitempty"`     // sessionStart: the DaemonSession id
+	TurnStarted bool           `json:"turnStarted,omitempty"` // sessionStart, sessionSend
+	Error       string         `json:"error,omitempty"`
 }
 
 // WorkOrderHold says why the hub holds an order.

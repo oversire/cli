@@ -1,0 +1,33 @@
+{
+  "workspaces": [
+    {
+      "id": "r-towertail::/Users/ada/orca/workspaces/towertail/TOWERTAIL-2",
+      "runtime": "orca",
+      "repo": "r-towertail",
+      "path": "/Users/ada/orca/workspaces/towertail/TOWERTAIL-2",
+      "name": "TOWERTAIL-2",
+      "comment": "https://app.plane.so/ocral/browse/TOWERTAIL-2/",
+      "kind": "worktree",
+      "branch": "towertail-2",
+      "liveTerminals": 1,
+      "lastActivity": "2026-10-22T10:00:00Z",
+      "terminals": [
+        {
+          "id": "term_7c1e",
+          "title": "claude",
+          "session": "tab-3:leaf-1",
+          "orphaned": false
+        }
+      ]
+    },
+    {
+      "id": "r-oversire::/Users/ada/Projects/oversire-workspace",
+      "runtime": "orca",
+      "repo": "r-oversire",
+      "path": "/Users/ada/Projects/oversire-workspace",
+      "kind": "folder",
+      "liveTerminals": 0,
+      "lastActivity": "2026-10-21T18:30:00Z"
+    }
+  ]
+}

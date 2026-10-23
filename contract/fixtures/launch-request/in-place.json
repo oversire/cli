@@ -1,0 +1,8 @@
+{
+  "repo": "/Users/ada/Projects/oversire-workspace",
+  "agent": "claude",
+  "prompt": "Fix the banner text.",
+  "command": "claude -n claude-fix-banner",
+  "title": "claude-fix-banner",
+  "inPlace": true
+}

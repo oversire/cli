@@ -1,0 +1,19 @@
+{
+  "id": "ask:w-3b9d:msg_5",
+  "session": "tab-9:leaf-1",
+  "terminal": "term_91aa",
+  "harness": "claude",
+  "via": "askReply",
+  "items": [
+    {
+      "id": "reply",
+      "text": "Should the banner show on the Intake tab too?",
+      "kind": "free",
+      "options": [],
+      "allowsOther": false
+    }
+  ],
+  "answerable": true,
+  "source": "transcript",
+  "askedAt": "2026-10-22T10:07:00Z"
+}

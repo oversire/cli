@@ -46,7 +46,8 @@
       "type": "object",
       "properties": {
         "session": { "$ref": "refs.json#/$defs/SessionRef" },
-        "lines": { "description": "The number of last lines. The runner caps it.", "type": "integer", "minimum": 1 }
+        "lines": { "description": "The number of last lines. The runner caps it.", "type": "integer", "minimum": 1 },
+        "scrollback": { "description": "True: read the scrollback with blank lines. Default: the visible screen, trimmed.", "type": "boolean" }
       },
       "required": ["session", "lines"],
       "additionalProperties": false
@@ -209,6 +210,8 @@
         "session": { "description": "The session that sessionStart made.", "$ref": "refs.json#/$defs/SessionRef" },
         "lines": { "description": "The lines that sessionRead read.", "type": "array", "items": { "type": "string" } },
         "digest": { "description": "The digest that sessionHistory read.", "$ref": "session-digest.json#/$defs/SessionDigest" },
+        "paneKey": { "description": "With sessionStart: the DaemonSession id of the new session, when the runtime knows it.", "type": "string" },
+        "turnStarted": { "description": "With sessionStart and sessionSend: the agent started a turn on the prompt.", "type": "boolean" },
         "error": { "description": "Why the order failed.", "type": "string" }
       },
       "additionalProperties": false

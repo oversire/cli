@@ -37,6 +37,16 @@ func TestDaemonFixtures(t *testing.T) {
 	roundTrip[ProviderEvent](t, "provider-event")
 	roundTrip[SessionAsk](t, "session-ask")
 	roundTrip[SessionAskReply](t, "session-ask-reply")
+	roundTrip[DaemonRuntimesPage](t, "daemon-runtimes-page")
+	roundTrip[DaemonReposPage](t, "daemon-repos-page")
+	roundTrip[DaemonWorkspacesPage](t, "daemon-workspaces-page")
+	roundTrip[WorkspaceRemove](t, "workspace-remove")
+	roundTrip[WorkspaceRemoval](t, "workspace-removal")
+	roundTrip[WorkspaceFiles](t, "workspace-files")
+	roundTrip[WorkspaceFilesResult](t, "workspace-files-result")
+	roundTrip[WorkerStart](t, "worker-start")
+	roundTrip[Worker](t, "worker")
+	roundTrip[WorkerState](t, "worker-state")
 }
 
 func TestSessionSubject(t *testing.T) {

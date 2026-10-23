@@ -45,8 +45,11 @@
         "branch": { "type": "string" },
         "agent": { "description": "Same raw values as the AgentBinder Harness: claude, codex, opencode, cursor.", "type": "string" },
         "prompt": { "type": "string" },
-        "environment": { "description": "Runtime environment id.", "type": "string" },
-        "command": { "description": "The resolved shell command that starts the agent in a terminal runtime. Empty: the runtime default. The first word is the agent program.", "type": "string" }
+        "environment": { "description": "Deprecated. The daemon ignores it: each daemon runs sessions only on its own machine.", "type": "string" },
+        "command": { "description": "The resolved shell command that starts the agent in a terminal runtime. Empty: the runtime default. The first word is the agent program.", "type": "string" },
+        "title": { "description": "The terminal title. Default: the agent name.", "type": "string" },
+        "baseBranch": { "description": "The branch that a new workspace starts from. Default: the runtime default.", "type": "string" },
+        "inPlace": { "description": "True: open a new terminal in the folder repo. The runtime makes no workspace and ignores name, note, branch and baseBranch.", "type": "boolean" }
       },
       "required": ["repo", "agent", "prompt"],
       "additionalProperties": false

@@ -38,8 +38,11 @@ type LaunchRequest struct {
 	Branch      string   `json:"branch,omitempty"`
 	Agent       string   `json:"agent"`
 	Prompt      string   `json:"prompt"`
-	Environment string   `json:"environment,omitempty"`
-	Command     string   `json:"command,omitempty"` // the resolved start command; empty: the runtime default
+	Environment string   `json:"environment,omitempty"` // deprecated: the daemon ignores it
+	Command     string   `json:"command,omitempty"`     // the resolved start command; empty: the runtime default
+	Title       string   `json:"title,omitempty"`       // the terminal title
+	BaseBranch  string   `json:"baseBranch,omitempty"`
+	InPlace     bool     `json:"inPlace,omitempty"` // a new terminal in the folder Repo, no workspace
 }
 
 // WorkspaceName is the name, else the item key.

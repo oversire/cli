@@ -1,0 +1,7 @@
+{
+  "repo": "/Users/ada/Projects/towertail",
+  "name": "TOWERTAIL-9",
+  "agent": "codex",
+  "prompt": "work on TOWERTAIL-9",
+  "baseBranch": "release/1.2"
+}

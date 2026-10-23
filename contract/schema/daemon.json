@@ -286,7 +286,7 @@
         "session": { "description": "The DaemonSession id.", "type": "string", "minLength": 1 },
         "terminal": { "description": "The Orca terminal handle.", "type": "string" },
         "harness": { "type": "string", "minLength": 1 },
-        "via": { "description": "The same values as SessionQuestion.Via.", "enum": ["form", "permission", "turn", "waiting"] },
+        "via": { "description": "The same values as SessionQuestion.Via. askReply: a blocking ask of an Enhance worker.", "enum": ["form", "permission", "turn", "waiting", "askReply"] },
         "items": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/DaemonQuestionItem" } },
         "answerable": { "description": "False for waiting, and for a session with no terminal.", "type": "boolean" },
         "source": { "description": "Where the items came from.", "enum": ["hook", "screen", "transcript"] },
@@ -335,6 +335,169 @@
         "error": { "description": "With 409 and 504. Open set: busy, timeout.", "type": "string" },
         "message": { "description": "With error. Text for the user.", "type": "string" }
       },
+      "additionalProperties": false
+    },
+    "DaemonRuntime": {
+      "description": "One agent runtime on the machine. The daemon talks only to the runtimes of its own machine.",
+      "type": "object",
+      "properties": {
+        "id": { "description": "orca or oversire. Open set.", "type": "string", "minLength": 1 },
+        "name": { "description": "Text for the user, for example Orca.", "type": "string", "minLength": 1 },
+        "installed": { "description": "The daemon found the runtime program.", "type": "boolean" },
+        "reachable": { "description": "The runtime answered its last status call.", "type": "boolean" },
+        "version": { "type": "string" },
+        "error": { "description": "Why the runtime is not reachable. Text for the user.", "type": "string" },
+        "capabilities": { "description": "The same raw values as Capability of the app, for example sessionInput, reveal, hostFiles. Open set.", "type": "array", "items": { "type": "string", "minLength": 1 } }
+      },
+      "required": ["id", "name", "installed", "reachable", "capabilities"],
+      "additionalProperties": false
+    },
+    "DaemonRuntimesPage": {
+      "description": "The answer of GET /v1/runtimes (Member).",
+      "type": "object",
+      "properties": { "runtimes": { "type": "array", "items": { "$ref": "#/$defs/DaemonRuntime" } } },
+      "required": ["runtimes"],
+      "additionalProperties": false
+    },
+    "DaemonRepo": {
+      "description": "One repo that a runtime knows.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "runtime": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 },
+        "folder": { "description": "A plain folder, not a git repo.", "type": "boolean" }
+      },
+      "required": ["id", "runtime", "name", "path", "folder"],
+      "additionalProperties": false
+    },
+    "DaemonReposPage": {
+      "description": "The answer of GET /v1/repos (Member).",
+      "type": "object",
+      "properties": { "repos": { "type": "array", "items": { "$ref": "#/$defs/DaemonRepo" } } },
+      "required": ["repos"],
+      "additionalProperties": false
+    },
+    "DaemonTerminal": {
+      "description": "One terminal of a workspace. A terminal can hold an agent session.",
+      "type": "object",
+      "properties": {
+        "id": { "description": "The terminal handle (Orca term_…).", "type": "string", "minLength": 1 },
+        "title": { "type": "string" },
+        "session": { "description": "The DaemonSession id of the terminal (Orca: the pane key).", "type": "string" },
+        "orphaned": { "description": "The terminal has no live process.", "type": "boolean" }
+      },
+      "required": ["id", "title", "orphaned"],
+      "additionalProperties": false
+    },
+    "DaemonWorkspace": {
+      "description": "One runtime workspace: an Orca card, a worktree of the oversire runtime.",
+      "type": "object",
+      "properties": {
+        "id": { "description": "The workspace id of the runtime (Orca worktreeId).", "type": "string", "minLength": 1 },
+        "runtime": { "type": "string", "minLength": 1 },
+        "repo": { "type": "string" },
+        "path": { "type": "string", "minLength": 1 },
+        "name": { "type": "string" },
+        "comment": { "type": "string" },
+        "kind": { "description": "worktree: a git worktree of its own. folder: a card on a shared folder. main: the main checkout of a repo.", "enum": ["worktree", "folder", "main"] },
+        "branch": { "type": "string" },
+        "liveTerminals": { "type": "integer", "minimum": 0 },
+        "lastActivity": { "$ref": "#/$defs/Date" },
+        "terminals": { "type": "array", "items": { "$ref": "#/$defs/DaemonTerminal" } }
+      },
+      "required": ["id", "runtime", "path", "kind", "liveTerminals", "lastActivity"],
+      "additionalProperties": false
+    },
+    "DaemonWorkspacesPage": {
+      "description": "The answer of GET /v1/workspaces (Member). A runtime that does not answer is in errors, not in workspaces.",
+      "type": "object",
+      "properties": {
+        "workspaces": { "type": "array", "items": { "$ref": "#/$defs/DaemonWorkspace" } },
+        "errors": { "description": "Runtime id to error text.", "type": "object", "additionalProperties": { "type": "string" } }
+      },
+      "required": ["workspaces"],
+      "additionalProperties": false
+    },
+    "WorkspaceRemove": {
+      "description": "The body of DELETE /v1/workspaces/{id} (Member).",
+      "type": "object",
+      "properties": {
+        "runtime": { "type": "string", "minLength": 1 },
+        "force": { "description": "Remove a workspace with changes that are not committed.", "type": "boolean" },
+        "runHooks": { "description": "Run the archive hooks of the runtime.", "type": "boolean" }
+      },
+      "required": ["runtime", "force", "runHooks"],
+      "additionalProperties": false
+    },
+    "WorkspaceRemoval": {
+      "description": "The answer of DELETE /v1/workspaces/{id}. HTTP 404: no runtime knows the workspace.",
+      "type": "object",
+      "properties": { "warning": { "description": "A note of the runtime, for example a kept branch or a failed hook.", "type": "string" } },
+      "additionalProperties": false
+    },
+    "WorkspaceFile": {
+      "type": "object",
+      "properties": {
+        "name": { "description": "A plain file name. No folder, no .. and no leading dot.", "type": "string", "minLength": 1, "maxLength": 255 },
+        "data": { "description": "Base64 of the file bytes.", "type": "string" }
+      },
+      "required": ["name", "data"],
+      "additionalProperties": false
+    },
+    "WorkspaceFiles": {
+      "description": "The body of POST /v1/files (Member). The daemon writes the files into a new folder of its own and gives their full paths. The client cannot choose the folder. At most 20 files and 25 MB.",
+      "type": "object",
+      "properties": { "files": { "type": "array", "minItems": 1, "maxItems": 20, "items": { "$ref": "#/$defs/WorkspaceFile" } } },
+      "required": ["files"],
+      "additionalProperties": false
+    },
+    "WorkspaceFilesResult": {
+      "description": "The answer of POST /v1/files. The paths are in the order of the files.",
+      "type": "object",
+      "properties": { "paths": { "type": "array", "items": { "type": "string", "minLength": 1 } } },
+      "required": ["paths"],
+      "additionalProperties": false
+    },
+    "WorkerStart": {
+      "description": "The body of POST /v1/workers (Member). Start a supervised worker that reads the code and sends one result.",
+      "type": "object",
+      "properties": {
+        "runtime": { "description": "Default orca.", "type": "string", "minLength": 1 },
+        "spec": { "description": "The task of the worker.", "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "path": { "description": "The folder that the worker works in.", "type": "string", "minLength": 1 },
+        "agent": { "description": "A harness name, for example claude.", "type": "string", "minLength": 1 }
+      },
+      "required": ["spec", "title", "path", "agent"],
+      "additionalProperties": false
+    },
+    "Worker": {
+      "description": "The answer of POST /v1/workers. The daemon keeps the worker in its data folder: the worker survives a restart.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "runtime": { "type": "string", "minLength": 1 },
+        "title": { "type": "string" },
+        "path": { "type": "string" },
+        "agent": { "type": "string" },
+        "terminal": { "description": "The terminal handle of the worker, for reveal.", "type": "string" },
+        "startedAt": { "$ref": "#/$defs/Date" }
+      },
+      "required": ["id", "runtime", "startedAt"],
+      "additionalProperties": false
+    },
+    "WorkerState": {
+      "description": "The answer of GET /v1/workers/{id}. HTTP 404: the daemon does not know the worker.",
+      "type": "object",
+      "properties": {
+        "state": { "description": "done: the worker sent its result. ended: the worker stopped with no result.", "enum": ["running", "done", "ended"] },
+        "outcome": { "description": "With done. Open set, for example succeeded.", "type": "string" },
+        "body": { "description": "With done. The result text of the worker.", "type": "string" },
+        "reason": { "description": "With ended. The last state of the worker in the runtime.", "type": "string" }
+      },
+      "required": ["state"],
       "additionalProperties": false
     }
   }
