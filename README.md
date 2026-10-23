@@ -43,7 +43,7 @@ The app owns `~/.config/oversire/` (`config.json`, `store/`). The CLI uses only 
 
 `OVERSIRE_DAEMON_HOME` sets another config folder. The data folder is then `$OVERSIRE_DAEMON_HOME/data`. The old name `OVERSIRE_RUNNER_HOME` works for one release.
 
-`config.json` has the fields `roles`, `hub`, `device`, `account`, `name`, `keepAwake`, `maxSessions`, `dataDir` and `serve`. The file has mode 0600.
+`config.json` has the fields `roles`, `hub`, `device`, `account`, `name`, `keepAwake`, `maxSessions`, `dataDir`, `serve` and `log`. The file has mode 0600.
 
 ## Pair with the hub
 
@@ -287,6 +287,17 @@ A worker can ask with `orchestration ask`. `GET /v1/questions` then shows the as
 | Windows | Logon task `OverSireDaemon`. |
 
 On macOS, `daemon install --keep-awake` keeps the Mac awake while the daemon runs (`caffeinate -s`). `daemon install` without the flag removes this setting.
+
+## Log
+
+The daemon writes its log to stderr. The service puts it in the log of the table above.
+
+- **Level.** The default level is `info`. Set `"log": {"level": "debug"}` in `config.json`, or set `OVERSIRE_LOG_LEVEL` (`debug`, `info`, `warn` or `error`). The variable wins over the file. A bad value gives a warning and the level `info`.
+- **Requests.** Each request to the local API writes one `request` line: the method, the path, the status, the time in `ms`, the listener (`via`), the caller and the request id. A failure has the error text. A write is at `info`. A read that works, an agent hook and an event ack are at `debug`. The line has no headers, no body and no query. A WebSocket writes `websocket open` and `websocket close`.
+- **Request id.** The app sends `X-Request-Id` on each request. The daemon sends it back and writes it as `id`. Find the same id in the app log (Settings › Logs, Network) to join the two sides.
+- **Orders.** A work order writes `order received` (with the request id), `order started` and one end line: `order done`, `order failed`, `order refused` or `order expired`.
+- **Commands.** Each Orca, Tailscale and git command writes a `command` line at `debug`, with its arguments (each cut to 80 characters) and the time. A failure is at `warn` with the exit code and the end of stderr. The same failure again is at `debug`. The line has no stdin and no stdout.
+- **Runtimes.** A runtime error on `GET /v1/workspaces` is at `warn` when it changes, and a line comes when the runtime works again.
 
 ## Security model
 
