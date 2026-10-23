@@ -89,8 +89,8 @@ func newFixture(t *testing.T, withVerifier bool) *fixture {
 	f.loop = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { guarded.ServeHTTP(w, r) }))
 	port := f.loop.Listener.Addr().(*net.TCPAddr).Port
 	f.s.port = port
-	guarded = f.s.guard(port, f.s.loopMux)
-	f.net = httptest.NewServer(f.s.netMux)
+	guarded = f.s.accessLog("loopback", f.s.guard(port, f.s.loopMux))
+	f.net = httptest.NewServer(f.s.accessLog("tailnet", f.s.netMux))
 	t.Cleanup(func() {
 		f.s.closeClients(websocket.StatusGoingAway, "end")
 		f.loop.Close()

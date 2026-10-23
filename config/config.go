@@ -5,6 +5,8 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -118,6 +120,29 @@ type Config struct {
 	// DataDir holds the worktrees and transcripts of the oversire runtime. Empty is DataDir().
 	DataDir string       `json:"dataDir,omitempty"`
 	Serve   *ServeConfig `json:"serve,omitempty"`
+	Log     *LogConfig   `json:"log,omitempty"`
+}
+
+// LogConfig sets the daemon log.
+type LogConfig struct {
+	// Level is debug, info, warn or error. Empty is info.
+	Level string `json:"level,omitempty"`
+}
+
+// LogLevel is env (OVERSIRE_LOG_LEVEL) when it is set, else log.level, else info.
+func (c Config) LogLevel(env string) (slog.Level, error) {
+	text := env
+	if text == "" && c.Log != nil {
+		text = c.Log.Level
+	}
+	var l slog.Level
+	if text == "" {
+		return slog.LevelInfo, nil
+	}
+	if err := l.UnmarshalText([]byte(text)); err != nil {
+		return slog.LevelInfo, fmt.Errorf("log level %q: use debug, info, warn or error", text)
+	}
+	return l, nil
 }
 
 // Has tells if the config has role.

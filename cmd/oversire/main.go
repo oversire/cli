@@ -74,6 +74,7 @@ type cli struct {
 	in      io.Reader
 	out     io.Writer
 	log     *slog.Logger
+	level   *slog.LevelVar
 	secrets *secret.Store
 	service *service.Manager
 	migrate func(context.Context) (migrate.Report, error)
@@ -181,12 +182,14 @@ func newCLI() (*cli, error) {
 	}
 	paths := config.Paths{Dir: dir}
 	run := proc.Local{}
-	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	level := new(slog.LevelVar)
+	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
 	c := &cli{
 		paths:   paths,
 		in:      os.Stdin,
 		out:     os.Stdout,
 		log:     log,
+		level:   level,
 		secrets: secret.New(run, goruntime.GOOS, secret.Daemon, paths.Token(), exec.LookPath),
 		service: service.NewManager(goruntime.GOOS, home, os.Getuid(), exe, run),
 		exe:     exe,
@@ -233,6 +236,13 @@ func (c *cli) setup(ctx context.Context) (config.Config, error) {
 		if err := c.paths.SaveConfig(cfg); err != nil {
 			return cfg, err
 		}
+	}
+	if c.level != nil {
+		l, err := cfg.LogLevel(os.Getenv("OVERSIRE_LOG_LEVEL"))
+		if err != nil {
+			c.log.Warn("log level", "err", err)
+		}
+		c.level.Set(l)
 	}
 	return cfg, nil
 }

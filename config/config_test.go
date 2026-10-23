@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log/slog"
 	"path/filepath"
 	"testing"
 )
@@ -28,5 +29,24 @@ func TestConfigKeepsSessionFields(t *testing.T) {
 	c, ok, err := p.LoadConfig()
 	if err != nil || !ok || c.MaxSessions != 3 || c.DataDir != "/data" {
 		t.Fatal(c, ok, err)
+	}
+}
+
+func TestLogLevel(t *testing.T) {
+	for _, c := range []struct {
+		env, cfg string
+		want     slog.Level
+		bad      bool
+	}{
+		{"", "", slog.LevelInfo, false},
+		{"", "debug", slog.LevelDebug, false},
+		{"warn", "debug", slog.LevelWarn, false},
+		{"loud", "", slog.LevelInfo, true},
+	} {
+		cfg := Config{Log: &LogConfig{Level: c.cfg}}
+		got, err := cfg.LogLevel(c.env)
+		if got != c.want || (err != nil) != c.bad {
+			t.Errorf("env %q, config %q: got %v, %v", c.env, c.cfg, got, err)
+		}
 	}
 }

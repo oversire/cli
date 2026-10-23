@@ -192,7 +192,7 @@ func (s *Server) Run(ctx context.Context) error {
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	handler := s.guard(port, s.loopMux)
+	handler := s.accessLog("loopback", s.guard(port, s.loopMux))
 	errc := make(chan error, len(lns))
 	var servers []*http.Server
 	var wg sync.WaitGroup
@@ -268,7 +268,7 @@ func (s *Server) rebind(addrs []netip.Addr) {
 			s.Log.Warn("tailnet listen", "addr", a, "err", err)
 			continue
 		}
-		srv := newHTTPServer(s.netMux)
+		srv := newHTTPServer(s.accessLog("tailnet", s.netMux))
 		s.nets[a] = srv
 		s.Log.Info("tailnet listen", "addr", ln.Addr().String())
 		go srv.Serve(ln)
@@ -368,6 +368,7 @@ func (s *Server) onTailnet(r Route) http.Handler {
 			return
 		}
 		if ok {
+			setCaller(req.Context(), c.Name)
 			req = req.WithContext(WithCaller(req.Context(), c))
 		}
 		r.Handle(w, req)
