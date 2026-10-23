@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLoggedWritesAFailureOnce(t *testing.T) {
@@ -63,5 +64,18 @@ func TestShortArgs(t *testing.T) {
 	got := short(args)
 	if !strings.HasPrefix(got, strings.Repeat("p", 79)+"… a") || !strings.HasSuffix(got, " a …") || strings.Count(got, " a") != 11 {
 		t.Fatal(got)
+	}
+}
+
+func TestLoggedKilledHasTheSignal(t *testing.T) {
+	var buf bytes.Buffer
+	l := NewLogged(slog.New(slog.NewTextHandler(&buf, nil)))
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	if _, _, err := l.Run(ctx, "/bin/sleep", []string{"5"}, nil); err == nil {
+		t.Fatal("no error")
+	}
+	if !strings.Contains(buf.String(), `err="signal: killed"`) || strings.Contains(buf.String(), "exit=") {
+		t.Fatal(buf.String())
 	}
 }

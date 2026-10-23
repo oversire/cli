@@ -54,7 +54,7 @@ func (l *Logged) Run(ctx context.Context, exe string, args []string, stdin []byt
 		return out, errOut, nil
 	}
 	var exit *exec.ExitError
-	if errors.As(err, &exit) {
+	if errors.As(err, &exit) && exit.ExitCode() >= 0 {
 		a = append(a, "exit", exit.ExitCode())
 	} else {
 		a = append(a, "err", err)
