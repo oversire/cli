@@ -188,10 +188,7 @@ func LaunchdPlist(label, exe, logPath string) string {
 	<key>RunAtLoad</key>
 	<true/>
 	<key>KeepAlive</key>
-	<dict>
-		<key>SuccessfulExit</key>
-		<false/>
-	</dict>
+	<true/>
 	<key>ThrottleInterval</key>
 	<integer>30</integer>
 	<key>ProcessType</key>
@@ -213,7 +210,7 @@ Wants=network-online.target
 
 [Service]
 ExecStart="` + exe + `" daemon run
-Restart=on-failure
+Restart=always
 RestartSec=30
 
 [Install]

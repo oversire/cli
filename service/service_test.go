@@ -40,7 +40,7 @@ func TestLaunchdPlist(t *testing.T) {
 		"<string>com.oversire.daemon</string>",
 		"<string>com.oversire.daemon</string>", "<string>/opt/o&amp;r/oversire</string>\n\t\t<string>daemon</string>\n\t\t<string>run</string>",
 		"<key>RunAtLoad</key>\n\t<true/>",
-		"<key>SuccessfulExit</key>\n\t\t<false/>",
+		"<key>KeepAlive</key>\n\t<true/>",
 		"<key>ThrottleInterval</key>\n\t<integer>30</integer>",
 		"<string>/Users/ada/Library/Logs/oversire-daemon.log</string>",
 	} {
@@ -52,7 +52,7 @@ func TestLaunchdPlist(t *testing.T) {
 
 func TestSystemdUnit(t *testing.T) {
 	u := SystemdUnit("/home/ada/bin/oversire")
-	for _, want := range []string{`ExecStart="/home/ada/bin/oversire" daemon run`, "Restart=on-failure", "RestartSec=30", "WantedBy=default.target"} {
+	for _, want := range []string{`ExecStart="/home/ada/bin/oversire" daemon run`, "Restart=always", "RestartSec=30", "WantedBy=default.target"} {
 		if !strings.Contains(u, want) {
 			t.Errorf("unit has no %q", want)
 		}

@@ -278,7 +278,7 @@ A worker can ask with `orchestration ask`. `GET /v1/questions` then shows the as
 
 ## Service
 
-`daemon install` starts `oversire daemon run` at login and restarts it after a failure:
+`daemon install` starts `oversire daemon run` at login. On macOS and Linux, the service starts the daemon again 30 s after each stop, also after a clean stop (for example a SIGTERM). `daemon uninstall` stops it for good. Run `daemon install` again to put this rule into an older service file.
 
 | OS | Service |
 |---|---|
