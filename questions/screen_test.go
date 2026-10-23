@@ -1,6 +1,7 @@
 package questions
 
 import (
+	"cmp"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -11,7 +12,8 @@ import (
 	"github.com/oversire/cli/wire"
 )
 
-var screensDir = filepath.Join("..", "contract", "fixtures", "claude-screens")
+// OVERSIRE_SCREENS reads the screens from another folder, for example ../../oversire/Contract/fixtures/claude-screens.
+var screensDir = cmp.Or(os.Getenv("OVERSIRE_SCREENS"), filepath.Join("..", "contract", "fixtures", "claude-screens"))
 
 func screen(t *testing.T, name string) []string {
 	t.Helper()
@@ -22,7 +24,7 @@ func screen(t *testing.T, name string) []string {
 	return strings.Split(string(data), "\n")
 }
 
-// expectOf has the shape of the .expect.json files that ClaudeScreensTests in the app writes.
+// expectOf has the shape of the .expect.json files.
 func expectOf(t *testing.T, s []string) any {
 	t.Helper()
 	out := map[string]any{"form": nil, "prompt": nil}
@@ -71,9 +73,19 @@ func TestScreensMatchTheExpectFiles(t *testing.T) {
 	if len(names) < 30 {
 		t.Fatalf("only %d screens", len(names))
 	}
+	record := os.Getenv("OVERSIRE_RECORD_SCREENS") == "1"
 	for _, path := range names {
 		name := strings.TrimSuffix(filepath.Base(path), ".txt")
-		data, err := os.ReadFile(filepath.Join(screensDir, name+".expect.json"))
+		file := filepath.Join(screensDir, name+".expect.json")
+		// A record writes only the missing files, so the files that exist stay the same in each repo.
+		if _, err := os.Stat(file); record && os.IsNotExist(err) {
+			g, _ := json.MarshalIndent(expectOf(t, screen(t, name)), "", "  ")
+			if err := os.WriteFile(file, append(g, '\n'), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			continue
+		}
+		data, err := os.ReadFile(file)
 		if err != nil {
 			t.Fatal(err)
 		}

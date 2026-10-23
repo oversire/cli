@@ -1,8 +1,7 @@
 # Claude screen fixtures
 
 These files are recorded screens and transcripts of Claude Code in an Orca terminal.
-Two parsers read them: the app (`OrcaFormsTests`, `OrcaPromptsTests`, `OrcaTurnTests` and `ClaudeScreensTests` in `RuntimeOrcaTests`)
-and the daemon (the Go package `questions` in `oversire/cli`). The two parsers must agree.
+The daemon reads them (the Go package `questions` in `oversire/cli`). The app has no screen parser: it gets the questions from the daemon.
 The tests also replay the keys that answer each pause.
 This folder is not a wire type. The contract tests skip it.
 
@@ -42,7 +41,7 @@ Do these steps when Claude Code changes its screen, or when a test of a new paus
 
    Use `--permission-mode default`. In auto mode, Claude Code shows no permission prompts.
 2. Send a prompt that makes the pause. For example: `Use AskUserQuestion once with two questions. ...` or `Run this exact Bash command and nothing else: date > stamp.txt`.
-3. Record the screen with the same read that the adapter uses:
+3. Record the screen with the same read that the daemon uses:
 
    ```bash
    orca terminal read --terminal <handle> --limit 40 --json \
@@ -53,23 +52,12 @@ Do these steps when Claude Code changes its screen, or when a test of a new paus
 4. For a flow, send one key with `orca terminal send --terminal <handle> --text <key>`. Then record the screen again. Do this for each key.
 5. For a transcript, copy the lines of the AskUserQuestion call and its result from `~/.claude/projects/<folder>/<session>.jsonl`. Remove the other lines.
 6. Put the Claude Code version in the file name (`claude --version`). Add a row to the table above.
-7. Write the `.expect.json` files with the Swift parser. Then read each new file and make sure that it is correct:
+7. Write the missing `.expect.json` files with the Go parser. Then read each new file and make sure that it is correct:
 
    ```bash
-   OVERSIRE_RECORD_SCREENS=1 swift test --filter ClaudeScreensTests
+   cd cli
+   OVERSIRE_RECORD_SCREENS=1 OVERSIRE_SCREENS=../oversire/Contract/fixtures/claude-screens go test ./questions -run TestScreensMatchTheExpectFiles
    ```
 
-8. Add the file to `testRecordedScreensParse` in `OrcaFormsTests`, and add a test for the keys if the keys change.
-9. Copy the contract to the CLI and the cloud. Then run the Go tests of the package `questions`.
-
-## Live test
-
-`OrcaLiveTests/testNativeQuestions` runs the full flow on a real Claude Code session in Orca.
-It answers a form page by page, sees a form that is answered in Orca, answers a Bash permission prompt and answers a turn question.
-
-```bash
-OVERSIRE_LIVE=1 ORCA_CLAUDE_TERMINAL=<handle> ORCA_CLAUDE_DIR=<folder> \
-  swift test --filter OrcaLiveTests/testNativeQuestions
-```
-
-The session must be idle at its prompt when the test starts.
+8. Add a test for the keys to `questions/screen_test.go` if the keys change.
+9. Copy the contract to the CLI and the cloud. Then run the Go tests of the package `questions` again.
