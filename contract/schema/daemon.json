@@ -397,7 +397,7 @@
       "properties": {
         "id": { "description": "The workspace id of the runtime (Orca worktreeId).", "type": "string", "minLength": 1 },
         "runtime": { "type": "string", "minLength": 1 },
-        "repo": { "type": "string" },
+        "repo": { "description": "The repo name.", "type": "string" },
         "path": { "type": "string", "minLength": 1 },
         "name": { "type": "string" },
         "comment": { "type": "string" },

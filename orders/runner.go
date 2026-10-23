@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/oversire/cli/server"
 	"github.com/oversire/cli/wire"
 )
 
@@ -44,6 +45,7 @@ type Hooks struct {
 }
 
 // Runner is the one path for each order: journal, running set, expiry, runtime, allow list, runtime call.
+// An order with a loopback caller in its context skips the allow list: the user of this machine gave it.
 type Runner struct {
 	runtimes Runtimes
 	allow    Allow
@@ -104,8 +106,10 @@ func (r *Runner) do(ctx context.Context, o wire.WorkOrder, h Hooks) wire.Result 
 	reason := ""
 	if !r.runtimes.Has(o.Runtime) {
 		reason = fmt.Sprintf("This runner has no runtime %s.", o.Runtime)
-	} else if err := r.allow.Check(o); err != nil {
-		reason = err.Error()
+	} else if c, ok := server.CallerFrom(ctx); !ok || !c.Loopback {
+		if err := r.allow.Check(o); err != nil {
+			reason = err.Error()
+		}
 	}
 	if reason != "" {
 		return failed(o.ID, reason)

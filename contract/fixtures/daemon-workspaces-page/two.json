@@ -3,7 +3,7 @@
     {
       "id": "r-towertail::/Users/ada/orca/workspaces/towertail/TOWERTAIL-2",
       "runtime": "orca",
-      "repo": "r-towertail",
+      "repo": "towertail",
       "path": "/Users/ada/orca/workspaces/towertail/TOWERTAIL-2",
       "name": "TOWERTAIL-2",
       "comment": "https://app.plane.so/ocral/browse/TOWERTAIL-2/",
@@ -23,7 +23,7 @@
     {
       "id": "r-oversire::/Users/ada/Projects/oversire-workspace",
       "runtime": "orca",
-      "repo": "r-oversire",
+      "repo": "oversire-workspace",
       "path": "/Users/ada/Projects/oversire-workspace",
       "kind": "folder",
       "liveTerminals": 0,

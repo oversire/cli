@@ -86,8 +86,7 @@ Write `allow.json` in the config folder:
 {
   "runtimes": ["orca", "oversire"],
   "repos": ["/Users/ada/Projects/app", "/Users/ada/work"],
-  "agents": ["claude", "codex"],
-  "environments": ["local"]
+  "agents": ["claude", "codex"]
 }
 ```
 
@@ -96,9 +95,10 @@ Write `allow.json` in the config folder:
 | `runtimes` | The runtime of each order must be in the list. |
 | `repos` | A `sessionStart` repo must be a listed path or in a listed folder. The daemon cleans the path first. A remote URL must be the same text. |
 | `agents` | A `sessionStart` agent must be in the list. |
-| `environments` | The runtime environment of each order must be in the list. `local` is this machine. Other names are paired Orca environments. The `oversire` runtime uses only `local`. |
 
 The daemon reads the file again for each order. An edit applies without a restart.
+A direct order from loopback (the app on this machine) does not use the list. Orders from Tailscale and from the hub use it.
+The daemon talks only to the runtimes on this machine. The old `environments` field has no effect, and the daemon writes one warning when it reads it.
 The hub shows a summary of the list (the runtimes, the agents and the number of repos). The full list stays on the machine.
 
 ## runtime:oversire
@@ -129,7 +129,7 @@ The budget of the order has caps: 50 earlier turns, 10 last turns and 20000 char
 | Runtime | How the daemon finds the transcript |
 |---|---|
 | `oversire` | agent-wire gives the harness session id at the start of the session. |
-| `orca` | `orca terminal show` gives the agent, the workspace path and the title of the terminal. Then `orca search` gives the newest session of the agent at that path with the title as its name, and its transcript path. Orca gives the path only for a session on this machine. For a paired environment, the order fails. |
+| `orca` | `orca terminal show` gives the agent, the workspace path and the title of the terminal. Then `orca search` gives the newest session of the agent at that path with the title as its name, and its transcript path. |
 
 ## Commands
 
@@ -235,7 +235,7 @@ A member that is not home answers 409 `{"error":"<machine> is home","home":"<mac
 
 ### Direct orders
 
-An app of the group can give work orders to the daemon without the cloud hub. The bodies are `WorkOrder` and `WorkOrderResult` of `contract/schema/work-order.json`. The orders go through the same allow list, expiry and journal (`orders.json`) as the hub orders. A daemon credential gets 403: daemons do not order each other.
+An app of the group can give work orders to the daemon without the cloud hub. The bodies are `WorkOrder` and `WorkOrderResult` of `contract/schema/work-order.json`. The orders go through the same allow list (except from loopback), expiry and journal (`orders.json`) as the hub orders. A daemon credential gets 403: daemons do not order each other.
 
 | Route | What it does |
 |---|---|
@@ -245,6 +245,19 @@ An app of the group can give work orders to the daemon without the cloud hub. Th
 | `POST /v1/runner-sessions/{id}/answer` | Body: a `RunnerAnswer` `{id, items, note?}`. Answers the open question of an `oversire` session with a `sessionSend` order that expires in 60 min, and answers 200 with that order. 404: no such session. 409: no such question is open. |
 
 `GET /v1/connect` also sends the `runner.json` frames `{"type":"ack","order":…}`, `{"type":"result","order":…,"state":…,"result":…}` and `{"type":"session","session":…}`. Each change of an `oversire` session goes out as a `session` frame, and into the session book (`/v1/sessions`, source `wire`).
+
+### Runtimes
+
+The daemon owns the agent runtimes of this machine: `oversire`, and `orca` when the Orca CLI is on the machine. The app talks only to daemons, never to a runtime. The bodies are in `contract/schema/daemon.json`. Start, stop, read, send and history go through the direct orders.
+
+| Route | What it does |
+|---|---|
+| `GET /v1/runtimes` | A `DaemonRuntimesPage`: for each runtime, `installed`, `reachable`, `version`, `error` and the `capabilities` (Capability raw values of the app). A runtime that is not reachable has no capabilities. |
+| `GET /v1/repos` | A `DaemonReposPage`: the repos of each runtime with a catalog. A runtime that fails gives no repos. |
+| `GET /v1/workspaces` | A `DaemonWorkspacesPage`: the workspaces with their terminals. `errors` has the error of each runtime that fails. |
+| `DELETE /v1/workspaces/{id}` | Body `WorkspaceRemove` `{runtime, force, runHooks}`. Answers a `WorkspaceRemoval` `{warning?}`. Escape a `/` in the id as `%2F`. 404: no such runtime or workspace. 501: the runtime cannot remove. The main checkout of a repo cannot be removed. |
+| `POST /v1/files` | Body `WorkspaceFiles` (1 to 20 files, 25 MB together, base64 data). Plain file names only: no `/`, no leading dot, no two files with the same name. The daemon writes the files into a new folder `<data>/files/<id>/` and answers `WorkspaceFilesResult` `{paths}`. It removes the folders older than 7 days. |
+| `POST /v1/reveal` | Loopback only. Body: a `SessionRef`. Shows the terminal in the runtime UI, and answers 204. 404: no such runtime or session. 501: the runtime cannot show it. |
 
 ## Service
 
@@ -263,7 +276,7 @@ On macOS, `daemon install --keep-awake` keeps the Mac awake while the daemon run
 - **Dial-out to the hub.** The daemon opens the hub connection. The hub needs no open port on the machine.
 - **Typed orders.** An order is one of `sessionStart`, `sessionStop`, `sessionRead`, `sessionSend` and `sessionHistory`. There is no shell order. The `oversire` runtime asks the hub before an agent uses a tool, and denies it when no answer comes. An order with a field that the contract does not know fails.
 - **Checked start command.** A `sessionStart` order can carry `command`, the start command that the user set in OverSire (Settings › Runtime). The `orca` runtime types it into the terminal in place of its default. It accepts the command only if the first word is the agent of the order (or a path that ends in `/<agent>`), and the text has no shell operator (`;` `|` `&` `` ` `` `$(` `>` `<` or a newline). Else the order fails with the reason. An empty field gives the default command. The `oversire` runtime starts the agent over agent-wire, without a command line, and ignores the field.
-- **Local allow list.** The machine owner decides which runtimes, repos, agents and environments the hub can use. The hub cannot change the list.
+- **Local allow list.** The machine owner decides which runtimes, repos and agents the hub can use. The hub cannot change the list.
 - **Expiry.** Each order has an expiry time. The daemon never does an expired order.
 - **At most once.** The daemon keeps the last 500 finished orders in `orders.json`. An order that the hub or an app sends again does not run again. The daemon only sends its result again.
 - **Secrets on stdin.** The token goes to `security` and `secret-tool` on stdin, never in argv.
@@ -294,7 +307,7 @@ The layout:
 | `hub` | The WebSocket client and the journal of finished orders. |
 | `ask` | The route `POST /v1/sessions/{id}/ask`: it sends a question to a session and waits for the turn end. |
 | `orders` | The one run path of each order (`Runner`), and the direct orders from the apps of the group (`Direct`). |
-| `runtime` | The `Runtime` interface and the registry. `runtime/orca` is the Orca driver. `runtime/oversire` is the agent-wire driver. |
+| `runtime` | The `Runtime` interface, the registry and the runtime routes (`API`). `runtime/orca` is the Orca driver for the local Orca. `runtime/oversire` is the agent-wire driver. |
 | `digest` | The transcript readers that make a `SessionDigest`. |
 | `store` | The home store: the op log in SQLite and the `/v1/store/ops` routes. |
 | `allow` | The allow list. |

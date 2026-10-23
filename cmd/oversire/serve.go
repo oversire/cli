@@ -112,6 +112,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	srv.Handle(ask.NewAsker(book, screen, reg, time.Now).Routes()...)
 	srv.Handle(installer.Routes()...)
 	srv.Handle(updates.Routes()...)
+	srv.Handle(runtime.NewAPI(reg, filepath.Join(data, "files"), time.Now).Routes()...)
 	direct := orders.NewDirect(runner, func(m any) { srv.Notify(false, m) }, time.Now)
 	direct.Log = c.log
 	srv.Handle(direct.Routes()...)

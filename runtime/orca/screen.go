@@ -19,7 +19,7 @@ func (s *Screen) Read(ctx context.Context, terminal string, lines int) ([]string
 			Tail []string `json:"tail"`
 		} `json:"terminal"`
 	}
-	if err := s.o.callInto(ctx, localEnv, 20*time.Second, &r, "terminal", "read", "--terminal", terminal, "--limit", strconv.Itoa(lines)); err != nil {
+	if err := s.o.callInto(ctx, 20*time.Second, &r, "terminal", "read", "--terminal", terminal, "--limit", strconv.Itoa(lines)); err != nil {
 		return nil, err
 	}
 	out := make([]string, len(r.Terminal.Tail))
@@ -32,10 +32,10 @@ func (s *Screen) Read(ctx context.Context, terminal string, lines int) ([]string
 // Send types the text. With enter it submits the text as a prompt and waits until the agent takes it.
 func (s *Screen) Send(ctx context.Context, terminal, text string, enter bool) error {
 	if enter {
-		_, err := s.o.call(ctx, localEnv, 30*time.Second, "terminal", "send", "--terminal", terminal, "--text", text, "--enter", "--wait-submit", "15")
+		_, err := s.o.call(ctx, 30*time.Second, "terminal", "send", "--terminal", terminal, "--text", text, "--enter", "--wait-submit", "15")
 		return err
 	}
-	_, err := s.o.call(ctx, localEnv, 10*time.Second, "terminal", "send", "--terminal", terminal, "--text", text)
+	_, err := s.o.call(ctx, 10*time.Second, "terminal", "send", "--terminal", terminal, "--text", text)
 	return err
 }
 
@@ -48,7 +48,7 @@ func (s *Screen) Search(ctx context.Context, cwd, words string) ([]string, error
 			} `json:"source"`
 		} `json:"hits"`
 	}
-	if err := s.o.callInto(ctx, localEnv, 30*time.Second, &r, "search", "--query", words, "--agent", "claude", "--path", cwd,
+	if err := s.o.callInto(ctx, 30*time.Second, &r, "search", "--query", words, "--agent", "claude", "--path", cwd,
 		"--scope", "conversation", "--sort", "newest", "--limit", "5"); err != nil {
 		return nil, err
 	}

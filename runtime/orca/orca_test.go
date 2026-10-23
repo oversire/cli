@@ -77,18 +77,21 @@ func TestStartInANewWorkspaceUsesTheShell(t *testing.T) {
 	r.on("terminal wait", `{"ok":true,"result":{"wait":{"satisfied":false}}}`, `{"ok":true,"result":{"wait":{"satisfied":true}}}`)
 	r.on("terminal send", `{"ok":true,"result":{}}`, `{"ok":true,"result":{"send":{"prompt":{"stages":["typed","turn_started"]}}}}`)
 
-	ref, err := o.Start(context.Background(), runtime.Order{}, wire.LaunchRequest{Repo: "/w", Name: "ENG-4", Note: "https://x/ENG-4", Agent: "claude", Prompt: "go", Environment: "mbp"})
+	// The daemon ignores the environment: it talks only to its own Orca.
+	st, err := o.Launch(context.Background(), runtime.Order{}, wire.LaunchRequest{Repo: "/w", Name: "ENG-4", Note: "https://x/ENG-4", Agent: "claude", Prompt: "go",
+		Environment: "mbp", BaseBranch: "release/1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := wire.SessionRef{Workspace: wire.WorkspaceRef{Account: wire.AccountID{Provider: "orca", ID: "mbp"}, ID: "c1"}, ID: "h1"}
-	if ref != want {
-		t.Fatalf("ref %#v", ref)
+	want := wire.SessionRef{Workspace: wire.WorkspaceRef{Account: wire.AccountID{Provider: "orca", ID: "local"}, ID: "c1"}, ID: "h1"}
+	if st.Session != want || st.PaneKey != "t1:l1" || !st.TurnStarted {
+		t.Fatalf("started %#v", st)
 	}
 	create := r.args("worktree create")[0]
-	if !slices.Equal(create, []string{"worktree", "create", "--repo", "path:/w", "--name", "ENG-4", "--comment", "https://x/ENG-4", "--json", "--environment", "mbp"}) {
+	if !slices.Equal(create, []string{"worktree", "create", "--repo", "path:/w", "--name", "ENG-4", "--comment", "https://x/ENG-4", "--base-branch", "release/1", "--json"}) {
 		t.Fatalf("create %q", create)
 	}
+	noEnvironment(t, r)
 	sends := r.args("terminal send")
 	if len(sends) != 2 || sends[0][5] != "claude -n 'ENG-4'" || sends[1][5] != "go" {
 		t.Fatalf("sends %q", sends)
@@ -175,10 +178,41 @@ func TestStartReusesTheWorkspace(t *testing.T) {
 	if !slices.Equal(tc[:8], []string{"terminal", "create", "--worktree", "id:" + ref.Workspace.ID, "--title", "eng-4", "--command", "codex"}) {
 		t.Fatalf("terminal create %q", tc)
 	}
+	noEnvironment(t, r)
+}
+
+func noEnvironment(t *testing.T, r *replay) {
+	t.Helper()
 	for _, c := range r.calls {
 		if slices.Contains(c, "--environment") {
-			t.Fatalf("a local call has --environment: %q", c)
+			t.Fatalf("a call has --environment: %q", c)
 		}
+	}
+}
+
+func TestLaunchInPlace(t *testing.T) {
+	o, r := setup()
+	r.on("terminal create", `{"ok":true,"result":{"terminal":{"handle":"h3","worktreeId":"r1::/w","tabId":"t3","leafId":"l3"}}}`)
+	r.on("terminal wait", `{"ok":true,"result":{"wait":{"satisfied":true}}}`)
+	r.on("terminal send", `{"ok":true,"result":{"send":{"prompt":{"stages":["typed"]}}}}`)
+
+	st, err := o.Launch(context.Background(), runtime.Order{}, wire.LaunchRequest{Repo: "/w", Name: "ignored", Agent: "claude", Prompt: "fix it",
+		Command: "claude -n fix-it", Title: "fix-it", InPlace: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Session.Workspace.ID != "r1::/w" || st.Session.ID != "h3" || st.PaneKey != "t3:l3" || st.TurnStarted {
+		t.Fatalf("started %#v", st)
+	}
+	if len(r.args("worktree ps"))+len(r.args("worktree create")) != 0 {
+		t.Fatal("an in-place launch makes no workspace")
+	}
+	tc := r.args("terminal create")[0]
+	if !slices.Equal(tc, []string{"terminal", "create", "--worktree", "path:/w", "--title", "fix-it", "--command", "claude -n fix-it", "--json"}) {
+		t.Fatalf("terminal create %q", tc)
+	}
+	if _, err := o.Launch(context.Background(), runtime.Order{}, wire.LaunchRequest{Repo: "/w", Agent: "claude", Prompt: "x", InPlace: true}); err == nil {
+		t.Fatal("an in-place launch needs a title")
 	}
 }
 
@@ -247,10 +281,20 @@ func TestSessionIO(t *testing.T) {
 	if err := o.Stop(ctx, s); err != nil {
 		t.Fatal(err)
 	}
-	want = []string{"terminal", "close", "--terminal", "h1", "--json", "--environment", "mbp"}
+	want = []string{"terminal", "close", "--terminal", "h1", "--json"}
 	if got := r.calls[len(r.calls)-1]; !slices.Equal(got, want) {
 		t.Fatalf("close %q", got)
 	}
+
+	r.on("terminal read", `{"ok":true,"result":{"terminal":{"tail":["a\u00a0b","","c"]}}}`)
+	lines, err = o.ReadScrollback(ctx, s, 3)
+	if err != nil || !slices.Equal(lines, []string{"a b", "", "c"}) {
+		t.Fatalf("scrollback %q %v", lines, err)
+	}
+	if got := r.calls[len(r.calls)-1]; !slices.Equal(got, []string{"terminal", "read", "--terminal", "h1", "--limit", "3", "--json"}) {
+		t.Fatalf("scrollback args %q", got)
+	}
+	noEnvironment(t, r)
 }
 
 func TestErrorMapping(t *testing.T) {
@@ -321,10 +365,10 @@ func TestHistory(t *testing.T) {
 func TestHistoryFailures(t *testing.T) {
 	ref := wire.SessionRef{Workspace: wire.WorkspaceRef{Account: wire.AccountID{Provider: ID, ID: "mbp"}, ID: "c1"}, ID: "h1"}
 	cases := map[string]struct{ show, search, want string }{
-		"no agent":    {`{"ok":true,"result":{"terminal":{"title":"ENG-4","worktreePath":"/w","agentIdentity":""}}}`, "", "knows no agent"},
-		"codex":       {`{"ok":true,"result":{"terminal":{"title":"ENG-4","worktreePath":"/w","agentIdentity":"codex"}}}`, "", `harness "codex"`},
-		"no match":    {`{"ok":true,"result":{"terminal":{"title":"ENG-4","worktreePath":"/w","agentIdentity":"claude"}}}`, `{"ok":true,"result":{"hits":[{"title":"ENG-5","source":{"filePath":"/x"}}]}}`, "found no claude session"},
-		"remote path": {`{"ok":true,"result":{"terminal":{"title":"ENG-4","worktreePath":"/w","agentIdentity":"claude"}}}`, `{"ok":true,"result":{"hits":[{"title":"ENG-4","source":{}}]}}`, "only local transcripts"},
+		"no agent": {`{"ok":true,"result":{"terminal":{"title":"ENG-4","worktreePath":"/w","agentIdentity":""}}}`, "", "knows no agent"},
+		"codex":    {`{"ok":true,"result":{"terminal":{"title":"ENG-4","worktreePath":"/w","agentIdentity":"codex"}}}`, "", `harness "codex"`},
+		"no match": {`{"ok":true,"result":{"terminal":{"title":"ENG-4","worktreePath":"/w","agentIdentity":"claude"}}}`, `{"ok":true,"result":{"hits":[{"title":"ENG-5","source":{"filePath":"/x"}}]}}`, "found no claude session"},
+		"no path":  {`{"ok":true,"result":{"terminal":{"title":"ENG-4","worktreePath":"/w","agentIdentity":"claude"}}}`, `{"ok":true,"result":{"hits":[{"title":"ENG-4","source":{}}]}}`, "no transcript path"},
 	}
 	for name, c := range cases {
 		o, r := setup()
@@ -334,8 +378,6 @@ func TestHistoryFailures(t *testing.T) {
 		if _, err := o.History(context.Background(), ref, wire.HistoryBudget{}); err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%s: %v", name, err)
 		}
-		if name == "no match" && !slices.Contains(r.calls[0], "mbp") {
-			t.Errorf("no environment in %q", r.calls[0])
-		}
+		noEnvironment(t, r)
 	}
 }

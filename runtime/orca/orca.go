@@ -1,4 +1,5 @@
-// Package orca drives Orca terminals through the Orca CLI. Each call has an argument array and --json.
+// Package orca drives the Orca of this machine through the Orca CLI. Each call has an argument array and --json.
+// The daemon talks only to its own Orca: no call has --environment.
 package orca
 
 import (
@@ -10,6 +11,7 @@ import (
 	"os/exec"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -20,9 +22,10 @@ import (
 )
 
 const (
-	ID       = "orca"
-	MacPath  = "/Applications/Orca.app/Contents/Resources/bin/orca"
-	localEnv = "local"
+	ID      = "orca"
+	MacPath = "/Applications/Orca.app/Contents/Resources/bin/orca"
+	// account is the account id of the session refs. The app puts the machine name in its place.
+	account = "local"
 )
 
 // Runner runs one child process.
@@ -50,30 +53,43 @@ var agentName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 type Orca struct {
 	exe       string
 	run       Runner
+	stat      func(string) (os.FileInfo, error)
 	shellWait time.Duration
 	// digests gives the transcript reader of a harness.
 	digests func(harness string) (digest.Reader, error)
 }
 
 func New(exe string, run Runner) *Orca {
-	return &Orca{exe: exe, run: run, shellWait: 300 * time.Millisecond, digests: digest.ForUser}
+	return &Orca{exe: exe, run: run, stat: os.Stat, shellWait: 300 * time.Millisecond, digests: digest.ForUser}
 }
 
 func (o *Orca) ID() string { return ID }
 
-// Start opens an agent session in the workspace with the request name, then sends the prompt once.
+// Start is Launch with only the session.
+func (o *Orca) Start(ctx context.Context, ord runtime.Order, r wire.LaunchRequest) (wire.SessionRef, error) {
+	st, err := o.Launch(ctx, ord, r)
+	return st.Session, err
+}
+
+// Launch opens an agent session in the workspace with the request name, then sends the prompt once.
 // A workspace with that name at the repo path is used again. A new workspace gets a fallback shell,
-// and the agent command goes into it.
-func (o *Orca) Start(ctx context.Context, _ runtime.Order, r wire.LaunchRequest) (wire.SessionRef, error) {
-	var none wire.SessionRef
+// and the agent command goes into it. With InPlace, a new terminal opens in the folder Repo.
+func (o *Orca) Launch(ctx context.Context, _ runtime.Order, r wire.LaunchRequest) (runtime.Started, error) {
+	var none runtime.Started
 	name := r.WorkspaceName()
+	if r.InPlace {
+		name = r.Title
+	}
 	if name == "" {
 		return none, errors.New("A launch needs a name or an item.")
 	}
 	if !agentName.MatchString(r.Agent) {
 		return none, fmt.Errorf("The agent name %q is not valid.", r.Agent)
 	}
-	env := environment(r.Environment)
+	title := r.Title
+	if title == "" {
+		title = name
+	}
 	command := AgentCommand(r.Agent, name)
 	if r.Command != "" {
 		if err := checkCommand(r.Agent, r.Command); err != nil {
@@ -82,45 +98,90 @@ func (o *Orca) Start(ctx context.Context, _ runtime.Order, r wire.LaunchRequest)
 		command = r.Command
 	}
 
-	card, err := o.findWorkspace(ctx, env, r.Repo, name)
+	var t terminal
+	var err error
+	if r.InPlace {
+		if t, err = o.createTerminal(ctx, "path:"+r.Repo, title, command); err != nil {
+			return none, err
+		}
+	} else if t, err = o.workspaceTerminal(ctx, r, name, title, command); err != nil {
+		return none, err
+	}
+	ref := wire.SessionRef{Workspace: wire.WorkspaceRef{Account: wire.AccountID{Provider: ID, ID: account}, ID: t.Worktree}, ID: t.Handle}
+	if err := o.waitIdle(ctx, t.Handle, name); err != nil {
+		return none, err
+	}
+	started, err := o.send(ctx, ref, r.Prompt)
 	if err != nil {
 		return none, err
 	}
-	shell := ""
-	if card == "" {
-		if card, err = o.createWorkspace(ctx, env, r); err != nil {
-			return none, err
-		}
-		shell = o.waitShell(ctx, env, card)
-	}
-
-	handle := shell
-	if shell != "" {
-		if _, err := o.call(ctx, env, 20*time.Second, "terminal", "send", "--terminal", shell, "--text", command, "--enter"); err != nil {
-			return none, err
-		}
-	} else {
-		var made struct {
-			Terminal struct {
-				Handle string `json:"handle"`
-			} `json:"terminal"`
-		}
-		if err := o.callInto(ctx, env, 30*time.Second, &made, "terminal", "create", "--worktree", "id:"+card, "--title", name, "--command", command); err != nil {
-			return none, err
-		}
-		if made.Terminal.Handle == "" {
-			return none, errors.New("Orca made no terminal.")
-		}
-		handle = made.Terminal.Handle
-	}
-	ref := wire.SessionRef{Workspace: wire.WorkspaceRef{Account: wire.AccountID{Provider: ID, ID: env}, ID: card}, ID: handle}
-	if err := o.waitIdle(ctx, env, handle, name); err != nil {
-		return none, err
-	}
-	return ref, o.send(ctx, ref, r.Prompt)
+	return runtime.Started{Session: ref, PaneKey: t.paneKey(), TurnStarted: started}, nil
 }
 
-func (o *Orca) findWorkspace(ctx context.Context, env, repo, name string) (string, error) {
+// terminal is one row of `terminal list`, or the terminal of `terminal create`.
+type terminal struct {
+	Handle   string `json:"handle"`
+	Worktree string `json:"worktreeId"`
+	Title    string `json:"title"`
+	TabID    string `json:"tabId"`
+	LeafID   string `json:"leafId"`
+	PaneKey  string `json:"paneKey"`
+	Orphaned bool   `json:"orphaned"`
+}
+
+// paneKey is <tabId>:<leafId>, the id of the session in the session book.
+func (t terminal) paneKey() string {
+	if t.PaneKey != "" {
+		return t.PaneKey
+	}
+	if t.TabID == "" || t.LeafID == "" {
+		return ""
+	}
+	return t.TabID + ":" + t.LeafID
+}
+
+// workspaceTerminal finds or makes the workspace and starts the agent command in it.
+func (o *Orca) workspaceTerminal(ctx context.Context, r wire.LaunchRequest, name, title, command string) (terminal, error) {
+	card, err := o.findWorkspace(ctx, r.Repo, name)
+	if err != nil {
+		return terminal{}, err
+	}
+	shell, ok := terminal{}, false
+	if card == "" {
+		if card, err = o.createWorkspace(ctx, r); err != nil {
+			return terminal{}, err
+		}
+		shell, ok = o.waitShell(ctx, card)
+	}
+	t := shell
+	if ok {
+		if _, err := o.call(ctx, 20*time.Second, "terminal", "send", "--terminal", shell.Handle, "--text", command, "--enter"); err != nil {
+			return terminal{}, err
+		}
+	} else if t, err = o.createTerminal(ctx, "id:"+card, title, command); err != nil {
+		return terminal{}, err
+	}
+	t.Worktree = card
+	return t, nil
+}
+
+func (o *Orca) createTerminal(ctx context.Context, worktree, title, command string) (terminal, error) {
+	var made struct {
+		Terminal terminal `json:"terminal"`
+	}
+	if err := o.callInto(ctx, 30*time.Second, &made, "terminal", "create", "--worktree", worktree, "--title", title, "--command", command); err != nil {
+		return terminal{}, err
+	}
+	if made.Terminal.Handle == "" {
+		return terminal{}, errors.New("Orca made no terminal.")
+	}
+	if made.Terminal.Worktree == "" {
+		made.Terminal.Worktree = strings.TrimPrefix(worktree, "id:")
+	}
+	return made.Terminal, nil
+}
+
+func (o *Orca) findWorkspace(ctx context.Context, repo, name string) (string, error) {
 	var ps struct {
 		Worktrees []struct {
 			ID          string `json:"worktreeId"`
@@ -129,7 +190,7 @@ func (o *Orca) findWorkspace(ctx context.Context, env, repo, name string) (strin
 			IsArchived  bool   `json:"isArchived"`
 		} `json:"worktrees"`
 	}
-	if err := o.callInto(ctx, env, 20*time.Second, &ps, "worktree", "ps", "--limit", "500"); err != nil {
+	if err := o.callInto(ctx, 20*time.Second, &ps, "worktree", "ps", "--limit", "500"); err != nil {
 		return "", err
 	}
 	for _, w := range ps.Worktrees {
@@ -140,17 +201,20 @@ func (o *Orca) findWorkspace(ctx context.Context, env, repo, name string) (strin
 	return "", nil
 }
 
-func (o *Orca) createWorkspace(ctx context.Context, env string, r wire.LaunchRequest) (string, error) {
+func (o *Orca) createWorkspace(ctx context.Context, r wire.LaunchRequest) (string, error) {
 	args := []string{"worktree", "create", "--repo", "path:" + r.Repo, "--name", r.WorkspaceName()}
 	if note := r.WorkspaceNote(); note != "" {
 		args = append(args, "--comment", note)
+	}
+	if r.BaseBranch != "" {
+		args = append(args, "--base-branch", r.BaseBranch)
 	}
 	var made struct {
 		Worktree struct {
 			ID string `json:"id"`
 		} `json:"worktree"`
 	}
-	err := o.callInto(ctx, env, 30*time.Second, &made, args...)
+	err := o.callInto(ctx, 30*time.Second, &made, args...)
 	if e := (*Error)(nil); errors.As(err, &e) && e.Code == "repo_not_found" {
 		return "", &Error{Code: e.Code, Message: "Orca has no workspace at " + r.Repo}
 	}
@@ -163,42 +227,39 @@ func (o *Orca) createWorkspace(ctx context.Context, env string, r wire.LaunchReq
 	return made.Worktree.ID, nil
 }
 
-// waitShell gives the fallback shell of a new workspace, or "" when none shows up.
-func (o *Orca) waitShell(ctx context.Context, env, card string) string {
+// waitShell gives the fallback shell of a new workspace. ok is false when none shows up.
+func (o *Orca) waitShell(ctx context.Context, card string) (terminal, bool) {
 	for i := range 10 {
 		var list struct {
-			Terminals []struct {
-				Handle   string `json:"handle"`
-				Orphaned bool   `json:"orphaned"`
-			} `json:"terminals"`
+			Terminals []terminal `json:"terminals"`
 		}
-		if o.callInto(ctx, env, 20*time.Second, &list, "terminal", "list", "--worktree", "id:"+card) == nil {
+		if o.callInto(ctx, 20*time.Second, &list, "terminal", "list", "--worktree", "id:"+card) == nil {
 			for _, t := range list.Terminals {
 				if t.Handle != "" && !t.Orphaned {
-					return t.Handle
+					return t, true
 				}
 			}
 		}
 		if i < 9 {
 			select {
 			case <-ctx.Done():
-				return ""
+				return terminal{}, false
 			case <-time.After(o.shellWait):
 			}
 		}
 	}
-	return ""
+	return terminal{}, false
 }
 
 // waitIdle waits two times, since a cold start of the agent can take longer than one wait.
-func (o *Orca) waitIdle(ctx context.Context, env, handle, name string) error {
+func (o *Orca) waitIdle(ctx context.Context, handle, name string) error {
 	for range 2 {
 		var r struct {
 			Wait struct {
 				Satisfied bool `json:"satisfied"`
 			} `json:"wait"`
 		}
-		err := o.callInto(ctx, env, 60*time.Second, &r, "terminal", "wait", "--terminal", handle, "--for", "tui-idle", "--timeout-ms", "45000")
+		err := o.callInto(ctx, 60*time.Second, &r, "terminal", "wait", "--terminal", handle, "--for", "tui-idle", "--timeout-ms", "45000")
 		if err == nil && r.Wait.Satisfied {
 			return nil
 		}
@@ -238,24 +299,39 @@ func checkCommand(agent, cmd string) error {
 }
 
 func (o *Orca) Stop(ctx context.Context, s wire.SessionRef) error {
-	_, err := o.call(ctx, sessionEnv(s), 20*time.Second, "terminal", "close", "--terminal", s.ID)
+	_, err := o.call(ctx, 20*time.Second, "terminal", "close", "--terminal", s.ID)
 	return err
 }
 
-// Send types the text into the terminal. Orca has no permission prompts, so a permission answer fails.
 func (o *Orca) Send(ctx context.Context, p wire.SendPayload) error {
+	_, err := o.Submit(ctx, p)
+	return err
+}
+
+// Submit types the text into the terminal. Orca has no permission prompts, so a permission answer fails.
+func (o *Orca) Submit(ctx context.Context, p wire.SendPayload) (bool, error) {
 	if p.Permission != nil {
-		return errors.New("The orca runtime has no permission prompts. Answer the agent in its terminal.")
+		return false, errors.New("The orca runtime has no permission prompts. Answer the agent in its terminal.")
 	}
 	if p.Answer != nil {
-		return errors.New("The orca runtime has no runner questions. Answer the agent in Orca.")
+		return false, errors.New("The orca runtime has no runner questions. Answer the agent in Orca.")
 	}
 	return o.send(ctx, p.Session, p.Text)
 }
 
-func (o *Orca) send(ctx context.Context, s wire.SessionRef, text string) error {
-	_, err := o.call(ctx, sessionEnv(s), 30*time.Second, "terminal", "send", "--terminal", s.ID, "--text", text, "--enter", "--wait-submit", "15")
-	return err
+// send is true when the agent started a turn on the text.
+func (o *Orca) send(ctx context.Context, s wire.SessionRef, text string) (bool, error) {
+	var r struct {
+		Send struct {
+			Prompt struct {
+				Stages []string `json:"stages"`
+			} `json:"prompt"`
+		} `json:"send"`
+	}
+	if err := o.callInto(ctx, 30*time.Second, &r, "terminal", "send", "--terminal", s.ID, "--text", text, "--enter", "--wait-submit", "15"); err != nil {
+		return false, err
+	}
+	return slices.Contains(r.Send.Prompt.Stages, "turn_started"), nil
 }
 
 // Read gives the last lines of the screen without blank lines and rules.
@@ -265,7 +341,7 @@ func (o *Orca) Read(ctx context.Context, s wire.SessionRef, lines int) ([]string
 			Tail []string `json:"tail"`
 		} `json:"terminal"`
 	}
-	if err := o.callInto(ctx, sessionEnv(s), 20*time.Second, &r, "terminal", "read", "--terminal", s.ID, "--screen"); err != nil {
+	if err := o.callInto(ctx, 20*time.Second, &r, "terminal", "read", "--terminal", s.ID, "--screen"); err != nil {
 		return nil, err
 	}
 	out := []string{}
@@ -282,12 +358,28 @@ func (o *Orca) Read(ctx context.Context, s wire.SessionRef, lines int) ([]string
 	return out, nil
 }
 
+// ReadScrollback gives the last lines of the output, with blank lines.
+func (o *Orca) ReadScrollback(ctx context.Context, s wire.SessionRef, lines int) ([]string, error) {
+	var r struct {
+		Terminal struct {
+			Tail []string `json:"tail"`
+		} `json:"terminal"`
+	}
+	if err := o.callInto(ctx, 20*time.Second, &r, "terminal", "read", "--terminal", s.ID, "--limit", strconv.Itoa(max(lines, 1))); err != nil {
+		return nil, err
+	}
+	out := make([]string, len(r.Terminal.Tail))
+	for i, l := range r.Terminal.Tail {
+		out[i] = strings.ReplaceAll(l, "\u00a0", " ")
+	}
+	return out, nil
+}
+
 // History finds the transcript of the agent in the terminal through orca search, then reads it.
 // The session is the newest one of the agent at the workspace path with the terminal title as its name.
 // Orca gives the transcript path only for a session on this machine.
 func (o *Orca) History(ctx context.Context, s wire.SessionRef, b wire.HistoryBudget) (wire.SessionDigest, error) {
 	var none wire.SessionDigest
-	env := sessionEnv(s)
 	var shown struct {
 		Terminal struct {
 			Title         string `json:"title"`
@@ -295,7 +387,7 @@ func (o *Orca) History(ctx context.Context, s wire.SessionRef, b wire.HistoryBud
 			AgentIdentity string `json:"agentIdentity"`
 		} `json:"terminal"`
 	}
-	if err := o.callInto(ctx, env, 20*time.Second, &shown, "terminal", "show", "--terminal", s.ID); err != nil {
+	if err := o.callInto(ctx, 20*time.Second, &shown, "terminal", "show", "--terminal", s.ID); err != nil {
 		return none, err
 	}
 	t := shown.Terminal
@@ -319,7 +411,7 @@ func (o *Orca) History(ctx context.Context, s wire.SessionRef, b wire.HistoryBud
 			} `json:"source"`
 		} `json:"hits"`
 	}
-	if err := o.callInto(ctx, env, 30*time.Second, &found, "search", "--query", name, "--agent", t.AgentIdentity,
+	if err := o.callInto(ctx, 30*time.Second, &found, "search", "--query", name, "--agent", t.AgentIdentity,
 		"--path", t.WorktreePath, "--sort", "newest", "--limit", "100"); err != nil {
 		return none, err
 	}
@@ -328,24 +420,15 @@ func (o *Orca) History(ctx context.Context, s wire.SessionRef, b wire.HistoryBud
 			continue
 		}
 		if h.Source.FilePath == "" {
-			return none, fmt.Errorf("Orca gives no transcript path for the session %q in the environment %s. The runner reads only local transcripts.", name, env)
+			return none, fmt.Errorf("Orca gives no transcript path for the session %q.", name)
 		}
 		return reader.Digest(h.Source.FilePath, &b, wire.DigestFromRunner)
 	}
 	return none, fmt.Errorf("Orca found no %s session %q at %s.", t.AgentIdentity, name, t.WorktreePath)
 }
 
-func environment(env string) string {
-	if env == "" {
-		return localEnv
-	}
-	return env
-}
-
-func sessionEnv(s wire.SessionRef) string { return environment(s.Workspace.Account.ID) }
-
-func (o *Orca) callInto(ctx context.Context, env string, timeout time.Duration, v any, args ...string) error {
-	raw, err := o.call(ctx, env, timeout, args...)
+func (o *Orca) callInto(ctx context.Context, timeout time.Duration, v any, args ...string) error {
+	raw, err := o.call(ctx, timeout, args...)
 	if err != nil {
 		return err
 	}
@@ -355,14 +438,11 @@ func (o *Orca) callInto(ctx context.Context, env string, timeout time.Duration, 
 	return nil
 }
 
-// call runs the CLI and gives the result object. A non-local environment adds --environment.
-func (o *Orca) call(ctx context.Context, env string, timeout time.Duration, args ...string) (json.RawMessage, error) {
+// call runs the CLI and gives the result object.
+func (o *Orca) call(ctx context.Context, timeout time.Duration, args ...string) (json.RawMessage, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	full := append(slices.Clone(args), "--json")
-	if env != localEnv {
-		full = append(full, "--environment", env)
-	}
 	stdout, stderr, runErr := o.run.Run(ctx, o.exe, full, nil)
 	command := strings.Join(args[:min(2, len(args))], " ")
 	var reply struct {

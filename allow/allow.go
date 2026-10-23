@@ -5,20 +5,23 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/oversire/cli/wire"
 )
 
 // List is the content of allow.json.
 type List struct {
-	Runtimes     []string `json:"runtimes"`
-	Repos        []string `json:"repos"`
-	Agents       []string `json:"agents"`
-	Environments []string `json:"environments"`
+	Runtimes []string `json:"runtimes"`
+	Repos    []string `json:"repos"`
+	Agents   []string `json:"agents"`
+	// Environments is deprecated. The daemon talks only to the runtimes of its own machine and ignores it.
+	Environments []string `json:"environments,omitempty"`
 }
 
 // Check gives an error that tells why the list refuses o, else nil.
@@ -34,24 +37,11 @@ func (l List) Check(o wire.WorkOrder) error {
 		if !l.hasRepo(p.Repo) {
 			return fmt.Errorf("The allow list has no repo %s.", p.Repo)
 		}
-		return l.checkEnvironment(environment(p.Environment))
-	case wire.StopPayload:
-		return l.checkEnvironment(p.Session.Workspace.Account.ID)
-	case wire.ReadPayload:
-		return l.checkEnvironment(p.Session.Workspace.Account.ID)
-	case wire.SendPayload:
-		return l.checkEnvironment(p.Session.Workspace.Account.ID)
-	case wire.HistoryPayload:
-		return l.checkEnvironment(p.Session.Workspace.Account.ID)
+		return nil
+	case wire.StopPayload, wire.ReadPayload, wire.SendPayload, wire.HistoryPayload:
+		return nil
 	}
 	return fmt.Errorf("The allow list does not know this order.")
-}
-
-func (l List) checkEnvironment(env string) error {
-	if !slices.Contains(l.Environments, env) {
-		return fmt.Errorf("The allow list does not have the environment %s.", env)
-	}
-	return nil
 }
 
 // hasRepo matches the exact path or a listed parent folder. A remote URL must match exactly.
@@ -80,13 +70,6 @@ func (l List) Summary() wire.AllowSummary {
 	return wire.AllowSummary{Runtimes: nonNil(l.Runtimes), Repos: len(l.Repos), Agents: nonNil(l.Agents)}
 }
 
-func environment(env string) string {
-	if env == "" {
-		return "local"
-	}
-	return env
-}
-
 func nonNil(s []string) []string {
 	if s == nil {
 		return []string{}
@@ -96,6 +79,8 @@ func nonNil(s []string) []string {
 
 // File reads allow.json again for each check, so an edit applies without a restart.
 type File struct{ Path string }
+
+var environmentsWarning sync.Once
 
 func (f File) Load() (List, error) {
 	var l List
@@ -108,6 +93,11 @@ func (f File) Load() (List, error) {
 	}
 	if err := json.Unmarshal(b, &l); err != nil {
 		return l, fmt.Errorf("The allow list %s is not valid JSON: %v", f.Path, err)
+	}
+	if len(l.Environments) > 0 {
+		environmentsWarning.Do(func() {
+			slog.Warn("allow list: environments is ignored, the daemon runs sessions only on this machine; remove it", "path", f.Path)
+		})
 	}
 	return l, nil
 }

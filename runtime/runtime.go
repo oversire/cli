@@ -3,6 +3,7 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"time"
@@ -39,6 +40,60 @@ type Runtime interface {
 	History(ctx context.Context, s wire.SessionRef, b wire.HistoryBudget) (wire.SessionDigest, error)
 }
 
+// Started is what a Launcher start made.
+type Started struct {
+	Session     wire.SessionRef
+	PaneKey     string // the DaemonSession id, when the runtime knows it
+	TurnStarted bool
+}
+
+// The optional parts of a runtime. Registry.Status gives a capability only when the runtime has the part.
+
+// Launcher starts a session and tells how far the prompt got. Do uses it in place of Start.
+type Launcher interface {
+	Launch(ctx context.Context, o Order, r wire.LaunchRequest) (Started, error)
+}
+
+// Submitter sends like Send and tells if the agent started a turn. Do uses it in place of Send.
+type Submitter interface {
+	Submit(ctx context.Context, p wire.SendPayload) (bool, error)
+}
+
+// ScrollbackReader reads the scrollback with blank lines, not the visible screen.
+type ScrollbackReader interface {
+	ReadScrollback(ctx context.Context, s wire.SessionRef, lines int) ([]string, error)
+}
+
+// Prober tells the state of the runtime program. Name, Installed, Reachable, Version and Error count.
+type Prober interface {
+	Probe(ctx context.Context) wire.DaemonRuntime
+}
+
+// Catalog lists the repos and workspaces of the runtime. Each workspace has its terminals.
+type Catalog interface {
+	Repos(ctx context.Context) ([]wire.DaemonRepo, error)
+	Workspaces(ctx context.Context) ([]wire.DaemonWorkspace, error)
+}
+
+// WorkspaceRemover removes a workspace and its terminals.
+type WorkspaceRemover interface {
+	RemoveWorkspace(ctx context.Context, id string, force, runHooks bool) (wire.WorkspaceRemoval, error)
+}
+
+// Revealer shows the terminal of a session to the user of this machine.
+type Revealer interface {
+	Reveal(ctx context.Context, s wire.SessionRef) error
+}
+
+// ErrNoRuntime is the error of a call for a runtime that the registry does not have.
+var ErrNoRuntime = errors.New("no such runtime")
+
+// ErrNotFound is the error of a call for a workspace or session that the runtime does not have.
+var ErrNotFound = errors.New("not found")
+
+// ErrUnsupported is the error of a call that the runtime cannot do.
+var ErrUnsupported = errors.New("the runtime cannot do this")
+
 type Registry struct{ byID map[string]Runtime }
 
 func NewRegistry(rs ...Runtime) *Registry {
@@ -72,7 +127,15 @@ func (r *Registry) Do(ctx context.Context, o wire.WorkOrder) (*wire.WorkOrderRes
 	}
 	switch p := o.Payload.(type) {
 	case wire.LaunchRequest:
-		s, err := rt.Start(ctx, Order{ID: o.ID, ExpiresAt: o.ExpiresAt}, p)
+		order := Order{ID: o.ID, ExpiresAt: o.ExpiresAt}
+		if l, ok := rt.(Launcher); ok {
+			st, err := l.Launch(ctx, order, p)
+			if err != nil {
+				return nil, err
+			}
+			return &wire.WorkOrderResult{Session: &st.Session, PaneKey: st.PaneKey, TurnStarted: st.TurnStarted}, nil
+		}
+		s, err := rt.Start(ctx, order, p)
 		if err != nil {
 			return nil, err
 		}
@@ -80,7 +143,14 @@ func (r *Registry) Do(ctx context.Context, o wire.WorkOrder) (*wire.WorkOrderRes
 	case wire.StopPayload:
 		return &wire.WorkOrderResult{}, rt.Stop(ctx, p.Session)
 	case wire.ReadPayload:
-		lines, err := rt.Read(ctx, p.Session, min(max(p.Lines, 1), MaxReadLines))
+		n := min(max(p.Lines, 1), MaxReadLines)
+		var lines []string
+		var err error
+		if sr, ok := rt.(ScrollbackReader); ok && p.Scrollback {
+			lines, err = sr.ReadScrollback(ctx, p.Session, n)
+		} else {
+			lines, err = rt.Read(ctx, p.Session, n)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -89,6 +159,13 @@ func (r *Registry) Do(ctx context.Context, o wire.WorkOrder) (*wire.WorkOrderRes
 		}
 		return &wire.WorkOrderResult{Lines: lines}, nil
 	case wire.SendPayload:
+		if sub, ok := rt.(Submitter); ok {
+			started, err := sub.Submit(ctx, p)
+			if err != nil {
+				return nil, err
+			}
+			return &wire.WorkOrderResult{TurnStarted: started}, nil
+		}
 		return &wire.WorkOrderResult{}, rt.Send(ctx, p)
 	case wire.HistoryPayload:
 		earlier, full, chars := p.Budget.Values()

@@ -101,7 +101,7 @@ func (d *Direct) post(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, OrderState{State: wire.State(res.State), Result: res.Result})
 		return
 	}
-	d.start(o)
+	d.start(o, loopback(r))
 	writeJSON(w, http.StatusAccepted, Accepted{Order: o})
 }
 
@@ -154,7 +154,7 @@ func (d *Direct) permission(w http.ResponseWriter, r *http.Request) {
 	d.answered(s, now)
 	d.mu.Unlock()
 	d.send(wire.Session{Session: s})
-	d.start(o)
+	d.start(o, loopback(r))
 	writeJSON(w, http.StatusOK, o)
 }
 
@@ -190,7 +190,7 @@ func (d *Direct) answer(w http.ResponseWriter, r *http.Request) {
 	d.answered(s, now)
 	d.mu.Unlock()
 	d.send(wire.Session{Session: s})
-	d.start(o)
+	d.start(o, loopback(r))
 	writeJSON(w, http.StatusOK, o)
 }
 
@@ -214,8 +214,14 @@ func (d *Direct) ordersFrom(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
+func loopback(r *http.Request) bool {
+	c, ok := server.CallerFrom(r.Context())
+	return ok && c.Loopback
+}
+
 // start runs o in the background unless it runs already. The order outlives the request.
-func (d *Direct) start(o wire.WorkOrder) {
+// An order from loopback skips the allow list.
+func (d *Direct) start(o wire.WorkOrder, loopback bool) {
 	d.mu.Lock()
 	if _, ok := d.states[o.ID]; ok {
 		d.mu.Unlock()
@@ -230,7 +236,11 @@ func (d *Direct) start(o wire.WorkOrder) {
 			d.mu.Unlock()
 		}()
 		log := d.Log.With("order", o.ID, "op", o.Payload.Op(), "runtime", o.Runtime, "via", "direct")
-		res, out := d.runner.Run(context.Background(), o, Hooks{Accepted: func() {
+		ctx := context.Background()
+		if loopback {
+			ctx = server.WithCaller(ctx, server.Caller{Loopback: true})
+		}
+		res, out := d.runner.Run(ctx, o, Hooks{Accepted: func() {
 			d.mu.Lock()
 			d.states[o.ID] = wire.StateAcked
 			d.mu.Unlock()

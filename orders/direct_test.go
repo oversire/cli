@@ -229,10 +229,20 @@ func TestDirectExpired(t *testing.T) {
 
 func TestDirectAllowList(t *testing.T) {
 	g := newRig(t)
+	g.setCaller(server.Caller{DeviceID: "a-1", Kind: string(wire.DeviceApp), Machine: "mba"})
 	g.post(t, "/v1/orders", order("wo-1", "codex", now.Add(time.Hour)))
 	g.d.Wait()
 	_, st := g.state(t, "wo-1")
 	if st.State != wire.StateFailed || st.Result == nil || st.Result.Error == "" || g.rts.count() != 0 {
+		t.Fatalf("%+v", st)
+	}
+}
+
+func TestDirectLoopbackSkipsAllowList(t *testing.T) {
+	g := newRig(t)
+	g.post(t, "/v1/orders", order("wo-1", "codex", now.Add(time.Hour)))
+	g.d.Wait()
+	if _, st := g.state(t, "wo-1"); st.State != wire.StateDone || g.rts.count() != 1 {
 		t.Fatalf("%+v", st)
 	}
 }

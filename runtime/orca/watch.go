@@ -66,7 +66,7 @@ func (o *Orca) Worktrees(ctx context.Context) ([]WorktreeCard, error) {
 	var r struct {
 		Worktrees []WorktreeCard `json:"worktrees"`
 	}
-	err := o.callInto(ctx, localEnv, listTimeout, &r, "worktree", "ps", "--limit", "500")
+	err := o.callInto(ctx, listTimeout, &r, "worktree", "ps", "--limit", "500")
 	return r.Worktrees, err
 }
 
@@ -75,7 +75,7 @@ func (o *Orca) Terminals(ctx context.Context) ([]Terminal, error) {
 	var r struct {
 		Terminals []Terminal `json:"terminals"`
 	}
-	err := o.callInto(ctx, localEnv, listTimeout, &r, "terminal", "list", "--limit", "500")
+	err := o.callInto(ctx, listTimeout, &r, "terminal", "list", "--limit", "500")
 	return r.Terminals, err
 }
 
@@ -86,6 +86,6 @@ func (o *Orca) Reachable(ctx context.Context) bool {
 			Reachable bool `json:"reachable"`
 		} `json:"runtime"`
 	}
-	raw, err := o.call(ctx, localEnv, listTimeout, "status")
+	raw, err := o.call(ctx, listTimeout, "status")
 	return err == nil && json.Unmarshal(raw, &r) == nil && r.Runtime.Reachable
 }

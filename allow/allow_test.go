@@ -44,7 +44,7 @@ func TestStart(t *testing.T) {
 		{"escape with dots", abs("/Users/ada/work/../secret"), "claude", "", "no repo"},
 		{"relative path", "Projects/app", "claude", "", "no repo"},
 		{"agent", abs("/Users/ada/Projects/app"), "opencode", "", "agent opencode"},
-		{"environment", abs("/Users/ada/Projects/app"), "claude", "studio", "environment studio"},
+		{"environment is ignored", abs("/Users/ada/Projects/app"), "claude", "studio", ""},
 	}
 	for _, c := range cases {
 		err := list.Check(start(c.repo, c.agent, c.env))
@@ -104,13 +104,10 @@ func TestSessionOrders(t *testing.T) {
 		if err := list.Check(wire.WorkOrder{Runtime: "orca", Payload: p}); err != nil {
 			t.Errorf("%s: %v", p.Op(), err)
 		}
-		bad := wire.WorkOrder{Runtime: "orca", Payload: wire.StopPayload{Session: session("studio")}}
-		if err := list.Check(bad); err == nil {
-			t.Errorf("%s: unknown environment passed", p.Op())
-		}
 	}
-	if err := list.Check(wire.WorkOrder{Runtime: "orca", Payload: wire.HistoryPayload{Session: session("studio")}}); err == nil {
-		t.Error("history: unknown environment passed")
+	// The account of a session is not an environment any more.
+	if err := list.Check(wire.WorkOrder{Runtime: "orca", Payload: wire.HistoryPayload{Session: session("studio")}}); err != nil {
+		t.Errorf("history: %v", err)
 	}
 }
 
