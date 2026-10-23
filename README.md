@@ -13,6 +13,8 @@ There are two runtimes:
 - `orca` starts agent sessions in Orca workspaces, reads them, sends text to them and closes them. The daemon has it when the Orca CLI is on the machine. For `sessionHistory`, the daemon finds the transcript of the agent through `orca search`. See [History](#history).
 - `oversire` runs agent sessions without Orca. See [runtime:oversire](#runtimeoversire).
 
+The daemon drives only the runtimes on its own machine. To add a runtime, see [docs/adding-a-runtime.md](docs/adding-a-runtime.md).
+
 The executable inside `OverSire.app` is also named `oversire`. It is not on PATH, so the names do not clash.
 
 ## Install
@@ -248,7 +250,7 @@ An app of the group can give work orders to the daemon without the cloud hub. Th
 
 ### Runtimes
 
-The daemon owns the agent runtimes of this machine: `oversire`, and `orca` when the Orca CLI is on the machine. The app talks only to daemons, never to a runtime. The bodies are in `contract/schema/daemon.json`. Start, stop, read, send and history go through the direct orders.
+The daemon owns the agent runtimes of this machine: `oversire`, and `orca` when the Orca CLI is on the machine. The app talks only to daemons, never to a runtime. The bodies are in `contract/schema/daemon.json`. A new runtime needs no app change: see [docs/adding-a-runtime.md](docs/adding-a-runtime.md). Start, stop, read, send and history go through the direct orders.
 
 | Route | What it does |
 |---|---|
