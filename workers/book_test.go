@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -106,7 +107,7 @@ func (g *rig) call(t *testing.T, method, path string, body, out any) int {
 	return res.StatusCode
 }
 
-var start = wire.WorkerStart{Spec: "Enhance it", Title: "Enhance TREBI-9", Path: "/w", Agent: "claude"}
+var start = wire.WorkerStart{Spec: "Enhance it", Title: "Enhance TREBI-9", Path: filepath.Join(os.TempDir(), "w"), Agent: "claude"}
 
 func TestWorkerLife(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "workers.json")

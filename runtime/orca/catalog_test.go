@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -24,6 +25,7 @@ func TestProbe(t *testing.T) {
 	if d := o.Probe(context.Background()); d.Reachable || d.Error != "Orca is not running." {
 		t.Fatalf("down %#v", d)
 	}
+	o.exe = filepath.Join(os.TempDir(), "orca")
 	o.stat = func(string) (os.FileInfo, error) { return nil, os.ErrNotExist }
 	n := len(r.calls)
 	if d := o.Probe(context.Background()); d.Installed || d.Reachable || len(r.calls) != n {

@@ -202,7 +202,7 @@ func TestAPIFiles(t *testing.T) {
 	if code := call(t, srv, "POST", "/v1/files", body, &res); code != 200 || len(res.Paths) != 2 {
 		t.Fatal(code, res)
 	}
-	if !strings.HasPrefix(res.Paths[0], dir+"/") || filepath.Base(res.Paths[1]) != "notes.txt" || filepath.Dir(res.Paths[0]) != filepath.Dir(res.Paths[1]) {
+	if !strings.HasPrefix(res.Paths[0], dir+string(filepath.Separator)) || filepath.Base(res.Paths[1]) != "notes.txt" || filepath.Dir(res.Paths[0]) != filepath.Dir(res.Paths[1]) {
 		t.Fatal(res.Paths)
 	}
 	if b, err := os.ReadFile(res.Paths[1]); err != nil || string(b) != "hi" {
