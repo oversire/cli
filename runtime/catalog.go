@@ -18,6 +18,7 @@ const (
 	CapRemoveWorkspace = "removeWorkspace"
 	CapWorkspaces      = "workspaces"
 	CapWorkers         = "workers"
+	CapSessionStream   = "sessionStream"
 )
 
 // Capabilities are the parts that rt has. Each runtime takes files: the daemon writes them, not the runtime.
@@ -35,6 +36,9 @@ func Capabilities(rt Runtime) []string {
 	if _, ok := rt.(Supervisor); ok {
 		caps = append(caps, CapWorkers)
 	}
+	if _, ok := rt.(Streamer); ok {
+		caps = append(caps, CapSessionStream)
+	}
 	return caps
 }
 
@@ -51,6 +55,10 @@ func (r *Registry) Status(ctx context.Context) []wire.DaemonRuntime {
 		d.Capabilities = []string{}
 		if d.Reachable {
 			d.Capabilities = Capabilities(rt)
+			if ss, ok := rt.(StreamStater); ok {
+				st := ss.StreamState()
+				d.Stream = &st
+			}
 		}
 		out[i] = d
 	})

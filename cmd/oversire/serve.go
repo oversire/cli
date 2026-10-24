@@ -24,6 +24,7 @@ import (
 	"github.com/oversire/cli/server"
 	"github.com/oversire/cli/sessions"
 	homestore "github.com/oversire/cli/store"
+	"github.com/oversire/cli/term"
 	"github.com/oversire/cli/update"
 	"github.com/oversire/cli/wire"
 	"github.com/oversire/cli/workers"
@@ -127,6 +128,9 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	runtimeAPI.Log = c.log
 	srv.Handle(runtimeAPI.Routes()...)
 	srv.Handle(workerBook.Routes()...)
+	streams := term.NewAPI(book, reg, time.Now)
+	streams.Log = c.log
+	srv.Handle(streams.Routes()...)
 	direct := orders.NewDirect(runner, func(m any) { srv.Notify(false, m) }, time.Now)
 	direct.Log = c.log
 	srv.Handle(direct.Routes()...)
