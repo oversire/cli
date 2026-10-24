@@ -172,6 +172,7 @@ func (m *Manager) do(ctx context.Context, exe string, args ...string) error {
 }
 
 // LaunchdPlist restarts the daemon after a failed exit, at most each 30 s.
+// The process type is Standard: macOS throttles a Background job and its children, and the Orca CLI then times out.
 func LaunchdPlist(label, exe, logPath string) string {
 	return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -192,7 +193,7 @@ func LaunchdPlist(label, exe, logPath string) string {
 	<key>ThrottleInterval</key>
 	<integer>30</integer>
 	<key>ProcessType</key>
-	<string>Background</string>
+	<string>Standard</string>
 	<key>StandardOutPath</key>
 	<string>` + xmlEscape(logPath) + `</string>
 	<key>StandardErrorPath</key>

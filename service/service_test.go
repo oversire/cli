@@ -42,6 +42,7 @@ func TestLaunchdPlist(t *testing.T) {
 		"<key>RunAtLoad</key>\n\t<true/>",
 		"<key>KeepAlive</key>\n\t<true/>",
 		"<key>ThrottleInterval</key>\n\t<integer>30</integer>",
+		"<key>ProcessType</key>\n\t<string>Standard</string>",
 		"<string>/Users/ada/Library/Logs/oversire-daemon.log</string>",
 	} {
 		if !strings.Contains(p, want) {

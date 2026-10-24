@@ -40,6 +40,13 @@ func (c *cli) registry(ov runtime.Runtime) *runtime.Registry {
 }
 
 func (c *cli) run(ctx context.Context) error {
+	if goruntime.GOOS == "darwin" {
+		if p := proc.LoginPath(ctx, os.Getenv("SHELL")); p != "" {
+			os.Setenv("PATH", proc.MergePath(p, os.Getenv("PATH")))
+		} else {
+			c.log.Warn("no PATH from the login shell; agent CLIs out of the PATH of launchd are not found")
+		}
+	}
 	cfg, err := c.setup(ctx)
 	if err != nil {
 		return err
