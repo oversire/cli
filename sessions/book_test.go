@@ -180,6 +180,29 @@ func TestExpiry(t *testing.T) {
 	}
 }
 
+func TestOrcaKeepsDone(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sessions.json")
+	b, l := newBook(path)
+	b.Apply(orca("s", 0, wire.PhaseDone))
+	b.Apply(orca("s", DoneTTL, wire.PhaseDone))
+	b.Prune(at(DoneTTL + time.Hour))
+	if _, ok := b.Get("s"); !ok {
+		t.Fatal("pruned while Orca reports it")
+	}
+	if err := b.Save(true); err != nil {
+		t.Fatal(err)
+	}
+	c := NewBook("mini", path, nil, func() time.Time { return at(3 * DoneTTL) })
+	c.Prune(at(3 * DoneTTL))
+	if _, ok := c.Get("s"); !ok {
+		t.Fatal("pruned at load, before the first Orca poll")
+	}
+	b.Prune(at(2 * DoneTTL))
+	if _, ok := b.Get("s"); ok || !strings.HasSuffix(l.actions(), "removed") {
+		t.Fatalf("stays after Orca stops to report it: %q", l.actions())
+	}
+}
+
 func TestOrder(t *testing.T) {
 	b, _ := newBook("")
 	b.Apply(orca("a", 0, wire.PhaseWorking))

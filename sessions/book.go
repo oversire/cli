@@ -265,12 +265,17 @@ func (b *Book) send(s wire.DaemonSession, action string, now time.Time) {
 }
 
 // Prune removes expired sessions: done or failed for DoneTTL, and ended cli sessions after CLIEndTTL.
+// A done session that Orca still reports stays: its DoneTTL starts at the last Orca poll.
 func (b *Book) Prune(now time.Time) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	for _, e := range b.byID {
 		done := e.s.State == wire.PhaseDone || e.s.State == wire.PhaseFailed
-		if done && !now.Before(e.s.StateSince.Add(DoneTTL)) || !e.ended.IsZero() && !now.Before(e.ended.Add(CLIEndTTL)) {
+		since := e.s.StateSince
+		if e.lastOrca.After(since) {
+			since = e.lastOrca
+		}
+		if done && !now.Before(since.Add(DoneTTL)) || !e.ended.IsZero() && !now.Before(e.ended.Add(CLIEndTTL)) {
 			b.remove(e, now)
 		}
 	}
@@ -378,7 +383,12 @@ func (b *Book) load() {
 			continue
 		}
 		s.Machine = b.machine
-		b.byID[s.ID] = &entry{s: s, sent: s}
+		e := &entry{s: s, sent: s}
+		// Give the first Orca poll time to report the session again.
+		if containsStr(s.Sources, string(SourceOrca)) {
+			e.lastOrca = b.clock()
+		}
+		b.byID[s.ID] = e
 	}
 }
 
