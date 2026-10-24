@@ -49,6 +49,8 @@ type TurnSource interface {
 	// Turns gives the turns after seq after, then the new turns. The channel closes when ctx is done or the session ends.
 	Turns(ctx context.Context, after int) ([]wire.SessionTurn, <-chan wire.SessionTurn, error)
 	Send(ctx context.Context, text string) error
+	// Interrupt stops the current turn. The session stays open.
+	Interrupt(ctx context.Context) error
 }
 
 // Opener gives a new source for each viewer of a session.

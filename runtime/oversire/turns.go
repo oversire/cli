@@ -303,3 +303,11 @@ func (c chatView) digestTurns(ctx context.Context, after int) ([]wire.SessionTur
 func (c chatView) Send(ctx context.Context, text string) error {
 	return c.rt.Send(ctx, wire.SendPayload{Session: c.ref, Text: text})
 }
+
+func (c chatView) Interrupt(ctx context.Context) error {
+	s, err := c.rt.session(c.ref)
+	if err != nil {
+		return err
+	}
+	return s.interrupt(ctx)
+}

@@ -92,6 +92,8 @@ type StreamSend struct {
 	Text string `json:"text"`
 }
 
+type StreamInterrupt struct{}
+
 // Daemon frames.
 
 type StreamAttached struct {
@@ -128,17 +130,18 @@ type StreamError struct {
 	Message string `json:"message"`
 }
 
-func (StreamAttach) Type() string   { return "attach" }
-func (StreamAck) Type() string      { return "ack" }
-func (StreamControl) Type() string  { return "control" }
-func (StreamRelease) Type() string  { return "release" }
-func (StreamSend) Type() string     { return "send" }
-func (StreamAttached) Type() string { return "attached" }
-func (StreamResized) Type() string  { return "resized" }
-func (StreamLease) Type() string    { return "lease" }
-func (StreamTurns) Type() string    { return "turns" }
-func (StreamEnded) Type() string    { return "ended" }
-func (StreamError) Type() string    { return "error" }
+func (StreamAttach) Type() string    { return "attach" }
+func (StreamAck) Type() string       { return "ack" }
+func (StreamControl) Type() string   { return "control" }
+func (StreamRelease) Type() string   { return "release" }
+func (StreamSend) Type() string      { return "send" }
+func (StreamInterrupt) Type() string { return "interrupt" }
+func (StreamAttached) Type() string  { return "attached" }
+func (StreamResized) Type() string   { return "resized" }
+func (StreamLease) Type() string     { return "lease" }
+func (StreamTurns) Type() string     { return "turns" }
+func (StreamEnded) Type() string     { return "ended" }
+func (StreamError) Type() string     { return "error" }
 
 // DecodeClientFrame reads one JSON frame from a client. An unknown type is an error.
 func DecodeClientFrame(data []byte) (Message, error) {
@@ -157,6 +160,8 @@ func DecodeClientFrame(data []byte) (Message, error) {
 		return decodeAs[StreamRelease](body)
 	case "send":
 		return decodeAs[StreamSend](body)
+	case "interrupt":
+		return decodeAs[StreamInterrupt](body)
 	}
 	return nil, fmt.Errorf("wire: unknown frame type %q", kind)
 }

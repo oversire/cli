@@ -233,3 +233,22 @@ var (
 	_ runtime.Streamer     = (*Runtime)(nil)
 	_ runtime.StreamStater = (*Runtime)(nil)
 )
+
+func TestChatInterrupt(t *testing.T) {
+	f := setup(t, tools, Options{})
+	ref := f.launch(t, "APP-10", runtime.Order{ID: "o1"})
+	f.rec.wait(t, ref.ID, wire.SessionWaitingInput)
+	src, err := f.rt.Chat(context.Background(), wire.DaemonSession{ID: ref.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := src.Interrupt(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.rt.Stop(context.Background(), ref); err != nil {
+		t.Fatal(err)
+	}
+	if err := src.Interrupt(context.Background()); err == nil {
+		t.Fatal("interrupt of an ended session")
+	}
+}

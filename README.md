@@ -287,6 +287,7 @@ The chat view:
 - `attach` carries `after`, the last turn seq that the client has. The daemon sends the turns after it in `turns` frames of at most 64 KB of JSON, then the new turns live.
 - A tool turn that changes state comes again with the same seq. The client keeps the last one.
 - `send` `{text}` gives text to the agent, on the same path as a `sessionSend` order.
+- `interrupt` stops the current turn of the agent. The session stays open. On a terminal view, `interrupt` writes Ctrl+C.
 
 `ended` `{reason}` (`exited`, `removed` or `closed`) comes before the daemon closes the socket. The app does not connect again after it.
 

@@ -287,6 +287,14 @@ func (v *viewer) terminalFrame(ctx context.Context, src Source, caps Caps, m wir
 		if err := src.Write(ctx, []byte(f.Text)); err != nil {
 			v.fail(ctx, "sourceFailed", err.Error())
 		}
+	case wire.StreamInterrupt:
+		if !caps.Writable {
+			v.fail(ctx, "notWritable", "This view cannot type into the terminal.")
+			return
+		}
+		if err := src.Write(ctx, []byte{0x03}); err != nil {
+			v.fail(ctx, "sourceFailed", err.Error())
+		}
 	default:
 		v.fail(ctx, "badFrame", "The daemon does not take a "+m.Type()+" frame now.")
 	}
@@ -316,12 +324,17 @@ func (v *viewer) chat(ctx context.Context, src TurnSource, after int) error {
 		case <-v.inputs:
 			v.fail(ctx, "notWritable", "The chat view takes text in a send frame.")
 		case m := <-v.frames:
-			f, ok := m.(wire.StreamSend)
-			if !ok {
-				v.fail(ctx, "badFrame", "The chat view takes only send frames.")
+			var err error
+			switch f := m.(type) {
+			case wire.StreamSend:
+				err = src.Send(ctx, f.Text)
+			case wire.StreamInterrupt:
+				err = src.Interrupt(ctx)
+			default:
+				v.fail(ctx, "badFrame", "The chat view takes only send and interrupt frames.")
 				continue
 			}
-			if err := src.Send(ctx, f.Text); err != nil {
+			if err != nil {
 				v.fail(ctx, "sourceFailed", err.Error())
 			}
 		case t, ok := <-live:

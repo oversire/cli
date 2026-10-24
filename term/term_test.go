@@ -86,6 +86,7 @@ type fakeTurns struct {
 	mu      sync.Mutex
 	after   int
 	sent    []string
+	stops   int
 }
 
 func (f *fakeTurns) Turns(_ context.Context, after int) ([]wire.SessionTurn, <-chan wire.SessionTurn, error) {
@@ -99,6 +100,13 @@ func (f *fakeTurns) Turns(_ context.Context, after int) ([]wire.SessionTurn, <-c
 		}
 	}
 	return out, f.live, nil
+}
+
+func (f *fakeTurns) Interrupt(context.Context) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.stops++
+	return nil
 }
 
 func (f *fakeTurns) Send(_ context.Context, text string) error {
@@ -450,6 +458,8 @@ func TestChat(t *testing.T) {
 	}
 	c.json(wire.StreamSend{Text: "stop"})
 	waitFor(t, func() bool { ft.mu.Lock(); defer ft.mu.Unlock(); return len(ft.sent) == 1 })
+	c.json(wire.StreamInterrupt{})
+	waitFor(t, func() bool { ft.mu.Lock(); defer ft.mu.Unlock(); return ft.stops == 1 })
 	close(ft.live)
 	if e, ok := c.next().msg.(wire.StreamEnded); !ok || e.Reason != "exited" {
 		t.Fatalf("ended %+v", e)

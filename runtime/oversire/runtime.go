@@ -508,6 +508,19 @@ func (s *session) say(ctx context.Context, text string) error {
 	return nil
 }
 
+func (s *session) interrupt(ctx context.Context) error {
+	s.mu.Lock()
+	aw, state := s.aw, s.info.State
+	s.mu.Unlock()
+	if state.Ended() {
+		return fmt.Errorf("The session %s has ended.", s.id)
+	}
+	if aw == nil {
+		return fmt.Errorf("The session %s has not started yet.", s.id)
+	}
+	return aw.Interrupt(ctx)
+}
+
 func (s *session) stop(ctx context.Context) error {
 	s.mu.Lock()
 	if s.info.State.Ended() {
