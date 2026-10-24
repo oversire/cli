@@ -24,7 +24,9 @@ func (s *streamer) Chat(_ context.Context, d wire.DaemonSession) (term.TurnSourc
 	s.opened = d.ID
 	return nil, nil
 }
-func (s *streamer) StreamState() wire.RuntimeStream { return wire.RuntimeStream{State: wire.StreamLive} }
+func (s *streamer) StreamState() wire.RuntimeStream {
+	return wire.RuntimeStream{State: wire.StreamLive}
+}
 
 func TestRegistryOpensTheViewOfTheRuntime(t *testing.T) {
 	st := &streamer{}

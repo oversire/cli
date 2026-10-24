@@ -142,11 +142,16 @@ func (rt *Runtime) Start(ctx context.Context, o runtime.Order, r wire.LaunchRequ
 	if err != nil {
 		return none, err
 	}
+	turns, err := openTurns(rt.turnsPath(id))
+	if err != nil {
+		_ = log.Close()
+		return none, err
+	}
 	ref := wire.SessionRef{Workspace: wire.WorkspaceRef{Account: wire.AccountID{Provider: ID, ID: Local}, ID: filepath.Base(repo) + "/" + key}, ID: id}
 	now := rt.now().UTC()
 	s := &session{
 		id: id, rt: rt, req: r, dir: dir, ended: make(chan struct{}),
-		log:  &transcript{file: log},
+		log: &transcript{file: log}, turns: turns,
 		info: wire.RunnerSession{ID: id, Runner: rt.opts.Runner, Session: ref, Order: o.ID, Agent: r.Agent, Repo: r.Repo, Branch: branch, Item: r.Item, State: wire.SessionQueued, StartedAt: now, UpdatedAt: now},
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -301,6 +306,7 @@ type session struct {
 	info    wire.RunnerSession
 	aw      agentwire.Session
 	log     *transcript
+	turns   *turnLog
 	partial string
 	last    string
 	lastErr string
@@ -349,6 +355,7 @@ func (s *session) run(ctx context.Context, expires time.Time) {
 	s.aw = aw
 	stopped := s.stopped
 	s.log.add("> " + s.req.Prompt)
+	s.addTurn(wire.RoleUser, s.req.Prompt)
 	s.mu.Unlock()
 	if stopped {
 		go aw.Close(ctx)
@@ -394,9 +401,13 @@ func (s *session) handle(ev agentwire.Event) {
 			s.change(wire.SessionWorking)
 		}
 	case agentwire.EventTool:
-		if ev.Tool != nil && ev.Tool.Status == "started" {
+		if ev.Tool == nil {
+			break
+		}
+		if ev.Tool.Status == "started" {
 			s.log.add("· " + ev.Tool.Name + " " + clip(ev.Tool.Input, 200))
 		}
+		s.turns.tool(ev.Tool, s.rt.now().UTC())
 	case agentwire.EventPermission:
 		if ev.Permission == nil {
 			break
@@ -429,6 +440,7 @@ func (s *session) handle(ev agentwire.Event) {
 			s.lastErr = ev.Code
 		}
 		s.log.add("! " + s.lastErr)
+		s.addTurn(wire.RoleSystem, s.lastErr)
 	case agentwire.EventExit:
 		// The last classified error tells more than the exit status.
 		reason := s.failure
@@ -445,13 +457,19 @@ func (s *session) saveMeta() {
 	_ = os.WriteFile(s.rt.metaPath(s.id), data, 0o600)
 }
 
-// say1 keeps one assistant text block.
+// addText keeps one assistant text block.
 func (s *session) addText(text string) {
 	if strings.TrimSpace(text) == "" {
 		return
 	}
 	s.last = text
 	s.log.add(text)
+	s.addTurn(wire.RoleAssistant, text)
+}
+
+// addTurn adds a turn to the chat view. Call it with s.mu held.
+func (s *session) addTurn(role wire.TurnRole, text string) {
+	s.turns.add(wire.SessionTurn{Role: role, At: s.rt.now().UTC(), Text: text})
 }
 
 func (s *session) flushPartial() {
@@ -478,6 +496,7 @@ func (s *session) say(ctx context.Context, text string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.log.add("> " + text)
+	s.addTurn(wire.RoleUser, text)
 	if s.info.State == wire.SessionWaitingInput {
 		s.change(wire.SessionWorking)
 	}
@@ -544,9 +563,13 @@ func (s *session) finish(reason string) {
 		state = wire.SessionFailed
 		s.info.Error = reason
 		s.log.add("! " + reason)
+		if reason != s.lastErr {
+			s.addTurn(wire.RoleSystem, reason)
+		}
 	}
 	s.change(state)
 	s.log.close()
+	s.turns.close()
 	s.cancel()
 	close(s.ended)
 	go s.reportPaths()
