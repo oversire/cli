@@ -391,7 +391,12 @@ func (s *session) handle(ev agentwire.Event) {
 		s.partial += ev.Text
 		return
 	}
-	s.flushPartial()
+	// The full block repeats its deltas (claude, codex). Keep only the deltas after it.
+	if rest, ok := strings.CutPrefix(s.partial, ev.Text); ok && ev.Type == agentwire.EventAssistant && ev.Text != "" {
+		s.partial = rest
+	} else {
+		s.flushPartial()
+	}
 	switch ev.Type {
 	case agentwire.EventAssistant:
 		s.addText(ev.Text)

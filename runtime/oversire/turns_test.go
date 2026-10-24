@@ -147,6 +147,33 @@ func TestChatTurns(t *testing.T) {
 	equal(t, all, brief{7, wire.RoleSystem, "x"})
 }
 
+func TestChatDeltasThenFullBlock(t *testing.T) {
+	f := setup(t, tools, Options{})
+	ref := f.launch(t, "APP-9", runtime.Order{ID: "o1"})
+	f.rec.wait(t, ref.ID, wire.SessionWaitingInput)
+	f.rt.mu.Lock()
+	s := f.rt.sessions[ref.ID]
+	f.rt.mu.Unlock()
+	for _, ev := range []agentwire.Event{
+		{Type: agentwire.EventAssistant, Text: "Hel", Delta: true},
+		{Type: agentwire.EventAssistant, Text: "lo.", Delta: true},
+		{Type: agentwire.EventAssistant, Text: "Hello."},
+		{Type: agentwire.EventAssistant, Text: "Only", Delta: true},
+		{Type: agentwire.EventResult},
+	} {
+		s.handle(ev)
+	}
+	src, err := f.rt.Chat(context.Background(), wire.DaemonSession{ID: ref.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	history, _, err := src.Turns(context.Background(), 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	equal(t, history, brief{4, wire.RoleAssistant, "Hello."}, brief{5, wire.RoleAssistant, "Only"})
+}
+
 func TestChatClipsTools(t *testing.T) {
 	l, err := openTurns(t.TempDir() + "/s-1.turns.jsonl")
 	if err != nil {
