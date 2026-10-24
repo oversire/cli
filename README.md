@@ -262,6 +262,36 @@ The daemon owns the agent runtimes of this machine: `oversire`, and `orca` when 
 | `POST /v1/files` | Body `WorkspaceFiles` (1 to 20 files, 25 MB together, base64 data). Plain file names only: no `/`, no leading dot, no two files with the same name. The daemon writes the files into a new folder `<data>/files/<id>/` and answers `WorkspaceFilesResult` `{paths}`. It removes the folders older than 7 days. |
 | `POST /v1/reveal` | Loopback only. Body: a `SessionRef`. Shows the terminal in the runtime UI, and answers 204. 404: no such runtime or session. 501: the runtime cannot show it. |
 
+### Session stream
+
+`GET /v1/sessions/{id}/stream` (member access) is the live view of one session: a WebSocket to the daemon of the machine of the session. The app uses it for the Terminal and Chat cards of the Session tab. The frames are in `contract/schema/session-stream.json`. A request with an `Origin` header gets 403: a web page must not reach a terminal.
+
+The client sends `attach` first, with `view` `terminal` or `chat`. The daemon answers `attached` with `source`, `cols`, `rows`, `writable`, `resizable` and, for a text-only view, the `reason`. A session that the daemon does not know gets 404. A view that the session does not have gets an `error` frame with code `unsupported`.
+
+| `source` | Sessions | What the client gets |
+|---|---|---|
+| `stream` | A runtime with a live terminal | The live bytes of the terminal. The client can take the size. |
+| `poll` | Orca | The screen as text, read each 1 s with `orca terminal read --screen`. No color, not resizable. Keys go through `orca terminal send`. Five failed reads in a row end the view. |
+| `wire` | `oversire` | The turns of the chat view. |
+
+The terminal view:
+
+- Binary frames are op (1 byte), seq (8 bytes, big endian) and data. Op 1 is a snapshot (a full repaint in ANSI), op 2 is output, op 3 is input from the client.
+- The seq of a daemon frame is the byte count of all binary data on this socket. The client acks the last seq that it drew. The app acks each 64 KiB and each 30 s.
+- The daemon stops at 512 KiB that are not acked. A viewer that is 5 s late gets a new snapshot. Each attach and each resize also give a snapshot.
+- `control` `{cols, rows}` takes the size, and `release` gives it back to the runtime UI. One viewer holds the size. `lease` tells each viewer the holder: `you`, `other`, `desktop` or `none`. A holder with no input for 10 min loses the size.
+- The daemon pings each 30 s. A write that takes more than 10 s closes the socket.
+
+The chat view:
+
+- `attach` carries `after`, the last turn seq that the client has. The daemon sends the turns after it in `turns` frames of at most 64 KB of JSON, then the new turns live.
+- A tool turn that changes state comes again with the same seq. The client keeps the last one.
+- `send` `{text}` gives text to the agent, on the same path as a `sessionSend` order.
+
+`ended` `{reason}` (`exited`, `removed` or `closed`) comes before the daemon closes the socket. The app does not connect again after it.
+
+The `oversire` runtime writes the turns of each session to `<data>/sessions/<id>.turns.jsonl`. A tool input is clipped to 200 characters, and a tool result to 2000. An old session with no turn log gets its turns from the transcript of the harness.
+
 ### Workers
 
 A worker is a supervised agent session for a short job, for example the intake Enhance of the app. It runs in the Orca of this machine. The daemon keeps one quiet coordinator terminal (`oversire-coordinator`) and its Orca Run. Each worker sends its result to the Run in a `worker_done`. The bodies are `WorkerStart`, `Worker` and `WorkerState` of `contract/schema/daemon.json`.
@@ -335,6 +365,7 @@ The layout:
 | `wire` | The Go types of the wire contract. |
 | `hub` | The WebSocket client and the journal of finished orders. |
 | `ask` | The route `POST /v1/sessions/{id}/ask`: it sends a question to a session and waits for the turn end. |
+| `term` | The route `GET /v1/sessions/{id}/stream`: the viewers, the acks, the size lease and the `Source` and `TurnSource` interfaces of the runtimes. |
 | `orders` | The one run path of each order (`Runner`), and the direct orders from the apps of the group (`Direct`). |
 | `runtime` | The `Runtime` interface, the registry and the runtime routes (`API`). `runtime/orca` is the Orca driver for the local Orca. `runtime/oversire` is the agent-wire driver. |
 | `digest` | The transcript readers that make a `SessionDigest`. |
