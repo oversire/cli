@@ -12,6 +12,7 @@ import (
 )
 
 func TestLoggedWritesAFailureOnce(t *testing.T) {
+	unix(t)
 	var buf bytes.Buffer
 	l := NewLogged(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
 	up := filepath.Join(t.TempDir(), "up")
@@ -68,6 +69,7 @@ func TestShortArgs(t *testing.T) {
 }
 
 func TestLoggedKilledHasTheSignal(t *testing.T) {
+	unix(t)
 	var buf bytes.Buffer
 	l := NewLogged(slog.New(slog.NewTextHandler(&buf, nil)))
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
