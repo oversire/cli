@@ -1,0 +1,11 @@
+{
+  "seq": 7,
+  "role": "tool",
+  "at": "2026-10-23T18:01:00Z",
+  "text": "",
+  "tool": {
+    "name": "Read",
+    "status": "running",
+    "input": "Contract/schema/daemon.json"
+  }
+}

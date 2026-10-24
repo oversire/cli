@@ -1,0 +1,34 @@
+{
+  "runtimes": [
+    {
+      "id": "orca",
+      "name": "Orca",
+      "installed": true,
+      "reachable": true,
+      "version": "1.4.237",
+      "capabilities": [
+        "sessionInput",
+        "sessionTail",
+        "sessionStream"
+      ],
+      "stream": {
+        "state": "textOnly",
+        "reason": "Pairing failed: Orca refused the device key."
+      }
+    },
+    {
+      "id": "oversire",
+      "name": "OverSire",
+      "installed": true,
+      "reachable": true,
+      "capabilities": [
+        "sessionInput",
+        "sessionTail",
+        "sessionStream"
+      ],
+      "stream": {
+        "state": "live"
+      }
+    }
+  ]
+}

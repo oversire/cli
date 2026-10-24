@@ -347,9 +347,20 @@
         "reachable": { "description": "The runtime answered its last status call.", "type": "boolean" },
         "version": { "type": "string" },
         "error": { "description": "Why the runtime is not reachable. Text for the user.", "type": "string" },
-        "capabilities": { "description": "The same raw values as Capability of the app, for example sessionInput, reveal, hostFiles. Open set.", "type": "array", "items": { "type": "string", "minLength": 1 } }
+        "capabilities": { "description": "The same raw values as Capability of the app, for example sessionInput, reveal, hostFiles. sessionStream: GET /v1/sessions/{id}/stream works for the sessions of this runtime. Open set.", "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "stream": { "$ref": "#/$defs/RuntimeStream" }
       },
       "required": ["id", "name", "installed", "reachable", "capabilities"],
+      "additionalProperties": false
+    },
+    "RuntimeStream": {
+      "description": "The state of the live session stream of a runtime. live: live bytes. pairing: the daemon connects to the runtime now. textOnly: the daemon reads the screen as text, reason tells why. POST /v1/runtimes/{id}/retry (Member) connects again and gives the DaemonRuntime.",
+      "type": "object",
+      "properties": {
+        "state": { "enum": ["live", "pairing", "textOnly"] },
+        "reason": { "description": "Text for the user, for example Orca 1.3.9 is older than 1.4.200.", "type": "string" }
+      },
+      "required": ["state"],
       "additionalProperties": false
     },
     "DaemonRuntimesPage": {

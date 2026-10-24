@@ -1,0 +1,5 @@
+{
+  "type": "error",
+  "code": "notResizable",
+  "message": "This source cannot change the size of the terminal."
+}

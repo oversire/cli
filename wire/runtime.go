@@ -9,13 +9,29 @@ const ViaAskReply QuestionVia = "askReply"
 
 // DaemonRuntime is one agent runtime on the machine.
 type DaemonRuntime struct {
-	ID           string   `json:"id"`
-	Name         string   `json:"name"`
-	Installed    bool     `json:"installed"`
-	Reachable    bool     `json:"reachable"`
-	Version      string   `json:"version,omitempty"`
-	Error        string   `json:"error,omitempty"`
-	Capabilities []string `json:"capabilities"` // Capability raw values of the app
+	ID           string         `json:"id"`
+	Name         string         `json:"name"`
+	Installed    bool           `json:"installed"`
+	Reachable    bool           `json:"reachable"`
+	Version      string         `json:"version,omitempty"`
+	Error        string         `json:"error,omitempty"`
+	Capabilities []string       `json:"capabilities"` // Capability raw values of the app
+	Stream       *RuntimeStream `json:"stream,omitempty"`
+}
+
+// StreamState: live, pairing or textOnly.
+type StreamState string
+
+const (
+	StreamLive     StreamState = "live"
+	StreamPairing  StreamState = "pairing"
+	StreamTextOnly StreamState = "textOnly"
+)
+
+// RuntimeStream is the state of the live session stream of a runtime.
+type RuntimeStream struct {
+	State  StreamState `json:"state"`
+	Reason string      `json:"reason,omitempty"`
 }
 
 // DaemonRuntimesPage is the answer of GET /v1/runtimes.

@@ -1,0 +1,6 @@
+{
+  "type": "attach",
+  "view": "terminal",
+  "cols": 120,
+  "rows": 40
+}

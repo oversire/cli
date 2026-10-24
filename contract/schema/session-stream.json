@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oversire.dev/contract/session-stream.json",
+  "title": "OverSire session stream",
+  "description": "The live view of one agent session. Route: GET /v1/sessions/{id}/stream on the daemon of the machine of the session, a WebSocket with Member access. Text frames are JSON: StreamClientFrame from the client, StreamDaemonFrame from the daemon. Binary frames are op (1 byte) | seq (8 bytes, big endian, unsigned) | data. op 1: snapshot, a full repaint of the screen in ANSI. op 2: output bytes of the terminal. op 3: input bytes from the client (seq is 0, the daemon ignores it). In a daemon frame, seq is the byte count of all the binary data that the daemon sent on this socket, this frame included. The client acks the last seq that it has drawn. The daemon stops when 512 KiB are not acked. It sends a new snapshot to a viewer that is 5 s late. A terminal view gets a snapshot after each attach and after each resize.",
+  "x-oversire-schema": 1,
+  "$defs": {
+    "StreamView": {
+      "description": "terminal: the bytes of a terminal. chat: the turns of a session that has no terminal (oversire runtime).",
+      "enum": ["terminal", "chat"]
+    },
+    "StreamSource": {
+      "description": "stream: live bytes from the runtime. poll: the daemon reads the screen as text each 1 s (no color, not resizable). wire: turns from the agent-wire events (chat view).",
+      "enum": ["stream", "poll", "wire"]
+    },
+    "LeaseHolder": {
+      "description": "Who sets the size of the terminal. you: this viewer. other: another viewer. desktop: the runtime UI (Orca). none: nobody, the size of the runtime UI applies.",
+      "enum": ["you", "other", "desktop", "none"]
+    },
+    "TurnRole": {
+      "enum": ["user", "assistant", "tool", "system"]
+    },
+    "TurnTool": {
+      "description": "The tool call of a tool turn.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["running", "done", "failed"] },
+        "input": { "description": "The tool input, clipped to 200 characters.", "type": "string", "maxLength": 200 },
+        "summary": { "description": "The start of the result, clipped to 2000 characters.", "type": "string", "maxLength": 2000 }
+      },
+      "required": ["name", "status"],
+      "additionalProperties": false
+    },
+    "SessionTurn": {
+      "description": "One turn of the chat view. seq starts at 1 for each session and goes up by 1. A tool turn that changes state comes again with the same seq.",
+      "type": "object",
+      "properties": {
+        "seq": { "type": "integer", "minimum": 1 },
+        "role": { "$ref": "#/$defs/TurnRole" },
+        "at": { "type": "string", "format": "date-time" },
+        "text": { "description": "Markdown. Empty for a tool turn.", "type": "string" },
+        "tool": { "$ref": "#/$defs/TurnTool" }
+      },
+      "required": ["seq", "role", "at", "text"],
+      "additionalProperties": false
+    },
+    "StreamClientFrame": {
+      "description": "A JSON frame from the client to the daemon.",
+      "oneOf": [
+        {
+          "description": "The first frame. cols and rows: the size of the view, for a later control. after: the chat view sends the last turn seq that it has.",
+          "type": "object",
+          "properties": {
+            "type": { "const": "attach" },
+            "view": { "$ref": "#/$defs/StreamView" },
+            "cols": { "type": "integer", "minimum": 1 },
+            "rows": { "type": "integer", "minimum": 1 },
+            "after": { "type": "integer", "minimum": 0 }
+          },
+          "required": ["type", "view"],
+          "additionalProperties": false
+        },
+        {
+          "description": "The client drew all the binary data up to seq.",
+          "type": "object",
+          "properties": { "type": { "const": "ack" }, "seq": { "type": "integer", "minimum": 0 } },
+          "required": ["type", "seq"],
+          "additionalProperties": false
+        },
+        {
+          "description": "Take control: the terminal gets this size. Send it again when the view changes size.",
+          "type": "object",
+          "properties": {
+            "type": { "const": "control" },
+            "cols": { "type": "integer", "minimum": 1 },
+            "rows": { "type": "integer", "minimum": 1 }
+          },
+          "required": ["type", "cols", "rows"],
+          "additionalProperties": false
+        },
+        {
+          "description": "Give back the size to the runtime UI.",
+          "type": "object",
+          "properties": { "type": { "const": "release" } },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "description": "Text for the agent. The chat view uses it. It goes the same path as a sessionSend order.",
+          "type": "object",
+          "properties": { "type": { "const": "send" }, "text": { "type": "string", "minLength": 1 } },
+          "required": ["type", "text"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "StreamDaemonFrame": {
+      "description": "A JSON frame from the daemon to the client.",
+      "oneOf": [
+        {
+          "description": "The answer to attach. reason: why the source is poll, text for the user.",
+          "type": "object",
+          "properties": {
+            "type": { "const": "attached" },
+            "source": { "$ref": "#/$defs/StreamSource" },
+            "cols": { "type": "integer", "minimum": 0 },
+            "rows": { "type": "integer", "minimum": 0 },
+            "writable": { "description": "The client can send input.", "type": "boolean" },
+            "resizable": { "description": "The client can take control of the size.", "type": "boolean" },
+            "title": { "type": "string" },
+            "reason": { "type": "string" }
+          },
+          "required": ["type", "source", "cols", "rows", "writable", "resizable"],
+          "additionalProperties": false
+        },
+        {
+          "description": "The terminal has a new size. A snapshot comes next.",
+          "type": "object",
+          "properties": {
+            "type": { "const": "resized" },
+            "cols": { "type": "integer", "minimum": 1 },
+            "rows": { "type": "integer", "minimum": 1 }
+          },
+          "required": ["type", "cols", "rows"],
+          "additionalProperties": false
+        },
+        {
+          "description": "The size holder changed.",
+          "type": "object",
+          "properties": { "type": { "const": "lease" }, "holder": { "$ref": "#/$defs/LeaseHolder" } },
+          "required": ["type", "holder"],
+          "additionalProperties": false
+        },
+        {
+          "description": "Turns of the chat view, from seq from to seq to. One frame has at most 64 KB of JSON.",
+          "type": "object",
+          "properties": {
+            "type": { "const": "turns" },
+            "from": { "type": "integer", "minimum": 1 },
+            "to": { "type": "integer", "minimum": 1 },
+            "turns": { "type": "array", "items": { "$ref": "#/$defs/SessionTurn" } }
+          },
+          "required": ["type", "from", "to", "turns"],
+          "additionalProperties": false
+        },
+        {
+          "description": "The session or its terminal ended. The daemon closes the socket next. reason: exited, removed or closed. Open set.",
+          "type": "object",
+          "properties": { "type": { "const": "ended" }, "reason": { "type": "string", "minLength": 1 } },
+          "required": ["type", "reason"],
+          "additionalProperties": false
+        },
+        {
+          "description": "A frame failed. code: badFrame, notWritable, notResizable, sourceFailed. Open set. message: text for the user.",
+          "type": "object",
+          "properties": {
+            "type": { "const": "error" },
+            "code": { "type": "string", "minLength": 1 },
+            "message": { "type": "string" }
+          },
+          "required": ["type", "code", "message"],
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

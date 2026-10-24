@@ -1,0 +1,9 @@
+{
+  "type": "attached",
+  "source": "poll",
+  "cols": 160,
+  "rows": 48,
+  "writable": true,
+  "resizable": false,
+  "reason": "Orca 1.3.9 is older than 1.4.200."
+}

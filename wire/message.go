@@ -95,16 +95,7 @@ func Encode(m Message) ([]byte, error) {
 
 // DecodeMessage reads one message. A type that the runner does not know gives Unknown.
 func DecodeMessage(data []byte) (Message, error) {
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(data, &fields); err != nil {
-		return nil, err
-	}
-	var kind string
-	if err := json.Unmarshal(fields["type"], &kind); err != nil {
-		return nil, fmt.Errorf("wire: message has no type")
-	}
-	delete(fields, "type")
-	body, err := json.Marshal(fields)
+	kind, body, err := splitType(data)
 	if err != nil {
 		return nil, err
 	}
