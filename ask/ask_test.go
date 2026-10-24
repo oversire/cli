@@ -6,8 +6,10 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -254,9 +256,11 @@ func TestAskRefusals(t *testing.T) {
 func TestAskAccess(t *testing.T) {
 	g := newRig(t)
 	g.orca("pane-1", wire.PhaseDone, "old")
+	// A count, not the time: the clock of Windows is coarse, and two turns can get the same text.
+	var n atomic.Int32
 	g.screen.onSend = func() {
 		g.book.Apply(sessions.Patch{ID: "pane-1", Source: sessions.SourceHook, State: phase(wire.PhaseWorking)})
-		g.book.Apply(sessions.Patch{ID: "pane-1", Source: sessions.SourceHook, State: phase(wire.PhaseDone), LastMessage: str("hi " + time.Now().String())})
+		g.book.Apply(sessions.Patch{ID: "pane-1", Source: sessions.SourceHook, State: phase(wire.PhaseDone), LastMessage: str("hi " + strconv.Itoa(int(n.Add(1))))})
 	}
 	for _, h := range [][]string{nil, {"Authorization", "Bearer wrong"}} {
 		if code, _ := g.post(t, g.net.URL, "pane-1", `{"text":"x"}`, h...); code != http.StatusUnauthorized {
