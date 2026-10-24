@@ -16,6 +16,7 @@ import (
 const (
 	Daemon = "oversire.daemon" // the hub device token
 	Group  = "oversire.group"  // the group secret
+	Orca   = "oversire.orca"   // the Orca pairing code
 	Legacy = "oversire-runner" // the token of oversire-runner
 )
 

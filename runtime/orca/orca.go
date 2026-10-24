@@ -62,10 +62,18 @@ type Orca struct {
 
 	coordMu sync.Mutex
 	coord   *coordinator
+
+	pairing *Pairing // nil: the views are text only
 }
 
 func New(exe string, run Runner) *Orca {
 	return &Orca{exe: exe, run: run, stat: os.Stat, shellWait: 300 * time.Millisecond, digests: digest.ForUser, now: time.Now}
+}
+
+// WithPairing turns on the live view through a paired device.
+func (o *Orca) WithPairing(p *Pairing) *Orca {
+	o.pairing = p
+	return o
 }
 
 func (o *Orca) ID() string { return ID }

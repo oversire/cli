@@ -48,6 +48,8 @@ func (a *API) Routes() []server.Route {
 	return []server.Route{
 		{Pattern: "GET /v1/runtimes", Access: server.Member, Handle: a.runtimes},
 		{Pattern: "POST /v1/runtimes/{id}/retry", Access: server.Member, Handle: a.retry},
+		{Pattern: "POST /v1/runtimes/{id}/pair", Access: server.Member, Handle: a.pair},
+		{Pattern: "DELETE /v1/runtimes/{id}/pair", Access: server.Member, Handle: a.unpair},
 		{Pattern: "GET /v1/repos", Access: server.Member, Handle: a.repos},
 		{Pattern: "GET /v1/workspaces", Access: server.Member, Handle: a.workspaces},
 		{Pattern: "DELETE /v1/workspaces/{id}", Access: server.Member, Handle: a.removeWorkspace},
@@ -67,6 +69,35 @@ func (a *API) retry(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status(err), err.Error())
 		return
 	}
+	writeJSON(w, http.StatusOK, d)
+}
+
+func (a *API) pair(w http.ResponseWriter, r *http.Request) {
+	var p wire.RuntimePair
+	if err := decode(r, 256<<10, &p); err != nil || strings.TrimSpace(p.Link) == "" {
+		writeError(w, http.StatusBadRequest, "The body needs a pairing link.")
+		return
+	}
+	d, err := a.reg.Pair(r.Context(), r.PathValue("id"), p.Link)
+	if err != nil {
+		code := status(err)
+		if errors.As(err, new(ErrPair)) {
+			code = http.StatusBadRequest
+		}
+		writeError(w, code, err.Error())
+		return
+	}
+	a.Log.Info("runtime paired", "runtime", d.ID)
+	writeJSON(w, http.StatusOK, d)
+}
+
+func (a *API) unpair(w http.ResponseWriter, r *http.Request) {
+	d, err := a.reg.Unpair(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, status(err), err.Error())
+		return
+	}
+	a.Log.Info("runtime unpaired", "runtime", d.ID)
 	writeJSON(w, http.StatusOK, d)
 }
 

@@ -142,6 +142,44 @@ func TestAPIRetry(t *testing.T) {
 	}
 }
 
+type pairer struct {
+	retrier
+	link string
+}
+
+func (p *pairer) PairStream(_ context.Context, link string) error {
+	if link != "good" {
+		return errors.New("bad link")
+	}
+	p.link, p.tries = link, 1
+	return nil
+}
+func (p *pairer) UnpairStream(context.Context) { p.link, p.tries = "", 0 }
+
+func TestAPIPair(t *testing.T) {
+	rt := &pairer{}
+	srv, _ := newAPI(t, rt, &fake{})
+	var d wire.DaemonRuntime
+	if code := call(t, srv, "POST", "/v1/runtimes/cat/pair", wire.RuntimePair{Link: "good"}, &d); code != 200 || rt.link != "good" || d.Stream.State != wire.StreamLive {
+		t.Fatal(code, d)
+	}
+	if code := call(t, srv, "POST", "/v1/runtimes/cat/pair", wire.RuntimePair{Link: "bad"}, nil); code != 400 {
+		t.Fatal(code)
+	}
+	if code := call(t, srv, "POST", "/v1/runtimes/cat/pair", nil, nil); code != 400 {
+		t.Fatal("no link", code)
+	}
+	if code := call(t, srv, "DELETE", "/v1/runtimes/cat/pair", nil, &d); code != 200 || rt.link != "" || d.Stream.State != wire.StreamTextOnly {
+		t.Fatal(code, d)
+	}
+	if code := call(t, srv, "POST", "/v1/runtimes/"+(&fake{}).ID()+"/pair", wire.RuntimePair{Link: "good"}, nil); code != 501 {
+		t.Fatal("a runtime with no pairing", code)
+	}
+	if code := call(t, srv, "DELETE", "/v1/runtimes/nope/pair", nil, nil); code != 404 {
+		t.Fatal(code)
+	}
+}
+
 func TestAPIRepos(t *testing.T) {
 	srv, _ := newAPI(t, &fake{}, &catalog{})
 	var page wire.DaemonReposPage

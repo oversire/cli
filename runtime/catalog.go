@@ -62,6 +62,45 @@ func (r *Registry) Retry(ctx context.Context, id string) (wire.DaemonRuntime, er
 	return probe(ctx, rt), nil
 }
 
+// ErrPair is a link that did not pair.
+type ErrPair struct{ Err error }
+
+func (e ErrPair) Error() string { return e.Err.Error() }
+
+// Pair keeps the pairing link of runtime id, when it takes one, and gives its new state.
+func (r *Registry) Pair(ctx context.Context, id, link string) (wire.DaemonRuntime, error) {
+	sp, err := r.pairer(id)
+	if err != nil {
+		return wire.DaemonRuntime{}, err
+	}
+	if err := sp.PairStream(ctx, link); err != nil {
+		return wire.DaemonRuntime{}, ErrPair{err}
+	}
+	return probe(ctx, r.byID[id]), nil
+}
+
+// Unpair forgets the pairing of runtime id.
+func (r *Registry) Unpair(ctx context.Context, id string) (wire.DaemonRuntime, error) {
+	sp, err := r.pairer(id)
+	if err != nil {
+		return wire.DaemonRuntime{}, err
+	}
+	sp.UnpairStream(ctx)
+	return probe(ctx, r.byID[id]), nil
+}
+
+func (r *Registry) pairer(id string) (StreamPairer, error) {
+	rt, ok := r.byID[id]
+	if !ok {
+		return nil, ErrNoRuntime
+	}
+	sp, ok := rt.(StreamPairer)
+	if !ok {
+		return nil, ErrUnsupported
+	}
+	return sp, nil
+}
+
 func probe(ctx context.Context, rt Runtime) wire.DaemonRuntime {
 	d := wire.DaemonRuntime{ID: rt.ID(), Name: rt.ID(), Installed: true, Reachable: true}
 	if p, ok := rt.(Prober); ok {

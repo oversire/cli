@@ -23,6 +23,12 @@ type StreamRetrier interface {
 	RetryStream(ctx context.Context)
 }
 
+// StreamPairer keeps a pairing link for the live view, for POST and DELETE /v1/runtimes/{id}/pair.
+type StreamPairer interface {
+	PairStream(ctx context.Context, link string) error
+	UnpairStream(ctx context.Context)
+}
+
 // Terminal opens the terminal view in the runtime of the session. The registry is the term.Opener of the daemon.
 func (r *Registry) Terminal(ctx context.Context, s wire.DaemonSession) (term.Source, error) {
 	st, ok := r.byID[s.Runtime].(Streamer)

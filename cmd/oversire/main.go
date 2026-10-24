@@ -42,6 +42,7 @@ Usage:
   oversire group request-code | admit <machine> <code>
   oversire group remove <machine|deviceId> | home <machine> | rotate
   oversire join <host> <code>|-                        join the group of the member at host
+  oversire orca pair | unpair | status [--json]        pair the live Orca view (the link goes on stdin)
   oversire digest --harness claude --session <id or file> [--markers]
                   [--source S] [--earlier N] [--full N] [--max-chars N]
                                                        print the history digest of a session
@@ -132,6 +133,8 @@ func (c *cli) dispatch(ctx context.Context, args []string) error {
 		return c.join(ctx, rest)
 	case cmd == "hub" && sub == "pair":
 		return c.pair(ctx, rest[1:])
+	case cmd == "orca":
+		return c.orca(ctx, rest)
 	case cmd == "update":
 		return c.update(ctx)
 	case cmd == "version" || cmd == "--version" || cmd == "-v":

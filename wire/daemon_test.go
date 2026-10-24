@@ -41,6 +41,7 @@ func TestDaemonFixtures(t *testing.T) {
 	roundTrip[DaemonReposPage](t, "daemon-repos-page")
 	roundTrip[DaemonWorkspacesPage](t, "daemon-workspaces-page")
 	roundTrip[WorkspaceRemove](t, "workspace-remove")
+	roundTrip[RuntimePair](t, "runtime-pair")
 	roundTrip[WorkspaceRemoval](t, "workspace-removal")
 	roundTrip[WorkspaceFiles](t, "workspace-files")
 	roundTrip[WorkspaceFilesResult](t, "workspace-files-result")

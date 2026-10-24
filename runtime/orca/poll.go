@@ -31,11 +31,12 @@ type Poll struct {
 	o        *Orca
 	terminal string
 	every    time.Duration
+	reason   string
 
 	writeMu sync.Mutex // the keys go in order
 }
 
-// Terminal opens the text-only view of an Orca session. A session with no handle is found by its pane key.
+// Terminal opens the view of an Orca session: live when Orca is paired, else text only. A session with no handle is found by its pane key.
 func (o *Orca) Terminal(ctx context.Context, s wire.DaemonSession) (term.Source, error) {
 	h := s.Terminal
 	if h == "" {
@@ -49,7 +50,10 @@ func (o *Orca) Terminal(ctx context.Context, s wire.DaemonSession) (term.Source,
 		}
 		h = ts[i].Handle
 	}
-	return &Poll{o: o, terminal: h, every: PollEvery}, nil
+	if o.pairing != nil && o.pairing.Live(ctx) {
+		return newLive(o.pairing, h), nil
+	}
+	return &Poll{o: o, terminal: h, every: PollEvery, reason: o.pollReason()}, nil
 }
 
 // Chat: an Orca session has a terminal.
@@ -57,13 +61,45 @@ func (o *Orca) Chat(context.Context, wire.DaemonSession) (term.TurnSource, error
 	return nil, term.ErrNoView
 }
 
-// StreamState: the view of each Orca session is text only.
+// StreamState tells if the views are live. With no pairing store, they are text only.
 func (o *Orca) StreamState() wire.RuntimeStream {
-	return wire.RuntimeStream{State: wire.StreamTextOnly, Reason: PollReason}
+	if o.pairing == nil {
+		return wire.RuntimeStream{State: wire.StreamTextOnly, Reason: PollReason}
+	}
+	return o.pairing.State(context.Background())
+}
+
+func (o *Orca) pollReason() string {
+	if o.pairing == nil {
+		return PollReason
+	}
+	return o.pairing.State(context.Background()).Reason
+}
+
+// RetryStream dials the paired Orca again.
+func (o *Orca) RetryStream(ctx context.Context) {
+	if o.pairing != nil {
+		o.pairing.Retry(ctx)
+	}
+}
+
+// PairStream keeps a runtime pairing link from Orca › Settings.
+func (o *Orca) PairStream(ctx context.Context, link string) error {
+	if o.pairing == nil {
+		return errors.New("This daemon cannot keep an Orca pairing.")
+	}
+	return o.pairing.Pair(ctx, link)
+}
+
+// UnpairStream forgets the pairing.
+func (o *Orca) UnpairStream(ctx context.Context) {
+	if o.pairing != nil {
+		o.pairing.Unpair(ctx)
+	}
 }
 
 func (p *Poll) Caps() term.Caps {
-	return term.Caps{Source: wire.SourcePoll, Writable: true, Reason: PollReason}
+	return term.Caps{Source: wire.SourcePoll, Writable: true, Reason: p.reason}
 }
 
 func (p *Poll) Control(context.Context, *term.Viewport) error { return term.ErrNoView }

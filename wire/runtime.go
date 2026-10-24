@@ -30,8 +30,15 @@ const (
 
 // RuntimeStream is the state of the live session stream of a runtime.
 type RuntimeStream struct {
-	State  StreamState `json:"state"`
-	Reason string      `json:"reason,omitempty"`
+	State    StreamState `json:"state"`
+	Reason   string      `json:"reason,omitempty"`
+	Pairable bool        `json:"pairable,omitempty"` // POST /v1/runtimes/{id}/pair takes a link
+	Paired   bool        `json:"paired,omitempty"`
+}
+
+// RuntimePair is the body of POST /v1/runtimes/{id}/pair. The link holds a secret: never log it.
+type RuntimePair struct {
+	Link string `json:"link"`
 }
 
 // DaemonRuntimesPage is the answer of GET /v1/runtimes.

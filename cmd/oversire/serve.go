@@ -74,6 +74,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 		goos = ""
 	}
 	groupSecrets := secret.New(proc.Local{}, goos, secret.Group, filepath.Join(c.paths.Dir, "group.secret"), exec.LookPath)
+	orcaCLI.WithPairing(orca.NewPairing(secret.New(proc.Local{}, goos, secret.Orca, filepath.Join(c.paths.Dir, "orca.pairing"), exec.LookPath)))
 	store := group.NewStore(filepath.Join(c.paths.Dir, "group.json"), groupSecrets, time.Now, func() {
 		if srv != nil {
 			srv.Notify(false, map[string]string{"type": "group"})

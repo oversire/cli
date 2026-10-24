@@ -354,13 +354,22 @@
       "additionalProperties": false
     },
     "RuntimeStream": {
-      "description": "The state of the live session stream of a runtime. live: live bytes. pairing: the daemon connects to the runtime now. textOnly: the daemon reads the screen as text, reason tells why. POST /v1/runtimes/{id}/retry (Member) connects again and gives the DaemonRuntime.",
+      "description": "The state of the live session stream of a runtime. live: live bytes. pairing: the daemon connects to the runtime now. textOnly: the daemon reads the screen as text, reason tells why. POST /v1/runtimes/{id}/retry (Member) connects again and gives the DaemonRuntime. POST /v1/runtimes/{id}/pair (Member, body RuntimePair) keeps a pairing link and DELETE forgets it. Both give the DaemonRuntime. HTTP 400: the link did not pair. HTTP 501: the runtime takes no link.",
       "type": "object",
       "properties": {
         "state": { "enum": ["live", "pairing", "textOnly"] },
-        "reason": { "description": "Text for the user, for example Orca 1.3.9 is older than 1.4.200.", "type": "string" }
+        "reason": { "description": "Text for the user, for example Orca 1.3.9 is older than 1.4.200.", "type": "string" },
+        "pairable": { "description": "The runtime takes a pairing link from the user.", "type": "boolean" },
+        "paired": { "description": "The daemon keeps a pairing link.", "type": "boolean" }
       },
       "required": ["state"],
+      "additionalProperties": false
+    },
+    "RuntimePair": {
+      "description": "The body of POST /v1/runtimes/{id}/pair (Member). The link holds a device token: do not log it.",
+      "type": "object",
+      "properties": { "link": { "description": "For Orca: the runtime pairing link from Orca › Settings.", "type": "string", "minLength": 1 } },
+      "required": ["link"],
       "additionalProperties": false
     },
     "DaemonRuntimesPage": {

@@ -13,7 +13,9 @@
       ],
       "stream": {
         "state": "textOnly",
-        "reason": "Pairing failed: Orca refused the device key."
+        "reason": "Pairing failed: Orca refused the device key.",
+        "pairable": true,
+        "paired": true
       }
     },
     {

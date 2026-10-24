@@ -147,6 +147,9 @@ The budget of the order has caps: 50 earlier turns, 10 last turns and 20000 char
 | `oversire hooks install [--harness claude,codex]` | Add or update the OverSire agent hooks. Other hooks stay. |
 | `oversire hooks remove [--harness claude,codex]` | Remove only the OverSire agent hooks. |
 | `oversire hooks status [--json]` | Show the hook state of each harness. |
+| `oversire orca pair` | Read an Orca runtime pairing link on stdin and pair the live Orca view. The link is never an argument. |
+| `oversire orca unpair` | Forget the Orca pairing. Remove the device in Orca › Settings too. |
+| `oversire orca status [--json]` | Show the state of the live Orca view. |
 | `oversire group show [--json]` | Show the machines and the apps of the group. |
 | `oversire group invite` | Make an invite code for a new machine. |
 | `oversire group requests`, `approve <id>`, `deny <id>` | List and decide the join requests. |
@@ -256,6 +259,8 @@ The daemon owns the agent runtimes of this machine: `oversire`, and `orca` when 
 |---|---|
 | `GET /v1/runtimes` | A `DaemonRuntimesPage`: for each runtime, `installed`, `reachable`, `version`, `error` and the `capabilities` (Capability raw values of the app). A runtime that is not reachable has no capabilities. `stream` tells the state of the live session view: `live`, `pairing` or `textOnly` (with the `reason`). |
 | `POST /v1/runtimes/{id}/retry` | Connects the live view of the runtime again, when the runtime can, and probes it. Answers the new `DaemonRuntime`. 404: no such runtime. Settings › Machines of the app calls it. |
+| `POST /v1/runtimes/{id}/pair` | Body `RuntimePair` `{link}`. The daemon checks the link with the runtime, then keeps it in the Keychain. Answers the new `DaemonRuntime`. 400: the link did not pair. 404: no such runtime. 501: the runtime takes no link. `stream.pairable` tells which runtimes take one. |
+| `DELETE /v1/runtimes/{id}/pair` | Forgets the pairing link. Answers the new `DaemonRuntime`. |
 | `GET /v1/repos` | A `DaemonReposPage`: the repos of each runtime with a catalog. A runtime that fails gives no repos. |
 | `GET /v1/workspaces` | A `DaemonWorkspacesPage`: the workspaces with their terminals. `errors` has the error of each runtime that fails. |
 | `DELETE /v1/workspaces/{id}` | Body `WorkspaceRemove` `{runtime, force, runHooks}`. Answers a `WorkspaceRemoval` `{warning?}`. Escape a `/` in the id as `%2F`. 404: no such runtime or workspace. 501: the runtime cannot remove. The main checkout of a repo cannot be removed. |
@@ -271,7 +276,8 @@ The client sends `attach` first, with `view` `terminal` or `chat`. The daemon an
 | `source` | Sessions | What the client gets |
 |---|---|---|
 | `stream` | A runtime with a live terminal | The live bytes of the terminal. The client can take the size. |
-| `poll` | Orca | The screen as text, read each 1 s with `orca terminal read --screen`. No color, not resizable. Keys go through `orca terminal send`. Five failed reads in a row end the view. |
+| `stream` | Orca, paired | The live terminal over the Orca runtime socket. See "Orca pairing". |
+| `poll` | Orca, not paired | The screen as text, read each 1 s with `orca terminal read --screen`. No color, not resizable. Keys go through `orca terminal send`. Five failed reads in a row end the view. |
 | `wire` | `oversire` | The turns of the chat view. |
 
 The terminal view:
@@ -292,6 +298,15 @@ The chat view:
 `ended` `{reason}` (`exited`, `removed` or `closed`) comes before the daemon closes the socket. The app does not connect again after it.
 
 The `oversire` runtime writes the turns of each session to `<data>/sessions/<id>.turns.jsonl`. A tool input is clipped to 200 characters, and a tool result to 2000. An old session with no turn log gets its turns from the transcript of the harness.
+
+### Orca pairing
+
+Orca does not let a local process pair by itself. The user makes a pairing link one time: in Orca, open Settings, make a runtime pairing link, and pick "This computer only". Then paste it in Settings › Machines of the app (Pair…), or into `oversire orca pair`.
+
+- The link holds the endpoint, the public key of Orca and a device token. The daemon keeps it in the Keychain (service `oversire.orca`), or in `<data>/orca.pairing` (mode 0600) when there is no Keychain. The daemon never logs it.
+- The daemon speaks the Orca runtime protocol 3 (Orca accepts 2 or higher): an end-to-end sealed WebSocket (Curve25519 box). Each view opens its own socket for `terminal.subscribe`. Keys and the size go on a second socket: `terminal.send` and `terminal.resizeForClient`.
+- Take control sets the Orca terminal to the size of the view (`mobile-fit`). Release gives it back (`restore`). When the Orca app takes the size back, the viewer gets a take-back.
+- After 3 failed connects in a row, the views fall back to `poll` and `stream.reason` starts with "Pairing failed". Retry or a new link turns the live view on again.
 
 ### Workers
 
