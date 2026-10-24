@@ -113,6 +113,35 @@ func TestAPIRuntimes(t *testing.T) {
 	}
 }
 
+type retrier struct {
+	catalog
+	tries int
+}
+
+func (r *retrier) RetryStream(context.Context) { r.tries++ }
+func (r *retrier) StreamState() wire.RuntimeStream {
+	if r.tries == 0 {
+		return wire.RuntimeStream{State: wire.StreamTextOnly, Reason: "no pairing"}
+	}
+	return wire.RuntimeStream{State: wire.StreamLive}
+}
+
+func TestAPIRetry(t *testing.T) {
+	rt := &retrier{}
+	srv, _ := newAPI(t, rt, &fake{})
+	var d wire.DaemonRuntime
+	if code := call(t, srv, "POST", "/v1/runtimes/cat/retry", nil, &d); code != 200 || rt.tries != 1 || d.ID != "cat" || d.Stream == nil || d.Stream.State != wire.StreamLive {
+		t.Fatal(code, rt.tries, d)
+	}
+	var plain wire.DaemonRuntime
+	if code := call(t, srv, "POST", "/v1/runtimes/"+(&fake{}).ID()+"/retry", nil, &plain); code != 200 || !plain.Reachable {
+		t.Fatal("a runtime with no retry gives its state", code, plain)
+	}
+	if code := call(t, srv, "POST", "/v1/runtimes/nope/retry", nil, nil); code != 404 {
+		t.Fatal(code)
+	}
+}
+
 func TestAPIRepos(t *testing.T) {
 	srv, _ := newAPI(t, &fake{}, &catalog{})
 	var page wire.DaemonReposPage

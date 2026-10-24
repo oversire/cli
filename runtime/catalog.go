@@ -46,23 +46,37 @@ func Capabilities(rt Runtime) []string {
 func (r *Registry) Status(ctx context.Context) []wire.DaemonRuntime {
 	ids := r.IDs()
 	out := make([]wire.DaemonRuntime, len(ids))
-	r.each(ids, func(i int, rt Runtime) {
-		d := wire.DaemonRuntime{ID: rt.ID(), Name: rt.ID(), Installed: true, Reachable: true}
-		if p, ok := rt.(Prober); ok {
-			d = p.Probe(ctx)
-			d.ID = rt.ID()
-		}
-		d.Capabilities = []string{}
-		if d.Reachable {
-			d.Capabilities = Capabilities(rt)
-			if ss, ok := rt.(StreamStater); ok {
-				st := ss.StreamState()
-				d.Stream = &st
-			}
-		}
-		out[i] = d
-	})
+	r.each(ids, func(i int, rt Runtime) { out[i] = probe(ctx, rt) })
 	return out
+}
+
+// Retry connects the live view of runtime id again, when it can, and gives its new state.
+func (r *Registry) Retry(ctx context.Context, id string) (wire.DaemonRuntime, error) {
+	rt, ok := r.byID[id]
+	if !ok {
+		return wire.DaemonRuntime{}, ErrNoRuntime
+	}
+	if sr, ok := rt.(StreamRetrier); ok {
+		sr.RetryStream(ctx)
+	}
+	return probe(ctx, rt), nil
+}
+
+func probe(ctx context.Context, rt Runtime) wire.DaemonRuntime {
+	d := wire.DaemonRuntime{ID: rt.ID(), Name: rt.ID(), Installed: true, Reachable: true}
+	if p, ok := rt.(Prober); ok {
+		d = p.Probe(ctx)
+		d.ID = rt.ID()
+	}
+	d.Capabilities = []string{}
+	if d.Reachable {
+		d.Capabilities = Capabilities(rt)
+		if ss, ok := rt.(StreamStater); ok {
+			st := ss.StreamState()
+			d.Stream = &st
+		}
+	}
+	return d
 }
 
 // Repos gives the repos of each Catalog runtime. A runtime that fails gives no repos.

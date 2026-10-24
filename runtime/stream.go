@@ -18,6 +18,11 @@ type StreamStater interface {
 	StreamState() wire.RuntimeStream
 }
 
+// StreamRetrier connects the live view again, for POST /v1/runtimes/{id}/retry.
+type StreamRetrier interface {
+	RetryStream(ctx context.Context)
+}
+
 // Terminal opens the terminal view in the runtime of the session. The registry is the term.Opener of the daemon.
 func (r *Registry) Terminal(ctx context.Context, s wire.DaemonSession) (term.Source, error) {
 	st, ok := r.byID[s.Runtime].(Streamer)

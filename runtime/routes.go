@@ -47,6 +47,7 @@ func NewAPI(reg *Registry, files string, now func() time.Time) *API {
 func (a *API) Routes() []server.Route {
 	return []server.Route{
 		{Pattern: "GET /v1/runtimes", Access: server.Member, Handle: a.runtimes},
+		{Pattern: "POST /v1/runtimes/{id}/retry", Access: server.Member, Handle: a.retry},
 		{Pattern: "GET /v1/repos", Access: server.Member, Handle: a.repos},
 		{Pattern: "GET /v1/workspaces", Access: server.Member, Handle: a.workspaces},
 		{Pattern: "DELETE /v1/workspaces/{id}", Access: server.Member, Handle: a.removeWorkspace},
@@ -58,6 +59,15 @@ func (a *API) Routes() []server.Route {
 
 func (a *API) runtimes(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, wire.DaemonRuntimesPage{Runtimes: a.reg.Status(r.Context())})
+}
+
+func (a *API) retry(w http.ResponseWriter, r *http.Request) {
+	d, err := a.reg.Retry(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, status(err), err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, d)
 }
 
 func (a *API) repos(w http.ResponseWriter, r *http.Request) {

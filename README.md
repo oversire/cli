@@ -254,7 +254,8 @@ The daemon owns the agent runtimes of this machine: `oversire`, and `orca` when 
 
 | Route | What it does |
 |---|---|
-| `GET /v1/runtimes` | A `DaemonRuntimesPage`: for each runtime, `installed`, `reachable`, `version`, `error` and the `capabilities` (Capability raw values of the app). A runtime that is not reachable has no capabilities. |
+| `GET /v1/runtimes` | A `DaemonRuntimesPage`: for each runtime, `installed`, `reachable`, `version`, `error` and the `capabilities` (Capability raw values of the app). A runtime that is not reachable has no capabilities. `stream` tells the state of the live session view: `live`, `pairing` or `textOnly` (with the `reason`). |
+| `POST /v1/runtimes/{id}/retry` | Connects the live view of the runtime again, when the runtime can, and probes it. Answers the new `DaemonRuntime`. 404: no such runtime. Settings › Machines of the app calls it. |
 | `GET /v1/repos` | A `DaemonReposPage`: the repos of each runtime with a catalog. A runtime that fails gives no repos. |
 | `GET /v1/workspaces` | A `DaemonWorkspacesPage`: the workspaces with their terminals. `errors` has the error of each runtime that fails. |
 | `DELETE /v1/workspaces/{id}` | Body `WorkspaceRemove` `{runtime, force, runHooks}`. Answers a `WorkspaceRemoval` `{warning?}`. Escape a `/` in the id as `%2F`. 404: no such runtime or workspace. 501: the runtime cannot remove. The main checkout of a repo cannot be removed. |
