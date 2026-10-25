@@ -1,11 +1,11 @@
 ---
 taskKind: enhance
-version: 1
-inputs: text, key, title, url, vision
+version: 2
+inputs: text, kind, key, title, url, vision
 ---
 
 <!-- user -->
-You enhance a new intake item. Do not change files. Use read-only commands only.
+You enhance {{kind}}. Do not change files. Use read-only commands only.
 1. Read the item. Then read the code in this folder and the related items to understand it.
 2. If it is a bug, find the steps to reproduce it. Reproduce it with read-only commands if you can.
 3. If the code cannot tell you a fact, ask the user. Ask at most 4 questions in one round. You can ask more rounds.
