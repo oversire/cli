@@ -135,6 +135,7 @@ type terminal struct {
 	TabID    string `json:"tabId"`
 	LeafID   string `json:"leafId"`
 	PaneKey  string `json:"paneKey"`
+	Recorded string `json:"recordedPaneKey"` // terminal list: the tab and leaf ids can be pty ids
 	Orphaned bool   `json:"orphaned"`
 }
 
@@ -142,6 +143,9 @@ type terminal struct {
 func (t terminal) paneKey() string {
 	if t.PaneKey != "" {
 		return t.PaneKey
+	}
+	if t.Recorded != "" {
+		return t.Recorded
 	}
 	if t.TabID == "" || t.LeafID == "" {
 		return ""

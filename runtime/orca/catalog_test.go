@@ -53,7 +53,8 @@ func TestWorkspaces(t *testing.T) {
 		`{"worktreeId":"r1::/wt/old","isArchived":true}]}}`)
 	r.on("terminal list", `{"ok":true,"result":{"terminals":[`+
 		`{"handle":"h1","worktreeId":"r1::/wt/eng-4","title":"claude","tabId":"t1","leafId":"l1"},`+
-		`{"handle":"h2","worktreeId":"r1::/wt/eng-4","title":"zsh","tabId":"t2","leafId":"l2","orphaned":true}]}}`)
+		`{"handle":"h2","worktreeId":"r1::/wt/eng-4","title":"zsh","tabId":"t2","leafId":"l2","orphaned":true},`+
+		`{"handle":"h3","worktreeId":"r1::/wt/eng-4","title":"Enhance ENG-4","tabId":"pty:p3","leafId":"pty:p3","recordedPaneKey":"t3:l3"}]}}`)
 	ws, err := o.Workspaces(context.Background())
 	if err != nil || len(ws) != 3 {
 		t.Fatalf("workspaces %#v %v", ws, err)
@@ -65,7 +66,8 @@ func TestWorkspaces(t *testing.T) {
 	if w.Branch != "eng-4" || w.Name != "ENG-4" || w.Comment != "https://x/ENG-4" || w.LiveTerminals != 1 || !w.LastActivity.Equal(time.UnixMilli(1792764909139)) {
 		t.Fatalf("card %#v", w)
 	}
-	terms := []wire.DaemonTerminal{{ID: "h1", Title: "claude", Session: "t1:l1"}, {ID: "h2", Title: "zsh", Session: "t2:l2", Orphaned: true}}
+	terms := []wire.DaemonTerminal{{ID: "h1", Title: "claude", Session: "t1:l1"}, {ID: "h2", Title: "zsh", Session: "t2:l2", Orphaned: true},
+		{ID: "h3", Title: "Enhance ENG-4", Session: "t3:l3"}}
 	if !slices.Equal(w.Terminals, terms) || ws[0].Terminals != nil {
 		t.Fatalf("terminals %#v", w.Terminals)
 	}
