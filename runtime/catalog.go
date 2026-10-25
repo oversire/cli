@@ -17,13 +17,13 @@ const (
 	CapReveal          = "reveal"
 	CapRemoveWorkspace = "removeWorkspace"
 	CapWorkspaces      = "workspaces"
-	CapWorkers         = "workers"
 	CapSessionStream   = "sessionStream"
+	CapSessionKey      = "sessionKey"
 )
 
-// Capabilities are the parts that rt has. Each runtime takes files: the daemon writes them, not the runtime.
+// Capabilities are the parts that rt has. Each runtime takes files and keys: the daemon does them, not the runtime.
 func Capabilities(rt Runtime) []string {
-	caps := []string{CapSessionInput, CapSessionTail, CapSessionHistory, CapHostFiles}
+	caps := []string{CapSessionInput, CapSessionTail, CapSessionHistory, CapHostFiles, CapSessionKey}
 	if _, ok := rt.(Catalog); ok {
 		caps = append(caps, CapWorkspaces)
 	}
@@ -32,9 +32,6 @@ func Capabilities(rt Runtime) []string {
 	}
 	if _, ok := rt.(WorkspaceRemover); ok {
 		caps = append(caps, CapRemoveWorkspace)
-	}
-	if _, ok := rt.(Supervisor); ok {
-		caps = append(caps, CapWorkers)
 	}
 	if _, ok := rt.(Streamer); ok {
 		caps = append(caps, CapSessionStream)
@@ -192,12 +189,6 @@ func (r *Registry) Reveal(ctx context.Context, s wire.SessionRef) error {
 func (r *Registry) Get(id string) (Runtime, bool) {
 	rt, ok := r.byID[id]
 	return rt, ok
-}
-
-// Supervisor gives the runtime with the id when it runs workers.
-func (r *Registry) Supervisor(id string) (Supervisor, bool) {
-	s, ok := r.byID[id].(Supervisor)
-	return s, ok
 }
 
 // each calls f for each runtime of ids at the same time.

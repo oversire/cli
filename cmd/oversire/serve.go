@@ -8,7 +8,6 @@ import (
 	goruntime "runtime"
 	"time"
 
-	"github.com/oversire/cli/allow"
 	"github.com/oversire/cli/ask"
 	"github.com/oversire/cli/config"
 	"github.com/oversire/cli/eventlog"
@@ -27,7 +26,6 @@ import (
 	"github.com/oversire/cli/term"
 	"github.com/oversire/cli/update"
 	"github.com/oversire/cli/wire"
-	"github.com/oversire/cli/workers"
 )
 
 // spoolInterval is how often the daemon reads the hook spool.
@@ -46,7 +44,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 		exe = orca.MacPath // Reachable is false, and the watcher waits and tries again
 	}
 	orcaCLI := orca.New(exe, c.cmds)
-	// One driver for the registry, the watcher and the questions: it keeps the one coordinator of the workers.
+	// One driver for the registry, the watcher and the questions.
 	rt, hasOrca := reg.Get(orca.ID)
 	if o, ok := rt.(*orca.Orca); ok {
 		orcaCLI = o
@@ -56,9 +54,8 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	userHome, _ := os.UserHomeDir()
 	files := questions.NewFiles(filepath.Join(userHome, ".claude", "projects"), screen)
 	asks := questions.NewChannel(book, screen, files, events, time.Now)
-	workerBook := workers.NewBook(reg, allow.File{Path: c.paths.Allow()}, filepath.Join(data, "workers.json"), time.Now)
 	if hasOrca {
-		asks.WithMail(orcaCLI, workerBook.Terminals)
+		go orcaCLI.RetireWorkers(ctx, filepath.Join(data, "workers.json"), c.log)
 	}
 	ingest := hooks.NewIngest(book, asks).WithHinter(watcher)
 	installer := c.installer()
@@ -109,7 +106,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	syncer.WithHomeTaker(storeRoutes)
 
 	info := func() wire.DaemonInfo {
-		d := wire.DaemonInfo{Machine: cfg.Machine(), Version: version, Contract: 1, Roles: cfg.Roles, Runtimes: reg.IDs(), Harnesses: installer.Status()}
+		d := wire.DaemonInfo{Machine: cfg.Machine(), Version: version, Contract: wire.DaemonContract, Roles: cfg.Roles, Runtimes: reg.IDs(), Harnesses: installer.Status()}
 		d.Group, d.Home = store.Info()
 		d.Update = updates.Status()
 		return d
@@ -129,7 +126,6 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	runtimeAPI := runtime.NewAPI(reg, filepath.Join(data, "files"), time.Now)
 	runtimeAPI.Log = c.log
 	srv.Handle(runtimeAPI.Routes()...)
-	srv.Handle(workerBook.Routes()...)
 	streams := term.NewAPI(book, reg, time.Now)
 	streams.Log = c.log
 	srv.Handle(streams.Routes()...)

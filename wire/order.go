@@ -9,6 +9,9 @@ import (
 // ContractVersion is the x-oversire-schema number of work-order.json.
 const ContractVersion = 1
 
+// DaemonContract is the x-oversire-schema number of daemon.json.
+const DaemonContract = 2
+
 type Op string
 
 const (

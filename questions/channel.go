@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/oversire/cli/hooks"
-	"github.com/oversire/cli/runtime"
 	"github.com/oversire/cli/sessions"
 	"github.com/oversire/cli/wire"
 )
@@ -96,10 +95,6 @@ type Channel struct {
 	fitted map[string]string // the transcript that fit last, for each session
 	locks  map[string]*sync.Mutex
 	kicks  chan string
-
-	mail    Mail
-	workers func() map[string]bool
-	box     runtime.Mail // the last read of mail
 }
 
 // NewChannel needs a book. screen and tr can be nil: then no question is answerable and no transcript is read.
@@ -110,13 +105,6 @@ func NewChannel(book *sessions.Book, screen Screen, tr Transcripts, log sessions
 	return &Channel{book: book, screen: screen, tr: tr, log: log, clock: clock, Tries: 10, Wait: 200 * time.Millisecond, Poll: PollInterval,
 		open: map[string]*record{}, closed: map[string]*record{}, sent: map[string]time.Time{}, given: map[string]wire.QuestionAnswer{},
 		hooked: map[string]string{}, fitted: map[string]string{}, locks: map[string]*sync.Mutex{}, kicks: make(chan string, 64)}
-}
-
-// WithMail adds the asks of the supervised workers. workers gives the worker terminals that the daemon started.
-// A worker does not ask the user at the end of its turn: its coordinator reads the turn.
-func (c *Channel) WithMail(m Mail, workers func() map[string]bool) *Channel {
-	c.mail, c.workers = m, workers
-	return c
 }
 
 // Open gives the open questions, oldest first.
@@ -254,7 +242,6 @@ func (c *Channel) Run(ctx context.Context) error {
 	defer stop()
 	t := time.NewTicker(c.Poll)
 	defer t.Stop()
-	c.readMail(ctx)
 	for {
 		select {
 		case <-ctx.Done():
@@ -264,62 +251,11 @@ func (c *Channel) Run(ctx context.Context) error {
 		case id := <-c.kicks:
 			c.check(ctx, id)
 		case <-t.C:
-			c.readMail(ctx)
 			for _, id := range c.due() {
 				c.check(ctx, id)
 			}
 		}
 	}
-}
-
-// readMail reads the mail again and checks each session with an ask, or with an open ask question.
-func (c *Channel) readMail(ctx context.Context) {
-	if c.mail == nil {
-		return
-	}
-	box, err := c.mail.Mail(ctx)
-	if err != nil {
-		return
-	}
-	asking := map[string]bool{}
-	for _, a := range box.Asks {
-		asking[a.Terminal] = true
-	}
-	c.mu.Lock()
-	c.box = box
-	for _, r := range c.open {
-		if r.q.Via == wire.ViaAskReply {
-			asking[r.s.Terminal] = true
-		}
-	}
-	c.mu.Unlock()
-	for _, s := range c.book.All() {
-		if s.Terminal != "" && asking[s.Terminal] {
-			c.check(ctx, s.ID)
-		}
-	}
-}
-
-// openAsk gives the ask of the terminal that has no reply.
-func (c *Channel) openAsk(terminal string) (runtime.Ask, bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	for _, a := range c.box.Asks {
-		if terminal != "" && a.Terminal == terminal && a.Reply == nil {
-			return a, true
-		}
-	}
-	return runtime.Ask{}, false
-}
-
-func (c *Channel) supervised(terminal string) bool {
-	if terminal == "" {
-		return false
-	}
-	c.mu.Lock()
-	in := c.box.Workers[terminal]
-	c.mu.Unlock()
-	return in || (c.workers != nil && c.workers()[terminal])
 }
 
 // due gives the sessions that wait or have an open question, and drops old closed questions.
@@ -380,17 +316,10 @@ func (c *Channel) check(ctx context.Context, id string) {
 // find gives the pause of the session now, or nil.
 func (c *Channel) find(ctx context.Context, s wire.DaemonSession) (*wire.DaemonQuestion, string, error) {
 	cur := c.current(s.ID)
-	// A worker that asks waits in a command, so its session can show as working.
-	if a, ok := c.openAsk(s.Terminal); ok {
-		_, items, _ := parseAsk(a.Body)
-		q := c.question(s, "ask:"+a.ID, wire.ViaAskReply, wire.SourceMail, a.At, items...)
-		q.Answerable = true
-		return q, a.ID, nil
-	}
 	switch s.State {
 	case wire.PhaseDone:
 		text, ok := TurnQuestion(s.LastMessage)
-		if !ok || c.supervised(s.Terminal) {
+		if !ok {
 			return nil, "", nil
 		}
 		if cur != nil && cur.q.Via == wire.ViaTurn && cur.key == text {
@@ -687,20 +616,7 @@ func (c *Channel) Given(ctx context.Context, id string) (*wire.QuestionAnswer, e
 	if rec != nil {
 		r = *rec
 	}
-	var reply *string
-	for _, a := range c.box.Asks {
-		if rec != nil && r.q.Via == wire.ViaAskReply && a.ID == r.key {
-			reply = a.Reply
-		}
-	}
 	c.mu.Unlock()
-	if rec != nil && r.q.Via == wire.ViaAskReply {
-		if reply == nil {
-			return nil, nil
-		}
-		g := replyAnswer(*reply, r.q)
-		return &g, nil
-	}
 	tool := strings.TrimPrefix(id, "form:")
 	if rec == nil || r.q.Via != wire.ViaForm || !strings.HasPrefix(id, "form:") || strings.Contains(tool, ":") {
 		return nil, nil
@@ -753,8 +669,6 @@ func (c *Channel) Answer(ctx context.Context, id string, a wire.QuestionAnswer) 
 		res, err = c.answerPrompt(ctx, *rec, a)
 	case wire.ViaTurn:
 		res, err = c.answerTurn(ctx, *rec, a)
-	case wire.ViaAskReply:
-		res, err = c.answerAsk(ctx, *rec, a)
 	default:
 		return wire.DaemonAnswerResult{Result: wire.AnswerError, Code: CodeNotAnswerable, Message: "Answer this question in the terminal."}, nil
 	}
@@ -995,30 +909,6 @@ func approveKeys(p Prompt, g wire.QuestionAnswerItem) []PromptStep {
 }
 
 // answerTurn sends the text as a prompt. The session must still be done in the same turn.
-// answerAsk replies to the ask of a worker. The mail is read first: Orca makes a new message for each reply.
-func (c *Channel) answerAsk(ctx context.Context, r record, a wire.QuestionAnswer) (wire.DaemonAnswerResult, error) {
-	box, err := c.mail.Mail(ctx)
-	if err != nil {
-		return wire.DaemonAnswerResult{}, err
-	}
-	c.mu.Lock()
-	c.box = box
-	c.mu.Unlock()
-	for _, ask := range box.Asks {
-		if ask.ID != r.key {
-			continue
-		}
-		if ask.Reply != nil {
-			return wire.DaemonAnswerResult{Result: wire.AnswerAlreadyAnswered}, nil
-		}
-		if err := c.mail.Reply(ctx, ask.ID, replyBody(ask.Body, a)); err != nil {
-			return wire.DaemonAnswerResult{}, err
-		}
-		return wire.DaemonAnswerResult{Result: wire.AnswerSent}, nil
-	}
-	return wire.DaemonAnswerResult{Result: wire.AnswerGone}, nil
-}
-
 func (c *Channel) answerTurn(ctx context.Context, r record, a wire.QuestionAnswer) (wire.DaemonAnswerResult, error) {
 	s, ok := c.book.Get(r.s.ID)
 	text, _ := TurnQuestion(s.LastMessage)

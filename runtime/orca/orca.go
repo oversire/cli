@@ -13,7 +13,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 	"unicode"
 
@@ -59,9 +58,6 @@ type Orca struct {
 	// digests gives the transcript reader of a harness.
 	digests func(harness string) (digest.Reader, error)
 	now     func() time.Time
-
-	coordMu sync.Mutex
-	coord   *coordinator
 
 	pairing *Pairing // nil: the views are text only
 }

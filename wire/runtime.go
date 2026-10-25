@@ -4,7 +4,7 @@ import "time"
 
 // The runtime API of the daemon. Each daemon talks only to the runtimes of its own machine.
 
-// ViaAskReply is a blocking ask of an Enhance worker.
+// ViaAskReply is the via of an ask of an old Enhance worker. The daemon does not send it.
 const ViaAskReply QuestionVia = "askReply"
 
 // DaemonRuntime is one agent runtime on the machine.
@@ -124,41 +124,4 @@ type WorkspaceFiles struct {
 // WorkspaceFilesResult has the full paths, in the order of the files.
 type WorkspaceFilesResult struct {
 	Paths []string `json:"paths"`
-}
-
-// WorkerStart is the body of POST /v1/workers.
-type WorkerStart struct {
-	Runtime string `json:"runtime,omitempty"`
-	Spec    string `json:"spec"`
-	Title   string `json:"title"`
-	Path    string `json:"path"`
-	Agent   string `json:"agent"`
-}
-
-// Worker is a supervised worker. The daemon keeps it over a restart.
-type Worker struct {
-	ID        string    `json:"id"`
-	Runtime   string    `json:"runtime"`
-	Title     string    `json:"title,omitempty"`
-	Path      string    `json:"path,omitempty"`
-	Agent     string    `json:"agent,omitempty"`
-	Terminal  string    `json:"terminal,omitempty"`
-	StartedAt time.Time `json:"startedAt"`
-}
-
-// WorkerPhase: running, done (the worker sent its result) or ended (no result).
-type WorkerPhase string
-
-const (
-	WorkerRunning WorkerPhase = "running"
-	WorkerDone    WorkerPhase = "done"
-	WorkerEnded   WorkerPhase = "ended"
-)
-
-// WorkerState is the answer of GET /v1/workers/{id}.
-type WorkerState struct {
-	State   WorkerPhase `json:"state"`
-	Outcome string      `json:"outcome,omitempty"`
-	Body    string      `json:"body,omitempty"`
-	Reason  string      `json:"reason,omitempty"`
 }
