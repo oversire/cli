@@ -163,11 +163,48 @@ func TestWorkerAllowList(t *testing.T) {
 		t.Fatal("loopback:", code)
 	}
 	g.caller = server.Caller{DeviceID: "a-1", Kind: string(wire.DeviceApp), Machine: "mba"}
+	if code := g.call(t, "POST", "/v1/workers", codex, nil); code != 200 {
+		t.Fatal("group app:", code)
+	}
+	g.caller = server.Caller{DeviceID: "d-2", Kind: string(wire.DeviceDaemon), Machine: "mba"}
 	if code := g.call(t, "POST", "/v1/workers", codex, nil); code != 403 {
-		t.Fatal("tailnet:", code)
+		t.Fatal("daemon:", code)
 	}
 	if code := g.call(t, "POST", "/v1/workers", start, nil); code != 200 {
-		t.Fatal("tailnet claude:", code)
+		t.Fatal("daemon claude:", code)
+	}
+}
+
+// allowNone is an allow list with no entries.
+type allowNone struct{}
+
+func (allowNone) Check(o wire.WorkOrder) error {
+	return errors.New("The allow list does not have the runtime " + o.Runtime + ".")
+}
+
+func TestWorkerStartEmptyAllowList(t *testing.T) {
+	cases := []struct {
+		name string
+		c    *server.Caller
+		pass bool
+	}{
+		{"loopback", &server.Caller{Loopback: true}, true},
+		{"group app", &server.Caller{DeviceID: "a-1", Kind: string(wire.DeviceApp)}, true},
+		{"daemon", &server.Caller{DeviceID: "d-2", Kind: string(wire.DeviceDaemon)}, false},
+		{"no caller", nil, false},
+	}
+	for _, c := range cases {
+		sup := &fakeSup{state: wire.WorkerState{State: wire.WorkerRunning}}
+		b := NewBook(sups{"orca": sup}, allowNone{}, filepath.Join(t.TempDir(), "workers.json"), func() time.Time { return now })
+		ctx := context.Background()
+		if c.c != nil {
+			ctx = server.WithCaller(ctx, *c.c)
+		}
+		_, err := b.Start(ctx, start)
+		var ref *refused
+		if c.pass && err != nil || !c.pass && !errors.As(err, &ref) {
+			t.Errorf("%s: %v", c.name, err)
+		}
 	}
 }
 

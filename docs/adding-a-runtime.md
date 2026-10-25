@@ -60,7 +60,7 @@ The serve role and the runner role use the same registry. The runtime is now in 
 
 ## 5. Allow list
 
-Orders from Tailscale and from the hub need the runtime id in `runtimes` of `allow.json`. An order from loopback (the app on this machine) does not use the list. Tell the user to add the id in the README section of the runtime.
+Orders from the hub need the runtime id in `runtimes` of `allow.json`. Orders from loopback and from the apps of the group do not use the list. Tell the user to add the id in the README section of the runtime.
 
 ## 6. A new capability
 

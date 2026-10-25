@@ -39,6 +39,12 @@ type Caller struct {
 	Loopback                      bool
 }
 
+// Trusted is true for loopback and for an app of the group. These callers skip the allow list.
+// A daemon credential and the zero Caller (no caller, for example a hub order) are not trusted.
+func (c Caller) Trusted() bool {
+	return c.Loopback || c.DeviceID != "" && c.Kind != string(wire.DeviceDaemon)
+}
+
 type Access int
 
 const (

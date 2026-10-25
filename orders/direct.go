@@ -215,11 +215,11 @@ func (d *Direct) ordersFrom(w http.ResponseWriter, r *http.Request) bool {
 }
 
 // start runs o in the background unless it runs already. The order outlives the request r.
-// An order from loopback skips the allow list.
+// The caller goes with the order: an order from loopback or from an app of the group skips the allow list.
 func (d *Direct) start(o wire.WorkOrder, r *http.Request) {
 	c, ok := server.CallerFrom(r.Context())
-	loopback, caller := ok && c.Loopback, c.Name
-	if loopback {
+	caller := c.Name
+	if c.Loopback {
 		caller = "loopback"
 	}
 	log := d.Log.With("order", o.ID, "op", o.Payload.Op(), "runtime", o.Runtime, "via", "direct")
@@ -238,8 +238,8 @@ func (d *Direct) start(o wire.WorkOrder, r *http.Request) {
 			d.mu.Unlock()
 		}()
 		ctx := context.Background()
-		if loopback {
-			ctx = server.WithCaller(ctx, server.Caller{Loopback: true})
+		if ok {
+			ctx = server.WithCaller(ctx, c)
 		}
 		start := d.clock()
 		accepted := false

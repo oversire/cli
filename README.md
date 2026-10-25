@@ -81,7 +81,8 @@ A second run does nothing. The old commands (`run`, `pair`, `install`, `uninstal
 
 ## Allow list
 
-The daemon does only the orders that the local allow list permits. Without the file, the daemon refuses all orders.
+The "My machines" group is the trust boundary. The allow list applies only to orders from the cloud hub and to daemon callers.
+Without the file, the daemon refuses all of these orders.
 Write `allow.json` in the config folder:
 
 ```json
@@ -99,7 +100,8 @@ Write `allow.json` in the config folder:
 | `agents` | A `sessionStart` agent must be in the list. |
 
 The daemon reads the file again for each order. An edit applies without a restart.
-A direct order from loopback (the app on this machine) does not use the list. Orders from Tailscale and from the hub use it.
+Loopback (the app on this machine) and the apps of the group do not use the list. They can use each runtime, repo and agent of each daemon in the group.
+Hub orders and daemon callers use the list.
 The daemon talks only to the runtimes on this machine. The old `environments` field has no effect, and the daemon writes one warning when it reads it.
 The hub shows a summary of the list (the runtimes, the agents and the number of repos). The full list stays on the machine.
 
@@ -110,7 +112,7 @@ It uses the CLI and the login that are on the machine.
 
 | Topic | Rule |
 |---|---|
-| Agents | `claude`, `codex`, `opencode`, `opencode2`, `pi`, `copilot`, `cursor` and `gemini` (the agent-wire harness names). The allow list must also have the agent. |
+| Agents | `claude`, `codex`, `opencode`, `opencode2`, `pi`, `copilot`, `cursor` and `gemini` (the agent-wire harness names). For a hub order, the allow list must also have the agent. |
 | Worktree | Each item gets one git worktree at `<data>/worktrees/<repo name>/<item key>`. The branch is the item key in lowercase, for example `towertail-2`. Without an item, the launch name is the key. A second launch for the same key uses the worktree and the branch again. `sessionStop` keeps the worktree. |
 | Session | `sessionStart` gives the session at once. The workspace id is `<repo name>/<key>`, and the session id starts with `s-`. The state goes from `queued` to `starting` to `working`, then `waitingInput` at the end of each turn, and `done` or `failed` at the end. |
 | Slots | At most `maxSessions` sessions run at the same time (default 2). A new session waits in `queued`. If the order expires before a slot is free, the session is `failed`. |
@@ -240,7 +242,7 @@ A member that is not home answers 409 `{"error":"<machine> is home","home":"<mac
 
 ### Direct orders
 
-An app of the group can give work orders to the daemon without the cloud hub. The bodies are `WorkOrder` and `WorkOrderResult` of `contract/schema/work-order.json`. The orders go through the same allow list (except from loopback), expiry and journal (`orders.json`) as the hub orders. A daemon credential gets 403: daemons do not order each other.
+An app of the group can give work orders to the daemon without the cloud hub. The bodies are `WorkOrder` and `WorkOrderResult` of `contract/schema/work-order.json`. The orders go through the same expiry and journal (`orders.json`) as the hub orders. They do not use the allow list: the group is the trust boundary. A daemon credential gets 403: daemons do not order each other.
 
 | Route | What it does |
 |---|---|
@@ -314,7 +316,7 @@ A worker is a supervised agent session for a short job, for example the intake E
 
 | Route | What it does |
 |---|---|
-| `POST /v1/workers` | Body `WorkerStart` `{runtime?, spec, title, path, agent}`. The default runtime is `orca`. Answers the `Worker`. A caller that is not on loopback must pass the allow list for the agent and the path, as for a `sessionStart`: else 403. |
+| `POST /v1/workers` | Body `WorkerStart` `{runtime?, spec, title, path, agent}`. The default runtime is `orca`. Answers the `Worker`. Loopback and the apps of the group do not use the allow list. A daemon caller must pass the allow list for the agent and the path, as for a `sessionStart`: else 403. |
 | `GET /v1/workers/{id}` | Answers a `WorkerState`: `running`, `done` (with `outcome` and `body`) or `ended` (with `reason`). |
 | `POST /v1/workers/{id}/stop` | Stops the worker. Answers 204. |
 | `DELETE /v1/workers/{id}` | Closes the terminal of the worker and removes it. Answers 204. |

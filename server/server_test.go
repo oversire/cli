@@ -503,3 +503,24 @@ func TestRun(t *testing.T) {
 }
 
 func discardLog() *slog.Logger { return slog.New(slog.DiscardHandler) }
+
+func TestCallerTrusted(t *testing.T) {
+	cases := []struct {
+		name string
+		c    Caller
+		want bool
+	}{
+		{"loopback", Caller{Loopback: true}, true},
+		{"app", Caller{DeviceID: "a-1", Kind: string(wire.DeviceApp), Machine: "mba"}, true},
+		{"daemon", Caller{DeviceID: "d-1", Kind: string(wire.DeviceDaemon), Machine: "mba"}, false},
+		{"no caller", Caller{}, false},
+	}
+	for _, c := range cases {
+		if got := c.c.Trusted(); got != c.want {
+			t.Errorf("%s: %v", c.name, got)
+		}
+	}
+	if c, _ := CallerFrom(context.Background()); c.Trusted() {
+		t.Error("a context with no caller is trusted")
+	}
+}

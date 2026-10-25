@@ -66,7 +66,7 @@ func NewBook(sups Supervisors, allow Allow, path string, clock func() time.Time)
 	return b
 }
 
-// Start starts a worker. A caller that is not on loopback must pass the allow list, as for a sessionStart.
+// Start starts a worker. A caller that is not trusted (a daemon, or no caller) must pass the allow list.
 func (b *Book) Start(ctx context.Context, w wire.WorkerStart) (wire.Worker, error) {
 	if w.Spec == "" || w.Agent == "" || !filepath.IsAbs(w.Path) {
 		return wire.Worker{}, ErrBadStart
@@ -78,7 +78,7 @@ func (b *Book) Start(ctx context.Context, w wire.WorkerStart) (wire.Worker, erro
 	if !ok {
 		return wire.Worker{}, fmt.Errorf("%w: %s runs no workers", runtime.ErrNoRuntime, w.Runtime)
 	}
-	if c, ok := server.CallerFrom(ctx); !ok || !c.Loopback {
+	if c, _ := server.CallerFrom(ctx); !c.Trusted() {
 		o := wire.WorkOrder{Runtime: w.Runtime, Payload: wire.LaunchRequest{Repo: w.Path, Agent: w.Agent}}
 		if err := b.allow.Check(o); err != nil {
 			return wire.Worker{}, &refused{err}

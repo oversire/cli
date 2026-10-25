@@ -228,14 +228,47 @@ func TestDirectExpired(t *testing.T) {
 	}
 }
 
-func TestDirectAllowList(t *testing.T) {
+func TestDirectGroupAppSkipsAllowList(t *testing.T) {
 	g := newRig(t)
 	g.setCaller(server.Caller{DeviceID: "a-1", Kind: string(wire.DeviceApp), Machine: "mba"})
 	g.post(t, "/v1/orders", order("wo-1", "codex", now.Add(time.Hour)))
 	g.d.Wait()
-	_, st := g.state(t, "wo-1")
-	if st.State != wire.StateFailed || st.Result == nil || st.Result.Error == "" || g.rts.count() != 0 {
+	if _, st := g.state(t, "wo-1"); st.State != wire.StateDone || g.rts.count() != 1 {
 		t.Fatalf("%+v", st)
+	}
+}
+
+// emptyAllow is an allow list with no entries.
+type emptyAllow struct{}
+
+func (emptyAllow) Check(o wire.WorkOrder) error {
+	return errors.New("The allow list does not have the runtime " + o.Runtime + ".")
+}
+
+func TestRunnerAllowList(t *testing.T) {
+	cases := []struct {
+		name string
+		ctx  context.Context
+		pass bool
+	}{
+		{"hub order", context.Background(), false},
+		{"daemon", server.WithCaller(context.Background(), server.Caller{DeviceID: "d-2", Kind: string(wire.DeviceDaemon)}), false},
+		{"loopback", server.WithCaller(context.Background(), server.Caller{Loopback: true}), true},
+		{"group app", server.WithCaller(context.Background(), server.Caller{DeviceID: "a-1", Kind: string(wire.DeviceApp)}), true},
+	}
+	for _, c := range cases {
+		rts := &fakeRuntimes{}
+		r := NewRunner(rts, emptyAllow{}, &memJournal{res: map[string]wire.Result{}, sent: map[string]bool{}}, func() time.Time { return now })
+		res, _ := r.Run(c.ctx, order("wo-1", "codex", now.Add(time.Hour)), Hooks{})
+		if c.pass {
+			if res.State != wire.ResultDone || rts.count() != 1 {
+				t.Errorf("%s: %+v", c.name, res)
+			}
+			continue
+		}
+		if res.State != wire.ResultFailed || res.Result == nil || !strings.Contains(res.Result.Error, "allow list") || rts.count() != 0 {
+			t.Errorf("%s: %+v", c.name, res)
+		}
 	}
 }
 
