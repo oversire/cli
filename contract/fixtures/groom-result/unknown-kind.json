@@ -1,0 +1,10 @@
+{
+  "proposals": [
+    {
+      "kind": "split",
+      "keys": ["OVERSIRE-300"],
+      "reason": "The item holds two features.",
+      "confidence": "maybe"
+    }
+  ]
+}

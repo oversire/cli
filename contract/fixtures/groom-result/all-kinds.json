@@ -1,0 +1,49 @@
+{
+  "proposals": [
+    {
+      "kind": "merge",
+      "keys": ["OVERSIRE-344", "OVERSIRE-351"],
+      "keep": "OVERSIRE-344",
+      "title": "Orca path in Settings",
+      "reason": "Same field, same steps.",
+      "confidence": "sure",
+      "description": "## Problem\n\nThe Orca path is not saved.\n\n## Merged from\n\n- OVERSIRE-351"
+    },
+    {
+      "kind": "done",
+      "keys": ["OVERSIRE-288"],
+      "reason": "The menu bar shows a red ring for a failing run.",
+      "evidence": ["a41f9c2", "PR #219", "Sources/OverSireApp/status_item.swift:58"],
+      "confidence": "sure"
+    },
+    {
+      "kind": "obsolete",
+      "keys": ["OVERSIRE-241"],
+      "reason": "The app no longer talks to Orca. Each daemon drives its own Orca.",
+      "evidence": ["OVERSIRE-289"],
+      "confidence": "maybe"
+    },
+    {
+      "kind": "fold",
+      "keys": ["OVERSIRE-371"],
+      "parent": "OVERSIRE-285",
+      "reason": "A part of the live terminal.",
+      "confidence": "sure"
+    },
+    {
+      "kind": "relate",
+      "keys": ["OVERSIRE-390"],
+      "relation": { "kind": "blocked_by", "key": "OVERSIRE-376" },
+      "reason": "Both change Contract/schema/store.json.",
+      "confidence": "maybe"
+    },
+    {
+      "kind": "vague",
+      "keys": ["OVERSIRE-356"],
+      "reason": "No steps and no result. Only the title.",
+      "confidence": "sure"
+    }
+  ],
+  "skipped": ["OVERSIRE-311"],
+  "findings": ["11 groups of items tell the same problem."]
+}

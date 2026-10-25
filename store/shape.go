@@ -242,7 +242,7 @@ var (
 	})
 
 	areas        = maxItems(6, area)
-	itemRelation = object(fields{"kind": oneOf("blockedBy", "blocks", "relatesTo"), "item": itemRef})
+	itemRelation = object(fields{"kind": oneOf("blockedBy", "blocks", "relatesTo", "duplicate"), "item": itemRef})
 	itemPatch    = object(fields{"title?": str, "status?": str, "priority?": str, "assignees?": arrayOf(str), "labels?": arrayOf(str),
 		"parent?": str, "bodyMarkdown?": str})
 	changeAction = tagged("type", map[string]shape{

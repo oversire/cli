@@ -1,0 +1,14 @@
+{
+  "proposals": [
+    {
+      "kind": "merge",
+      "keys": ["OVERSIRE-402", "OVERSIRE-398", "OVERSIRE-329"],
+      "keep": "OVERSIRE-402",
+      "title": "Intake row moves when a pill appears",
+      "reason": "All three come from FeedLine: the badge column has no fixed width.",
+      "evidence": ["Sources/OverSireApp/feed_line.swift:58"],
+      "confidence": "sure",
+      "description": "## Problem\n\nAn intake row changes width when a pill shows.\n\n## Merged from\n\n- OVERSIRE-398\n- OVERSIRE-329"
+    }
+  ]
+}

@@ -3,7 +3,7 @@
   "$id": "https://oversire.dev/contract/actions.json",
   "title": "OverSire actions",
   "description": "Typed writes that the app or the cloud sends to an adapter.",
-  "x-oversire-schema": 1,
+  "x-oversire-schema": 2,
   "$defs": {
     "ActionKind": {
       "description": "The risk of an action in the action catalog. read: allow. change: ask once in each chat. outward: ask each time. settings: the assistant never runs it.",
@@ -59,8 +59,8 @@
       "additionalProperties": false
     },
     "RelationKind": {
-      "description": "The kind of a relation, seen from the item that holds it. A blocks B is the same relation as B blockedBy A. The tracker keeps the relations: OverSire keeps no second graph. Duplicates are not a relation here: the intake verdict covers them.",
-      "enum": ["blockedBy", "blocks", "relatesTo"]
+      "description": "The kind of a relation, seen from the item that holds it. A blocks B is the same relation as B blockedBy A. The tracker keeps the relations: OverSire keeps no second graph. A duplicate B: A tells the same problem as B, and B stays. Schema 2 added duplicate (Groom, OVERSIRE-336).",
+      "enum": ["blockedBy", "blocks", "relatesTo", "duplicate"]
     },
     "ItemRelation": {
       "type": "object",

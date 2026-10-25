@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oversire.dev/contract/groom.json",
+  "title": "OverSire Groom",
+  "description": "The result of a Groom session (OVERSIRE-336): the JSON object in the oversire-result block of its last message. The agent proposes a cleanup of the open items of one project. The app writes only the lines that the user selects.",
+  "x-oversire-schema": 1,
+  "$defs": {
+    "GroomKind": {
+      "description": "Open set. merge: two or more items tell one problem, and keep stays. done: the code does it already. obsolete: the item is no longer valid, or it works against the vision. fold: the item is a part of parent. relate: add relation. vague: the item stays and needs Enhance. A decoder keeps an unknown kind. The app shows it as a line that it cannot apply.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40
+    },
+    "GroomRelation": {
+      "description": "The relation of a relate line, seen from the item in keys.",
+      "type": "object",
+      "properties": {
+        "kind": { "description": "blocked_by, blocks or relates_to.", "type": "string", "minLength": 1 },
+        "key": { "description": "The other item.", "type": "string", "minLength": 1 }
+      },
+      "required": ["kind", "key"],
+      "additionalProperties": false
+    },
+    "GroomProposal": {
+      "description": "One line of the review. merge: keys has 2 or more keys, and keep is one of them. fold: keys has 1 key, and parent is set. relate: keys has 1 key, and relation is set.",
+      "type": "object",
+      "properties": {
+        "kind": { "$ref": "#/$defs/GroomKind" },
+        "keys": { "description": "The items of the line, for example OVERSIRE-402.", "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 },
+        "keep": { "description": "merge: the item that stays.", "type": "string" },
+        "parent": { "description": "fold: the key of the new parent.", "type": "string" },
+        "relation": { "$ref": "#/$defs/GroomRelation" },
+        "title": { "description": "merge: a short name for the group.", "type": "string" },
+        "reason": { "description": "Why, in at most 25 words.", "type": "string" },
+        "evidence": { "description": "Commits, pull requests, or a file and a line.", "type": "array", "items": { "type": "string" } },
+        "confidence": { "enum": ["sure", "maybe"] },
+        "description": { "description": "merge: the new description of keep, in Markdown.", "type": "string" }
+      },
+      "required": ["kind", "keys", "reason", "confidence"],
+      "additionalProperties": false
+    },
+    "GroomResult": {
+      "type": "object",
+      "properties": {
+        "proposals": { "type": "array", "items": { "$ref": "#/$defs/GroomProposal" } },
+        "skipped": { "description": "The keys that the agent did not check.", "type": "array", "items": { "type": "string" } },
+        "findings": { "description": "Short facts about the set.", "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["proposals"],
+      "additionalProperties": false
+    }
+  }
+}
