@@ -377,3 +377,26 @@ type SessionAskReply struct {
 	Error       string     `json:"error,omitempty"`
 	Message     string     `json:"message,omitempty"`
 }
+
+// LeaseRequest is the body of POST /v1/leases/{name} on the home daemon.
+type LeaseRequest struct {
+	Holder     string `json:"holder"` // the store device id of the app
+	HolderName string `json:"holderName"`
+	TTLSeconds int    `json:"ttlSeconds"`
+	Take       bool   `json:"take"` // take the lease also when another holder has it
+}
+
+// Limits of LeaseRequest.TTLSeconds.
+const (
+	LeaseMinTTL = 30
+	LeaseMaxTTL = 600
+)
+
+// Lease is one named lease: one holder until Until. Epoch increases at each new holder.
+type Lease struct {
+	Name       string    `json:"name"`
+	Holder     string    `json:"holder"`
+	HolderName string    `json:"holderName"`
+	Epoch      int       `json:"epoch"`
+	Until      time.Time `json:"until"`
+}

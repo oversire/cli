@@ -55,8 +55,10 @@ func (s *Server) accessLog(via string, next http.Handler) http.Handler {
 	})
 }
 
-// routine tells a write that comes many times a minute: an agent hook or an event ack.
-func routine(path string) bool { return path == "/v1/ack" || strings.HasPrefix(path, "/v1/hooks/") }
+// routine tells a write that comes many times a minute: an agent hook, an event ack or a lease renew.
+func routine(path string) bool {
+	return path == "/v1/ack" || strings.HasPrefix(path, "/v1/hooks/") || strings.HasPrefix(path, "/v1/leases/")
+}
 
 // note carries the caller from the access rule back to the access log.
 type note struct{ caller string }

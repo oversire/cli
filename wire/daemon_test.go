@@ -45,6 +45,8 @@ func TestDaemonFixtures(t *testing.T) {
 	roundTrip[WorkspaceRemoval](t, "workspace-removal")
 	roundTrip[WorkspaceFiles](t, "workspace-files")
 	roundTrip[WorkspaceFilesResult](t, "workspace-files-result")
+	roundTrip[LeaseRequest](t, "lease-request")
+	roundTrip[Lease](t, "lease")
 }
 
 func TestSessionSubject(t *testing.T) {

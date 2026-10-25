@@ -13,6 +13,7 @@ import (
 	"github.com/oversire/cli/eventlog"
 	"github.com/oversire/cli/group"
 	"github.com/oversire/cli/hooks"
+	"github.com/oversire/cli/lease"
 	"github.com/oversire/cli/orcawatch"
 	"github.com/oversire/cli/orders"
 	"github.com/oversire/cli/proc"
@@ -119,6 +120,9 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	srv.Handle(joins.Routes()...)
 	srv.Handle(syncer.Routes()...)
 	srv.Handle(storeRoutes.Routes()...)
+	leases := lease.NewBook(filepath.Join(data, "leases.json"), time.Now)
+	leases.OnChange = func(l wire.Lease) { srv.Notify(false, map[string]any{"type": "lease", "lease": l}) }
+	srv.Handle(lease.NewRoutes(leases, store).Routes()...)
 	srv.Handle(asks.Routes()...)
 	srv.Handle(ask.NewAsker(book, screen, reg, time.Now).Routes()...)
 	srv.Handle(installer.Routes()...)

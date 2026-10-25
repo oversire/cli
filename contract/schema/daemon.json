@@ -480,6 +480,31 @@
       "properties": { "paths": { "type": "array", "items": { "type": "string", "minLength": 1 } } },
       "required": ["paths"],
       "additionalProperties": false
+    },
+    "LeaseRequest": {
+      "description": "The body of POST /v1/leases/{name} (Member) on the home daemon. The app gets or renews the lease.",
+      "type": "object",
+      "properties": {
+        "holder": { "description": "The store device id of the app. It stays the same across launches.", "type": "string", "minLength": 1, "maxLength": 200 },
+        "holderName": { "description": "The machine name that the other apps show.", "type": "string", "minLength": 1, "maxLength": 200 },
+        "ttlSeconds": { "description": "The time limit of the lease.", "type": "integer", "minimum": 30, "maximum": 600 },
+        "take": { "description": "Take the lease also when another holder has it (Run them here).", "type": "boolean" }
+      },
+      "required": ["holder", "holderName", "ttlSeconds", "take"],
+      "additionalProperties": false
+    },
+    "Lease": {
+      "description": "A named lease on the home daemon: one holder until the time limit. The answer of POST and GET /v1/leases/{name}. HTTP 409 with a Lease: another holder has it. HTTP 409 with error and home: this daemon is not home.",
+      "type": "object",
+      "properties": {
+        "name": { "description": "For example automations.", "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+        "holder": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "holderName": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "epoch": { "description": "Increases at each new holder. A renew keeps it.", "type": "integer", "minimum": 1 },
+        "until": { "$ref": "#/$defs/Date" }
+      },
+      "required": ["name", "holder", "holderName", "epoch", "until"],
+      "additionalProperties": false
     }
   }
 }
