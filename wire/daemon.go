@@ -64,6 +64,7 @@ type DaemonSession struct {
 	StateSince     time.Time     `json:"stateSince"`
 	UpdatedAt      time.Time     `json:"updatedAt"`
 	Sources        []string      `json:"sources"`
+	Key            string        `json:"key,omitempty"` // the start key of the order that made the session
 }
 
 // Limits of DaemonSession text fields, in characters.

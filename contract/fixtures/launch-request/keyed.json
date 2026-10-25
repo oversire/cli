@@ -1,0 +1,8 @@
+{
+  "repo": "/Users/ada/Projects/oversire-workspace",
+  "agent": "claude",
+  "prompt": "Enhance OVERSIRE-317. End with one oversire-result block.",
+  "title": "Enhance OVERSIRE-317",
+  "inPlace": true,
+  "key": "enhance:OVERSIRE-317"
+}

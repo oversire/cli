@@ -168,6 +168,15 @@ func (rt *Runtime) Start(ctx context.Context, o runtime.Order, r wire.LaunchRequ
 	return ref, nil
 }
 
+// Launch is Start with the DaemonSession id, which is the session id.
+func (rt *Runtime) Launch(ctx context.Context, o runtime.Order, r wire.LaunchRequest) (runtime.Started, error) {
+	ref, err := rt.Start(ctx, o, r)
+	if err != nil {
+		return runtime.Started{}, err
+	}
+	return runtime.Started{Session: ref, PaneKey: ref.ID}, nil
+}
+
 func (rt *Runtime) Stop(ctx context.Context, ref wire.SessionRef) error {
 	s, err := rt.session(ref)
 	if err != nil {

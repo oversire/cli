@@ -18,7 +18,7 @@ const MaxReadLines = 200
 const (
 	MaxHistoryEarlier = 50
 	MaxHistoryFull    = 10
-	MaxHistoryChars   = 20000
+	MaxHistoryChars   = 40000 // an Enhance result fits in one last turn
 )
 
 // Order names the sessionStart order. A runtime that queues a session fails it at ExpiresAt.

@@ -39,6 +39,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	serveCfg := cfg.ServeOrDefault()
 	events := eventlog.New(eventlog.DefaultCapacity)
 	book := sessions.NewBook(cfg.Machine(), filepath.Join(data, "sessions.json"), events, time.Now)
+	runner.WithKeys(book)
 
 	exe, ok := orca.FindCLI()
 	if !ok {

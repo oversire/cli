@@ -5,10 +5,12 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"sync"
 	"time"
 
 	"github.com/oversire/cli/server"
+	"github.com/oversire/cli/sessions"
 	"github.com/oversire/cli/wire"
 )
 
@@ -29,6 +31,15 @@ type Journal interface {
 	Put(r wire.Result)
 	MarkSent(order string)
 }
+
+// Keys finds the live session of a start key and keeps the key of a new session (sessions.Book).
+type Keys interface {
+	ByKey(key string) (wire.DaemonSession, bool)
+	Apply(p sessions.Patch)
+}
+
+// startKey is the form of LaunchRequest.Key in the contract.
+var startKey = regexp.MustCompile(`^[a-z]+:[A-Za-z0-9._-]+$`)
 
 // Outcome tells what Run did with an order.
 type Outcome int
@@ -54,12 +65,21 @@ type Runner struct {
 	journal  Journal
 	now      func() time.Time
 
-	mu      sync.Mutex
-	running map[string]bool
+	keys Keys
+
+	mu       sync.Mutex
+	running  map[string]bool
+	keyLocks map[string]*sync.Mutex
 }
 
 func NewRunner(runtimes Runtimes, allow Allow, journal Journal, now func() time.Time) *Runner {
-	return &Runner{runtimes: runtimes, allow: allow, journal: journal, now: now, running: map[string]bool{}}
+	return &Runner{runtimes: runtimes, allow: allow, journal: journal, now: now, running: map[string]bool{}, keyLocks: map[string]*sync.Mutex{}}
+}
+
+// WithKeys turns on the start keys. Without it, a keyed start launches each time.
+func (r *Runner) WithKeys(k Keys) *Runner {
+	r.keys = k
+	return r
 }
 
 // Result gives the stored result of an order.
@@ -117,11 +137,56 @@ func (r *Runner) do(ctx context.Context, o wire.WorkOrder, h Hooks) wire.Result 
 		return failed(o.ID, reason)
 	}
 	call(h.Accepted)
-	out, err := r.runtimes.Do(ctx, o)
+	out, err := r.start(ctx, o)
 	if err != nil {
 		return failed(o.ID, err.Error())
 	}
 	return wire.Result{Order: o.ID, State: wire.ResultDone, Result: out}
+}
+
+// start runs o. A sessionStart with a key gives the live session of the key, else it launches and keeps the key.
+// The lock of the key holds two orders with one key apart.
+func (r *Runner) start(ctx context.Context, o wire.WorkOrder) (*wire.WorkOrderResult, error) {
+	p, ok := o.Payload.(wire.LaunchRequest)
+	if !ok || p.Key == "" || r.keys == nil {
+		return r.runtimes.Do(ctx, o)
+	}
+	if !startKey.MatchString(p.Key) || len(p.Key) > 200 {
+		return nil, fmt.Errorf("The start key %q is not valid.", p.Key)
+	}
+	unlock := r.lockKey(p.Key)
+	defer unlock()
+	if s, ok := r.keys.ByKey(p.Key); ok {
+		ref := wire.SessionRef{Workspace: wire.WorkspaceRef{Account: wire.AccountID{Provider: s.Runtime, ID: "local"}, ID: s.Workspace}, ID: s.ID}
+		if s.Terminal != "" {
+			ref.ID = s.Terminal
+		}
+		return &wire.WorkOrderResult{Session: &ref, PaneKey: s.ID}, nil
+	}
+	out, err := r.runtimes.Do(ctx, o)
+	if err != nil || out.Session == nil || out.PaneKey == "" {
+		return out, err
+	}
+	// The session ref names the terminal when its id is not the session id.
+	patch := sessions.Patch{ID: out.PaneKey, Key: &p.Key, Runtime: &o.Runtime, Workspace: &out.Session.Workspace.ID}
+	if out.Session.ID != out.PaneKey {
+		patch.Terminal = &out.Session.ID
+	}
+	r.keys.Apply(patch)
+	return out, nil
+}
+
+// lockKey holds the lock of one start key. The result opens it.
+func (r *Runner) lockKey(key string) func() {
+	r.mu.Lock()
+	l, ok := r.keyLocks[key]
+	if !ok {
+		l = &sync.Mutex{}
+		r.keyLocks[key] = l
+	}
+	r.mu.Unlock()
+	l.Lock()
+	return l.Unlock
 }
 
 // LogResult writes the end of an order that ran. An order that failed before the runtime started is refused.

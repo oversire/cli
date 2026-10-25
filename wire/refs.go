@@ -43,6 +43,7 @@ type LaunchRequest struct {
 	Title       string   `json:"title,omitempty"`       // the terminal title
 	BaseBranch  string   `json:"baseBranch,omitempty"`
 	InPlace     bool     `json:"inPlace,omitempty"` // a new terminal in the folder Repo, no workspace
+	Key         string   `json:"key,omitempty"`     // one live session for each key
 }
 
 // WorkspaceName is the name, else the item key.

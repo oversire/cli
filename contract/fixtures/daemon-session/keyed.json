@@ -1,0 +1,17 @@
+{
+  "id": "tab-4:leaf-1",
+  "machine": "mbp",
+  "runtime": "orca",
+  "harness": "claude",
+  "workspace": "wt-oversire-main",
+  "terminal": "term_5d2e8b10",
+  "cwd": "/Users/dev/code/oversire-workspace",
+  "repo": "oversire/oversire",
+  "branch": "main",
+  "state": "working",
+  "prompt": "Enhance OVERSIRE-317. End with one oversire-result block.",
+  "stateSince": "2026-10-25T09:14:02Z",
+  "updatedAt": "2026-10-25T09:15:40Z",
+  "sources": ["hook", "orca"],
+  "key": "enhance:OVERSIRE-317"
+}

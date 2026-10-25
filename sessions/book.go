@@ -28,9 +28,11 @@ const (
 	// Coalesce is the window in which more changes of one session give only one event.
 	Coalesce = 300 * time.Millisecond
 	// OrcaLag is how much newer an Orca patch must be than the last hook patch to set the state.
-	OrcaLag     = 5 * time.Second
-	DoneTTL     = 24 * time.Hour
-	CLIEndTTL   = 10 * time.Minute
+	OrcaLag   = 5 * time.Second
+	DoneTTL   = 24 * time.Hour
+	CLIEndTTL = 10 * time.Minute
+	// UnseenTTL is how long a keyed session that no source reported stays.
+	UnseenTTL   = 10 * time.Minute
 	persistGap  = 2 * time.Second
 	runInterval = 100 * time.Millisecond
 )
@@ -51,6 +53,8 @@ type Patch struct {
 	End             bool // the source says the session is gone
 	// Since is when the source saw the state start. Zero means At.
 	Since time.Time
+	// Key is the start key of the order that made the session.
+	Key *string
 }
 
 type Appender interface{ Append(e wire.ProviderEvent) }
@@ -149,6 +153,7 @@ func (e *entry) merge(p Patch) {
 	set(&e.s.Repo, p.Repo)
 	set(&e.s.Branch, p.Branch)
 	set(&e.s.Question, p.Question)
+	set(&e.s.Key, p.Key)
 	set(&e.tool, p.Tool)
 	set(&e.toolInput, p.ToolInput)
 	if p.Prompt != nil {
@@ -157,7 +162,7 @@ func (e *entry) merge(p Patch) {
 	if p.LastMessage != nil {
 		e.s.LastMessage = clip(*p.LastMessage, wire.MaxSessionLastMessage)
 	}
-	if !containsStr(e.s.Sources, string(p.Source)) {
+	if p.Source != "" && !containsStr(e.s.Sources, string(p.Source)) {
 		e.s.Sources = append(e.s.Sources, string(p.Source))
 		sort.Strings(e.s.Sources)
 	}
@@ -264,7 +269,8 @@ func (b *Book) send(s wire.DaemonSession, action string, now time.Time) {
 	})
 }
 
-// Prune removes expired sessions: done or failed for DoneTTL, and ended cli sessions after CLIEndTTL.
+// Prune removes expired sessions: done or failed for DoneTTL, ended cli sessions after CLIEndTTL,
+// and keyed sessions that no source reported in UnseenTTL.
 // A done session that Orca still reports stays: its DoneTTL starts at the last Orca poll.
 func (b *Book) Prune(now time.Time) {
 	b.mu.Lock()
@@ -275,7 +281,8 @@ func (b *Book) Prune(now time.Time) {
 		if e.lastOrca.After(since) {
 			since = e.lastOrca
 		}
-		if done && !now.Before(since.Add(DoneTTL)) || !e.ended.IsZero() && !now.Before(e.ended.Add(CLIEndTTL)) {
+		unseen := len(e.s.Sources) == 0 && !now.Before(e.s.UpdatedAt.Add(UnseenTTL))
+		if done && !now.Before(since.Add(DoneTTL)) || !e.ended.IsZero() && !now.Before(e.ended.Add(CLIEndTTL)) || unseen {
 			b.remove(e, now)
 		}
 	}
@@ -306,6 +313,18 @@ func (b *Book) Get(id string) (wire.DaemonSession, bool) {
 		return wire.DaemonSession{}, false
 	}
 	return copySession(e.s), true
+}
+
+// ByKey gives the live session with the start key. An ended session frees its key.
+func (b *Book) ByKey(key string) (wire.DaemonSession, bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for _, e := range b.byID {
+		if e.s.Key == key && e.ended.IsZero() {
+			return copySession(e.s), true
+		}
+	}
+	return wire.DaemonSession{}, false
 }
 
 // Tool gives the last tool and its input of a session.
