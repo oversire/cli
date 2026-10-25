@@ -149,3 +149,18 @@ func TestStopFreesTheKey(t *testing.T) {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+func TestStartKeepsModelEffortAndProfile(t *testing.T) {
+	r, _, book := keyRig()
+	o := order("wo-1", "claude", now.Add(time.Hour))
+	p := o.Payload.(wire.LaunchRequest)
+	p.Model, p.Effort, p.Profile = "claude-opus-5-5", "max", "claude-max"
+	o.Payload = p
+	if res, _ := r.Run(trusted(), o, Hooks{}); res.State != wire.ResultDone {
+		t.Fatalf("result = %+v", res.Result)
+	}
+	s, ok := book.Get("s-1")
+	if !ok || s.Model != "claude-opus-5-5" || s.Effort != "max" || s.Profile != "claude-max" || s.Key != "" {
+		t.Fatalf("book = %+v %v", s, ok)
+	}
+}

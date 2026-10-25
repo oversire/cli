@@ -381,3 +381,50 @@ func TestHistoryFailures(t *testing.T) {
 		noEnvironment(t, r)
 	}
 }
+
+func TestWithModel(t *testing.T) {
+	cases := []struct{ agent, cmd, model, effort, want, err string }{
+		{"claude", "claude -n x", "claude-opus-5-5", "max", "claude -n x --model claude-opus-5-5 --effort max", ""},
+		{"claude", "claude -n x", "", "", "claude -n x", ""},
+		{"claude", "claude -n x --model opus", "claude-opus-5-5", "high", "claude -n x --model opus --effort high", ""},
+		{"claude", "claude --effort=low", "m", "high", "claude --effort=low --model m", ""},
+		{"codex", "codex", "gpt-5.5", "max", "codex -m gpt-5.5 -c model_reasoning_effort=xhigh", ""},
+		{"codex", "codex -c model_reasoning_effort=low", "", "high", "codex -c model_reasoning_effort=low", ""},
+		{"codex", "codex -m o3", "gpt-5.5", "", "codex -m o3", ""},
+		{"gemini", "gemini", "gemini-2.5-pro", "high", "gemini --model gemini-2.5-pro", ""},
+		{"opencode", "opencode", "anthropic/claude", "high", "opencode", ""},
+		{"cursor", "cursor", "claude-opus-4-8[effort=high]", "", "cursor --model 'claude-opus-4-8[effort=high]'", ""},
+		{"gemini-work", "gemini-work", "m", "high", "gemini-work", ""},
+		{"claude", "claude", "m; rm -rf ~", "", "", "The model"},
+		{"claude", "claude", "", "high'", "", "The effort"},
+	}
+	for _, c := range cases {
+		got, err := withModel(c.agent, c.cmd, c.model, c.effort)
+		if c.err != "" {
+			if err == nil || !strings.Contains(err.Error(), c.err) {
+				t.Errorf("%q %q %q: err %v, want %q", c.cmd, c.model, c.effort, err, c.err)
+			}
+			continue
+		}
+		if err != nil || got != c.want {
+			t.Errorf("%q %q %q: got %q %v, want %q", c.cmd, c.model, c.effort, got, err, c.want)
+		}
+	}
+}
+
+func TestStartAddsTheModelFlags(t *testing.T) {
+	o, r := setup()
+	r.on("worktree ps", `{"ok":true,"result":{"worktrees":[]}}`)
+	r.on("worktree create", `{"ok":true,"result":{"worktree":{"id":"c1"}}}`)
+	r.on("terminal list", `{"ok":true,"result":{"terminals":[{"handle":"h1","worktreeId":"c1"}]}}`)
+	r.on("terminal wait", `{"ok":true,"result":{"wait":{"satisfied":true}}}`)
+	r.on("terminal send", `{"ok":true,"result":{}}`)
+
+	if _, err := o.Start(context.Background(), runtime.Order{}, wire.LaunchRequest{Repo: "/w", Name: "ENG-4", Agent: "claude", Prompt: "go",
+		Model: "claude-opus-5-5", Effort: "max", Profile: "claude-max"}); err != nil {
+		t.Fatal(err)
+	}
+	if sends := r.args("terminal send"); len(sends) != 2 || sends[0][5] != "claude -n 'ENG-4' --model claude-opus-5-5 --effort max" {
+		t.Fatalf("sends %q", sends)
+	}
+}

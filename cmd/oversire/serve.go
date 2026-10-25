@@ -8,6 +8,7 @@ import (
 	goruntime "runtime"
 	"time"
 
+	"github.com/oversire/cli/agents"
 	"github.com/oversire/cli/ask"
 	"github.com/oversire/cli/config"
 	"github.com/oversire/cli/eventlog"
@@ -34,7 +35,7 @@ const spoolInterval = 10 * time.Second
 
 // serveTasks builds the serve role: the event log, the session book, the hooks, the Orca watcher, the group, the direct orders and the server.
 // runner runs the direct orders. reports gets the book and the direct orders as sinks of the oversire runtime.
-func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Registry, data string, hub func() string, runner *orders.Runner, reports *reports, updates *update.Loop) ([]func(context.Context) error, error) {
+func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Registry, data string, hub func() string, runner *orders.Runner, reports *reports, updates *update.Loop, models agents.Lister) ([]func(context.Context) error, error) {
 	serveCfg := cfg.ServeOrDefault()
 	events := eventlog.New(eventlog.DefaultCapacity)
 	book := sessions.NewBook(cfg.Machine(), filepath.Join(data, "sessions.json"), events, time.Now)
@@ -130,6 +131,9 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	runtimeAPI := runtime.NewAPI(reg, filepath.Join(data, "files"), time.Now)
 	runtimeAPI.Log = c.log
 	srv.Handle(runtimeAPI.Routes()...)
+	agentAPI := agents.NewAPI(models)
+	agentAPI.Log = c.log
+	srv.Handle(agentAPI.Routes()...)
 	streams := term.NewAPI(book, reg, time.Now)
 	streams.Log = c.log
 	srv.Handle(streams.Routes()...)

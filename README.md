@@ -279,6 +279,7 @@ The daemon owns the agent runtimes of this machine: `oversire`, and `orca` when 
 | `GET /v1/workspaces` | A `DaemonWorkspacesPage`: the workspaces with their terminals. `errors` has the error of each runtime that fails. |
 | `DELETE /v1/workspaces/{id}` | Body `WorkspaceRemove` `{runtime, force, runHooks}`. Answers a `WorkspaceRemoval` `{warning?}`. Escape a `/` in the id as `%2F`. 404: no such runtime or workspace. 501: the runtime cannot remove. The main checkout of a repo cannot be removed. |
 | `POST /v1/files` | Body `WorkspaceFiles` (1 to 20 files, 25 MB together, base64 data). Plain file names only: no `/`, no leading dot, no two files with the same name. The daemon writes the files into a new folder `<data>/files/<id>/` and answers `WorkspaceFilesResult` `{paths}`. It removes the folders older than 7 days. |
+| `GET /v1/agents/{agent}/models` | An `AgentModels` `{agent, models, source, reason?}`: the models of one agent CLI on this machine, through agent-wire (`source` `wire`). The list stays in a cache for 10 minutes. A CLI that cannot list, or a probe that fails, gives an empty list, `source` `none` and the `reason`. 404: the daemon does not know the agent. The Agents card of the app reads it from the "Run sessions on" machine. |
 | `POST /v1/reveal` | Loopback only. Body: a `SessionRef`. Shows the terminal in the runtime UI, and answers 204. 404: no such runtime or session. 501: the runtime cannot show it. |
 
 ### Session stream
@@ -358,6 +359,7 @@ The daemon writes its log to stderr. The service puts it in the log of the table
 - **Dial-out to the hub.** The daemon opens the hub connection. The hub needs no open port on the machine.
 - **Typed orders.** An order is one of `sessionStart`, `sessionStop`, `sessionRead`, `sessionSend` and `sessionHistory`. There is no shell order. The `oversire` runtime asks the hub before an agent uses a tool, and denies it when no answer comes. An order with a field that the contract does not know fails.
 - **Checked start command.** A `sessionStart` order can carry `command`, the start command that the user set in OverSire (Settings › Runtime). The `orca` runtime types it into the terminal in place of its default. It accepts the command only if the first word is the agent of the order (or a path that ends in `/<agent>`), and the text has no shell operator (`;` `|` `&` `` ` `` `$(` `>` `<` or a newline). Else the order fails with the reason. An empty field gives the default command. The `oversire` runtime starts the agent over agent-wire, without a command line, and ignores the field.
+- **Model and effort.** A `sessionStart` order can carry `model`, `effort` and `profile` (the OverSire agent name, for display). The `orca` runtime adds the flags of `agentwire.ModelArgs` to the end of the command, for example `--model claude-opus-5-5 --effort max`. A flag that the command has already (`--model`, `-m`, `--effort`, `--thinking`, `--reasoning-effort`, `model_reasoning_effort`) stays as it is: the command wins. A value with a shell character fails the order. The `oversire` runtime gives the model and the effort to agent-wire. The session book keeps the three fields on the session.
 - **Local allow list.** The machine owner decides which runtimes, repos and agents the hub can use. The hub cannot change the list.
 - **Expiry.** Each order has an expiry time. The daemon never does an expired order.
 - **At most once.** The daemon keeps the last 500 finished orders in `orders.json`. An order that the hub or an app sends again does not run again. The daemon only sends its result again.
@@ -388,6 +390,7 @@ The layout:
 | `wire` | The Go types of the wire contract. |
 | `hub` | The WebSocket client and the journal of finished orders. |
 | `ask` | The route `POST /v1/sessions/{id}/ask`: it sends a question to a session and waits for the turn end. |
+| `agents` | The route `GET /v1/agents/{agent}/models`. |
 | `term` | The route `GET /v1/sessions/{id}/stream`: the viewers, the acks, the size lease and the `Source` and `TurnSource` interfaces of the runtimes. |
 | `orders` | The one run path of each order (`Runner`), and the direct orders from the apps of the group (`Direct`). |
 | `runtime` | The `Runtime` interface, the registry and the runtime routes (`API`). `runtime/orca` is the Orca driver for the local Orca. `runtime/oversire` is the agent-wire driver. |

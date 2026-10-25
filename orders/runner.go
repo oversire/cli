@@ -32,7 +32,7 @@ type Journal interface {
 	MarkSent(order string)
 }
 
-// Keys finds the live session of a start key and keeps the key of a new session (sessions.Book).
+// Keys finds the live session of a start key and keeps the key, model, effort and profile of a new session (sessions.Book).
 type Keys interface {
 	ByKey(key string) (wire.DaemonSession, bool)
 	Apply(p sessions.Patch)
@@ -157,32 +157,44 @@ func (r *Runner) start(ctx context.Context, o wire.WorkOrder) (*wire.WorkOrderRe
 		return out, err
 	}
 	p, ok := o.Payload.(wire.LaunchRequest)
-	if !ok || p.Key == "" || r.keys == nil {
+	tagged := p.Model != "" || p.Effort != "" || p.Profile != ""
+	if !ok || (p.Key == "" && !tagged) || r.keys == nil {
 		return r.runtimes.Do(ctx, o)
 	}
-	if !startKey.MatchString(p.Key) || len(p.Key) > 200 {
-		return nil, fmt.Errorf("The start key %q is not valid.", p.Key)
-	}
-	unlock := r.lockKey(p.Key)
-	defer unlock()
-	if s, ok := r.keys.ByKey(p.Key); ok {
-		ref := wire.SessionRef{Workspace: wire.WorkspaceRef{Account: wire.AccountID{Provider: s.Runtime, ID: "local"}, ID: s.Workspace}, ID: s.ID}
-		if s.Terminal != "" {
-			ref.ID = s.Terminal
+	if p.Key != "" {
+		if !startKey.MatchString(p.Key) || len(p.Key) > 200 {
+			return nil, fmt.Errorf("The start key %q is not valid.", p.Key)
 		}
-		return &wire.WorkOrderResult{Session: &ref, PaneKey: s.ID}, nil
+		unlock := r.lockKey(p.Key)
+		defer unlock()
+		if s, ok := r.keys.ByKey(p.Key); ok {
+			ref := wire.SessionRef{Workspace: wire.WorkspaceRef{Account: wire.AccountID{Provider: s.Runtime, ID: "local"}, ID: s.Workspace}, ID: s.ID}
+			if s.Terminal != "" {
+				ref.ID = s.Terminal
+			}
+			return &wire.WorkOrderResult{Session: &ref, PaneKey: s.ID}, nil
+		}
 	}
 	out, err := r.runtimes.Do(ctx, o)
 	if err != nil || out.Session == nil || out.PaneKey == "" {
 		return out, err
 	}
 	// The session ref names the terminal when its id is not the session id.
-	patch := sessions.Patch{ID: out.PaneKey, Key: &p.Key, Runtime: &o.Runtime, Workspace: &out.Session.Workspace.ID}
+	patch := sessions.Patch{ID: out.PaneKey, Runtime: &o.Runtime, Workspace: &out.Session.Workspace.ID,
+		Key: nonEmpty(p.Key), Model: nonEmpty(p.Model), Effort: nonEmpty(p.Effort), Profile: nonEmpty(p.Profile)}
 	if out.Session.ID != out.PaneKey {
 		patch.Terminal = &out.Session.ID
 	}
 	r.keys.Apply(patch)
 	return out, nil
+}
+
+// nonEmpty is nil for "", so the patch keeps the field.
+func nonEmpty(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
 
 // lockKey holds the lock of one start key. The result opens it.

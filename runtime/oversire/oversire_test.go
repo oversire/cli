@@ -416,3 +416,36 @@ func TestClipAndTail(t *testing.T) {
 		t.Fatal("short text changed")
 	}
 }
+
+// startSpy keeps the last agent-wire StartRequest.
+type startSpy struct {
+	*agentwire.Runtime
+	mu  sync.Mutex
+	req agentwire.StartRequest
+}
+
+func (s *startSpy) Start(ctx context.Context, req agentwire.StartRequest) (agentwire.Session, error) {
+	s.mu.Lock()
+	s.req = req
+	s.mu.Unlock()
+	return s.Runtime.Start(ctx, req)
+}
+
+func TestStartPassesModelAndEffort(t *testing.T) {
+	var spy *startSpy
+	f := setupWith(t, chat, Options{}, func(aw *agentwire.Runtime) Harnesses {
+		spy = &startSpy{Runtime: aw}
+		return spy
+	})
+	ref, err := f.rt.Start(context.Background(), runtime.Order{ID: "o1"}, wire.LaunchRequest{Repo: f.repo, Name: "APP-9", Agent: "fake", Prompt: "go",
+		Model: "claude-opus-5-5", Effort: "max", Profile: "claude-max"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.rec.wait(t, ref.ID, wire.SessionWaitingInput)
+	spy.mu.Lock()
+	defer spy.mu.Unlock()
+	if spy.req.Model != "claude-opus-5-5" || spy.req.Effort != "max" {
+		t.Fatalf("start request %#v", spy.req)
+	}
+}

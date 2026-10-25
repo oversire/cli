@@ -55,6 +55,8 @@ type Patch struct {
 	Since time.Time
 	// Key is the start key of the order that made the session.
 	Key *string
+	// Model, Effort and Profile come from the LaunchRequest of the start.
+	Model, Effort, Profile *string
 }
 
 type Appender interface{ Append(e wire.ProviderEvent) }
@@ -159,6 +161,9 @@ func (e *entry) merge(p Patch) {
 	set(&e.s.Branch, p.Branch)
 	set(&e.s.Question, p.Question)
 	set(&e.s.Key, p.Key)
+	set(&e.s.Model, p.Model)
+	set(&e.s.Effort, p.Effort)
+	set(&e.s.Profile, p.Profile)
 	set(&e.tool, p.Tool)
 	set(&e.toolInput, p.ToolInput)
 	if p.Prompt != nil {

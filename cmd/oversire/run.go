@@ -105,7 +105,7 @@ func (c *cli) run(ctx context.Context) error {
 			}
 			return "on"
 		}
-		serve, err := c.serveTasks(ctx, cfg, reg, data, hubHealth, runner, reps, updates)
+		serve, err := c.serveTasks(ctx, cfg, reg, data, hubHealth, runner, reps, updates, agents)
 		if err != nil {
 			return err
 		}

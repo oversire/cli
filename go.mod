@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/coder/websocket v1.8.14
-	github.com/trebi-ai/agent-wire v0.6.1
+	github.com/trebi-ai/agent-wire v0.7.2
 	golang.org/x/crypto v0.47.0
 	modernc.org/sqlite v1.59.0
 )

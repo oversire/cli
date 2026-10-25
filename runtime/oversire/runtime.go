@@ -352,6 +352,8 @@ func (s *session) run(ctx context.Context, expires time.Time) {
 	}
 	aw, err := s.rt.agents.Start(ctx, agentwire.StartRequest{
 		Harness:      agentwire.Harness(s.req.Agent),
+		Model:        s.req.Model,
+		Effort:       s.req.Effort,
 		WorkingDir:   s.dir,
 		Instructions: s.instructions(),
 		Permissions:  agentwire.PermissionPolicy{Mode: agentwire.PermissionAsk},

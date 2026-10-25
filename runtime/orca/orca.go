@@ -16,6 +16,8 @@ import (
 	"time"
 	"unicode"
 
+	agentwire "github.com/trebi-ai/agent-wire"
+
 	"github.com/oversire/cli/digest"
 	"github.com/oversire/cli/runtime"
 	"github.com/oversire/cli/wire"
@@ -106,9 +108,12 @@ func (o *Orca) Launch(ctx context.Context, _ runtime.Order, r wire.LaunchRequest
 		}
 		command = r.Command
 	}
+	command, err := withModel(r.Agent, command, r.Model, r.Effort)
+	if err != nil {
+		return none, err
+	}
 
 	var t terminal
-	var err error
 	if r.InPlace {
 		if t, err = o.createTerminal(ctx, "path:"+r.Repo, title, command); err != nil {
 			return none, err
@@ -309,6 +314,62 @@ func checkCommand(agent, cmd string) error {
 		return fmt.Errorf("The command must start with %s.", agent)
 	}
 	return nil
+}
+
+// modelValue keeps a model or effort value safe to type into a shell, in single quotes when needed.
+var (
+	modelValue = regexp.MustCompile(`^[A-Za-z0-9._/:@+=,\[\]-]+$`)
+	plainValue = regexp.MustCompile(`^[A-Za-z0-9._/:@+=,-]+$`)
+)
+
+// Flags that set the model or the effort on some CLI. A command with one of them keeps its own value.
+var (
+	modelFlags  = []string{"--model", "-m"}
+	effortFlags = []string{"--effort", "--thinking", "--reasoning-effort", "model_reasoning_effort"}
+)
+
+// withModel adds the agent-wire model and effort flags of the base CLI to the command.
+// A flag that the command has already stays as it is: the command wins.
+func withModel(agent, command, model, effort string) (string, error) {
+	words := strings.Fields(command)
+	var add []string
+	for _, v := range []struct {
+		value, label string
+		flags        []string
+		args         []string
+	}{
+		{model, "model", modelFlags, agentwire.ModelArgs(agentwire.Harness(agent), model, "")},
+		{effort, "effort", effortFlags, agentwire.ModelArgs(agentwire.Harness(agent), "", effort)},
+	} {
+		if v.value == "" || len(v.args) == 0 || hasAnyFlag(words, v.flags) {
+			continue
+		}
+		if !modelValue.MatchString(v.value) {
+			return "", fmt.Errorf("The %s %q is not valid.", v.label, v.value)
+		}
+		for _, a := range v.args {
+			if !plainValue.MatchString(a) {
+				a = "'" + a + "'"
+			}
+			add = append(add, a)
+		}
+	}
+	if len(add) == 0 {
+		return command, nil
+	}
+	return command + " " + strings.Join(add, " "), nil
+}
+
+// hasAnyFlag is true when a word is one of the flags, sets it with =, or names it in -c key=value.
+func hasAnyFlag(words, flags []string) bool {
+	for _, w := range words {
+		for _, f := range flags {
+			if w == f || strings.HasPrefix(w, f+"=") || strings.HasPrefix(strings.Trim(w, `'"`), f+"=") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (o *Orca) Stop(ctx context.Context, s wire.SessionRef) error {
