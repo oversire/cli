@@ -1,0 +1,6 @@
+{
+  "agent": "gemini",
+  "models": [],
+  "source": "none",
+  "reason": "gemini cannot list its models"
+}

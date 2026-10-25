@@ -1,0 +1,20 @@
+{
+  "id": "tab-7:leaf-1",
+  "machine": "mbp",
+  "runtime": "orca",
+  "harness": "claude",
+  "workspace": "wt-oversire-317",
+  "terminal": "term_9a1c4e22",
+  "cwd": "/Users/dev/code/oversire-workspace/.wt/oversire-317",
+  "repo": "oversire/oversire",
+  "branch": "oversire-317",
+  "state": "working",
+  "prompt": "work on OVERSIRE-317",
+  "stateSince": "2026-10-25T13:02:10Z",
+  "startedAt": "2026-10-25T13:01:58Z",
+  "updatedAt": "2026-10-25T13:03:44Z",
+  "sources": ["hook", "orca"],
+  "model": "claude-opus-5-5",
+  "effort": "max",
+  "profile": "claude-max"
+}

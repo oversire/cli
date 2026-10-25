@@ -1,0 +1,9 @@
+{
+  "agent": "claude",
+  "models": [
+    { "id": "default", "name": "Default (recommended)", "description": "Opus 5.5 for complex work", "isDefault": true },
+    { "id": "claude-opus-5-5", "name": "Opus 5.5", "isDefault": false },
+    { "id": "claude-sonnet-5-5", "name": "Sonnet 5.5", "description": "Fast for daily tasks", "isDefault": false }
+  ],
+  "source": "wire"
+}

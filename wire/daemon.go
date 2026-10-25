@@ -65,7 +65,32 @@ type DaemonSession struct {
 	StartedAt      *time.Time    `json:"startedAt,omitempty"` // when the daemon first saw the session; a restart keeps it
 	UpdatedAt      time.Time     `json:"updatedAt"`
 	Sources        []string      `json:"sources"`
-	Key            string        `json:"key,omitempty"` // the start key of the order that made the session
+	Key            string        `json:"key,omitempty"`     // the start key of the order that made the session
+	Model          string        `json:"model,omitempty"`   // LaunchRequest.Model of the start
+	Effort         string        `json:"effort,omitempty"`  // LaunchRequest.Effort of the start
+	Profile        string        `json:"profile,omitempty"` // LaunchRequest.Profile: the OverSire agent name
+}
+
+// AgentModel is one model of an agent CLI, as agent-wire ModelInfo gives it.
+type AgentModel struct {
+	ID          string `json:"id"`
+	Name        string `json:"name,omitempty"`
+	Description string `json:"description,omitempty"`
+	IsDefault   bool   `json:"isDefault"`
+}
+
+// Values of AgentModels.Source. Open set.
+const (
+	ModelSourceWire = "wire"
+	ModelSourceNone = "none"
+)
+
+// AgentModels is the answer of GET /v1/agents/{agent}/models.
+type AgentModels struct {
+	Agent  string       `json:"agent"`
+	Models []AgentModel `json:"models"`
+	Source string       `json:"source"`
+	Reason string       `json:"reason,omitempty"` // why the list is empty
 }
 
 // Limits of DaemonSession text fields, in characters.

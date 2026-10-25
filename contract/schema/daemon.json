@@ -43,9 +43,36 @@
         "startedAt": { "description": "When the daemon first saw the session. A restart of the daemon keeps it.", "$ref": "#/$defs/Date" },
         "updatedAt": { "description": "The last change of any field.", "$ref": "#/$defs/Date" },
         "sources": { "description": "The sources that gave data.", "type": "array", "items": { "enum": ["hook", "orca", "wire"] } },
-        "key": { "description": "The start key of the sessionStart order that made the session (LaunchRequest.key).", "type": "string", "minLength": 1, "maxLength": 200, "pattern": "^[a-z]+:[A-Za-z0-9._-]+$" }
+        "key": { "description": "The start key of the sessionStart order that made the session (LaunchRequest.key).", "type": "string", "minLength": 1, "maxLength": 200, "pattern": "^[a-z]+:[A-Za-z0-9._-]+$" },
+        "model": { "description": "LaunchRequest.model of the start. Absent for a session that OverSire did not start.", "type": "string", "minLength": 1, "maxLength": 200 },
+        "effort": { "description": "LaunchRequest.effort of the start.", "type": "string", "minLength": 1, "maxLength": 40 },
+        "profile": { "description": "LaunchRequest.profile of the start: the OverSire agent name.", "type": "string", "minLength": 1, "maxLength": 200 }
       },
       "required": ["id", "machine", "runtime", "harness", "cwd", "state", "stateSince", "updatedAt", "sources"],
+      "additionalProperties": false
+    },
+    "AgentModel": {
+      "description": "One model of an agent CLI. The fields match ModelInfo of AgentBinder and agent-wire.",
+      "type": "object",
+      "properties": {
+        "id": { "description": "The value of LaunchRequest.model.", "type": "string", "minLength": 1 },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "isDefault": { "type": "boolean" }
+      },
+      "required": ["id", "isDefault"],
+      "additionalProperties": false
+    },
+    "AgentModels": {
+      "description": "The answer of GET /v1/agents/{agent}/models (Member): the models of one CLI on the machine. HTTP 404: the daemon does not know the agent. A CLI that cannot list gives an empty list and a reason.",
+      "type": "object",
+      "properties": {
+        "agent": { "description": "The base CLI: an agent-wire or AgentBinder harness name.", "type": "string", "minLength": 1 },
+        "models": { "type": "array", "items": { "$ref": "#/$defs/AgentModel" } },
+        "source": { "description": "wire: the CLI gave the list through agent-wire. none: no list. Open set.", "type": "string", "minLength": 1 },
+        "reason": { "description": "Why the list is empty.", "type": "string" }
+      },
+      "required": ["agent", "models", "source"],
       "additionalProperties": false
     },
     "DaemonSessionsPage": {

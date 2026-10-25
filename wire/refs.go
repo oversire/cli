@@ -44,6 +44,9 @@ type LaunchRequest struct {
 	BaseBranch  string   `json:"baseBranch,omitempty"`
 	InPlace     bool     `json:"inPlace,omitempty"` // a new terminal in the folder Repo, no workspace
 	Key         string   `json:"key,omitempty"`     // one live session for each key
+	Model       string   `json:"model,omitempty"`   // the vendor model id; empty: the CLI default
+	Effort      string   `json:"effort,omitempty"`  // low, medium, high, max; empty: the CLI default
+	Profile     string   `json:"profile,omitempty"` // the OverSire agent name, display only; Agent stays the base CLI
 }
 
 // WorkspaceName is the name, else the item key.
