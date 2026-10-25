@@ -239,7 +239,7 @@
       "type": "object",
       "properties": {
         "id": { "type": "string", "minLength": 1, "maxLength": 600 },
-        "kind": { "description": "Open set: item-summary, ci-explanation, ci-digest, session-status, enhance-written (the mark that Enhance wrote its review to the item).", "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+        "kind": { "description": "Open set: item-summary, ci-explanation, ci-digest, session-status, enhance-written (the mark that Enhance wrote its review to the item), groom-review (the Groom result of a project, until Apply or Discard).", "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
         "subject": { "description": "An item key, a run key or a day.", "type": "string", "minLength": 1, "maxLength": 500 },
         "hash": { "type": "string", "maxLength": 200 },
         "body": { "type": "object" },

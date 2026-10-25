@@ -18,7 +18,7 @@
         "priority": { "description": "Priority option id.", "type": "string" },
         "assignees": { "description": "Person ids.", "type": "array", "items": { "type": "string" } },
         "labels": { "description": "Label ids.", "type": "array", "items": { "type": "string" } },
-        "parent": { "description": "Item id.", "type": "string" },
+        "parent": { "description": "Item id. An empty string removes the parent.", "type": "string" },
         "bodyMarkdown": { "type": "string" }
       },
       "additionalProperties": false
