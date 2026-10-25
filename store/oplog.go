@@ -34,7 +34,7 @@ const (
 var Synced = []string{
 	"queue-lanes", "queue-triggers", "ignored-failures", "pins", "snoozes", "notes", "agent-links", "memory", "jobs", "suggestions",
 	"item-areas", "work-orders", "billing", "runners", "runner-sessions", "planner-settings", "area-catalog", "area-claims",
-	"area-candidates", "changed-paths",
+	"area-candidates", "changed-paths", "ai-outputs",
 }
 
 // HubOnly are the synced collections that only the cloud hub writes. A daemon refuses them.

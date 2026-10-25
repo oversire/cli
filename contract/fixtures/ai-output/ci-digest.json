@@ -1,0 +1,14 @@
+{
+  "id": "ci-digest:today",
+  "kind": "ci-digest",
+  "subject": "today",
+  "hash": "2026-10-25",
+  "body": {
+    "day": "2026-10-25",
+    "facts": [
+      "2 runs failed in oversire/oversire."
+    ],
+    "summary": "CI is green but for two flaky runs."
+  },
+  "at": "2026-10-25T08:01:00Z"
+}

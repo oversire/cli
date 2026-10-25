@@ -92,10 +92,11 @@ func pattern(re *regexp.Regexp, why string) shape {
 }
 
 var (
-	date       = pattern(regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$`), "not an ISO 8601 date-time")
-	providerID = pattern(regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`), "not a provider id")
-	area       = pattern(regexp.MustCompile(`^[a-z0-9-]{1,32}$`), "not an area")
-	hlcPattern = regexp.MustCompile(`^[0-9]{15}-[0-9]{6}-.+$`)
+	date         = pattern(regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$`), "not an ISO 8601 date-time")
+	providerID   = pattern(regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`), "not a provider id")
+	area         = pattern(regexp.MustCompile(`^[a-z0-9-]{1,32}$`), "not an area")
+	aiOutputKind = pattern(regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`), "not an AI output kind")
+	hlcPattern   = regexp.MustCompile(`^[0-9]{15}-[0-9]{6}-.+$`)
 )
 
 func uri(v any, path string) error {
@@ -319,6 +320,8 @@ var recordShapes = map[string]shape{
 		"hubs":     maxItems(50, object(fields{"glob": nonEmpty, "importers": integer(0, math.Inf(1))})),
 		"clusters": maxItems(50, object(fields{"name": area, "globs": maxItems(20, nonEmpty)}))}),
 	"changed-paths": object(fields{"id": nonEmpty, "subject": subjectRef, "paths": maxItems(500, nonEmpty), "at": date}),
+	"ai-outputs": object(fields{"id": text(1, 600), "kind": aiOutputKind, "subject": text(1, 500), "hash": text(0, 200),
+		"body": mapOf(func(any, string) error { return nil }), "at": date}),
 }
 
 func subject(kind string, ref shape) shape {

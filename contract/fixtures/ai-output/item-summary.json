@@ -1,0 +1,17 @@
+{
+  "id": "item-summary:OVERSIRE-317",
+  "kind": "item-summary",
+  "subject": "OVERSIRE-317",
+  "hash": "3f9a1c2e0b7d",
+  "body": {
+    "gist": "The home daemon gives one app the automations lease.",
+    "points": [
+      "The other apps show the results."
+    ],
+    "open": [],
+    "hash": "3f9a1c2e0b7d",
+    "at": "2026-10-24T22:30:00Z",
+    "version": 2
+  },
+  "at": "2026-10-24T22:30:00Z"
+}

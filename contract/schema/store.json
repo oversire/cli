@@ -234,6 +234,20 @@
       "required": ["id", "subject", "paths", "at"],
       "additionalProperties": false
     },
+    "AIOutput": {
+      "description": "Collection ai-outputs. The result of one automatic AI job. The Macs of the user share it, so only the app that owns the automations runs the job (OVERSIRE-327). The id is <kind>:<subject>. hash is the hash of the job input: a record with another hash does not count for a new input. body is the app form of the result.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 600 },
+        "kind": { "description": "Open set: item-summary, ci-explanation, ci-digest, session-status.", "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+        "subject": { "description": "An item key, a run key or a day.", "type": "string", "minLength": 1, "maxLength": 500 },
+        "hash": { "type": "string", "maxLength": 200 },
+        "body": { "type": "object" },
+        "at": { "$ref": "#/$defs/Date" }
+      },
+      "required": ["id", "kind", "subject", "hash", "body", "at"],
+      "additionalProperties": false
+    },
     "StoreOp": {
       "description": "One write to a synced collection. The hub keeps an op log of them. Last write wins for each collection and id, by hlc.",
       "type": "object",

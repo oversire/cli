@@ -268,7 +268,7 @@ func TestRecordFixturesPass(t *testing.T) {
 		"suggestion": "suggestions", "memory-entry": "memory", "job": "jobs", "item-areas": "item-areas", "planner-settings": "planner-settings",
 		"area-catalog": "area-catalog", "area-candidates": "area-candidates", "changed-paths": "changed-paths", "pin": "pins", "note": "notes",
 		"snooze": "snoozes", "queue-lane": "queue-lanes", "agent-link": "agent-links", "ignored-failure": "ignored-failures",
-		"queue-trigger": "queue-triggers",
+		"queue-trigger": "queue-triggers", "ai-output": "ai-outputs",
 	}
 	for kind, collection := range kinds {
 		paths, _ := filepath.Glob(filepath.Join("..", "contract", "fixtures", kind, "*.json"))
