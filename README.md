@@ -240,6 +240,18 @@ The home member of a group without cloud keeps the synced store of the apps in `
 
 A member that is not home answers 409 `{"error":"<machine> is home","home":"<machine>"}`. When the group has cloud, each member answers 409 `{"error":"the cloud is home","cloud":{...}}`. `POST /v1/group/home` with this machine copies all records of the old home before it sets home. When the old home does not answer, the move goes on and the answer has `"offline":true`.
 
+### Leases
+
+The home member of the group keeps named leases in `<data>/leases.json`, also when the group has a cloud. One app of the group holds the lease `automations` and runs the automatic actions (auto start, Enhance, cleanup, Plane write-back and the AI jobs). The bodies are `LeaseRequest` and `Lease` of `contract/schema/daemon.json`.
+
+| Route | What it does |
+| --- | --- |
+| `POST /v1/leases/{name}` | Body `{holder, holderName, ttlSeconds, take}`, `ttlSeconds` 30 to 600. Gets or renews the lease and answers 200 with the `Lease`. When another holder has a lease that did not expire, the answer is 409 with that `Lease`. `take: true` takes it also then (Run them here). `epoch` increases at each new holder. |
+| `DELETE /v1/leases/{name}?holder=` | Ends the lease of the holder at once and answers 204. A free or expired lease gives 204 too. Another holder gets 403. |
+| `GET /v1/leases/{name}` | Answers the `Lease`. 404: nobody holds it. |
+
+The routes need member access. A member that is not home answers 409 `{"error":"<machine> is home","home":"<machine>"}`, as the store routes do. Each new holder sends the frame `{"type":"lease","lease":…}` on `GET /v1/connect`. The app renews each 30 s with a time limit of 90 s. A Mac that sleeps or quits gives the lease back.
+
 ### Direct orders
 
 An app of the group can give work orders to the daemon without the cloud hub. The bodies are `WorkOrder` and `WorkOrderResult` of `contract/schema/work-order.json`. The orders go through the same expiry and journal (`orders.json`) as the hub orders. They do not use the allow list: the group is the trust boundary. A daemon credential gets 403: daemons do not order each other.
@@ -381,6 +393,7 @@ The layout:
 | `runtime` | The `Runtime` interface, the registry and the runtime routes (`API`). `runtime/orca` is the Orca driver for the local Orca. `runtime/oversire` is the agent-wire driver. |
 | `digest` | The transcript readers that make a `SessionDigest`. |
 | `store` | The home store: the op log in SQLite and the `/v1/store/ops` routes. |
+| `lease` | The leases of the home member: the book in `leases.json` and the `/v1/leases` routes. |
 | `allow` | The allow list. |
 | `config` | The config folder, `config.json` and `state.json`. |
 | `secret` | The token storage. |
