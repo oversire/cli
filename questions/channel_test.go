@@ -70,7 +70,7 @@ func (f *fakeScreen) sent() []string {
 type fakeFiles struct{ file string }
 
 func (f *fakeFiles) Tail(path string, n int) ([]byte, error) { return os.ReadFile(path) }
-func (f *fakeFiles) Find(_ context.Context, cwd, _ string) ([]string, error) {
+func (f *fakeFiles) Find(_ context.Context, cwd, _, _ string) ([]string, error) {
 	if cwd == "/w" && f.file != "" {
 		return []string{f.file}, nil
 	}
@@ -683,5 +683,41 @@ func TestRoutes(t *testing.T) {
 	resp.Body.Close()
 	if v, ok := body["answer"]; !ok || v != nil {
 		t.Errorf("given: %+v", body)
+	}
+}
+
+type noHits struct{}
+
+func (noHits) Search(context.Context, string, string) ([]string, error) { return nil, nil }
+
+// After a restart no hook gave the transcript path, and orca search does not read the question of a tool call.
+func TestFormFromTheFileOfTheHarnessSession(t *testing.T) {
+	projects := t.TempDir()
+	dir := filepath.Join(projects, ProjectDir("/w"))
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	ask, err := os.ReadFile(filepath.Join(screensDir, "ask-flow-open.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	own, other := filepath.Join(dir, "s1.jsonl"), filepath.Join(dir, "s2.jsonl")
+	if err := os.WriteFile(own, ask, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(other, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(own, t0, t0); err != nil {
+		t.Fatal(err)
+	}
+	r := newRig(t)
+	r.ch = NewChannel(r.book, r.screen, NewFiles(projects, noHits{}), r.log, func() time.Time { return t0 })
+	r.session(wire.PhaseWaiting, "AskUserQuestion", "")
+	r.book.Apply(sessions.Patch{ID: pane, Source: sessions.SourceHook, At: t0, HarnessSession: ptr("s1")})
+	r.screen.show(true, frame(t, 0))
+	q := r.open(t)
+	if q.Source != wire.SourceTranscript || len(q.Items) != 2 {
+		t.Fatalf("%s %d items", q.Source, len(q.Items))
 	}
 }

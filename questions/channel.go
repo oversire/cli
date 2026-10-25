@@ -27,8 +27,8 @@ type Screen interface {
 // Transcripts reads the agent transcripts on this machine.
 type Transcripts interface {
 	Tail(path string, bytes int) ([]byte, error)
-	// Find gives the files to try in order: the newest file of the folder, then the hits of orca search.
-	Find(ctx context.Context, cwd, words string) ([]string, error)
+	// Find gives the files to try in order: the file of the harness session, the newest file of the folder, then the hits of orca search.
+	Find(ctx context.Context, cwd, session, words string) ([]string, error)
 }
 
 // ErrBadAnswer: the answer does not fit the question.
@@ -579,7 +579,7 @@ func (c *Channel) transcript(ctx context.Context, s wire.DaemonSession, words st
 	if s.Cwd == "" {
 		return nil
 	}
-	found, _ := c.tr.Find(ctx, s.Cwd, words)
+	found, _ := c.tr.Find(ctx, s.Cwd, s.HarnessSession, words)
 	for _, p := range found {
 		if d := try(p); d != nil {
 			return d

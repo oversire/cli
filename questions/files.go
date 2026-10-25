@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"unicode"
+
+	"github.com/oversire/cli/digest"
 )
 
 // Searcher finds the transcript files of Claude sessions in a folder by words (orca search).
@@ -17,12 +19,13 @@ type Searcher interface {
 // Files reads the Claude transcripts under a projects folder, normally ~/.claude/projects. It implements Transcripts.
 type Files struct {
 	projects string
+	claude   *digest.ClaudeReader
 	search   Searcher
 }
 
 // NewFiles: search can be nil. Then Find gives only the newest file of the folder.
 func NewFiles(projects string, search Searcher) *Files {
-	return &Files{projects: projects, search: search}
+	return &Files{projects: projects, claude: digest.NewClaudeReader(projects), search: search}
 }
 
 // Tail gives the last n bytes of the file. The first line can be cut; the readers skip it.
@@ -44,10 +47,14 @@ func (f *Files) Tail(path string, n int) ([]byte, error) {
 	return io.ReadAll(io.LimitReader(file, int64(n)))
 }
 
-// Find gives the newest transcript in the project folder of cwd, then the files where the search finds the words.
+// Find gives the file of the harness session, the newest transcript in the project folder of cwd, then the files where the search finds the words.
 // Many sessions can run in one folder, so the newest file can be of another session.
-func (f *Files) Find(ctx context.Context, cwd, words string) ([]string, error) {
+// The search does not read the tool calls, thus it finds a question only when other text has its words.
+func (f *Files) Find(ctx context.Context, cwd, session, words string) ([]string, error) {
 	var out []string
+	if p, err := f.claude.Find(session); err == nil {
+		out = append(out, p)
+	}
 	if newest := f.newest(cwd); newest != "" {
 		out = append(out, newest)
 	}
