@@ -43,6 +43,7 @@ func TestAccessLogAFailureHasTheErrorAndTheRequestID(t *testing.T) {
 func TestAccessLogLevels(t *testing.T) {
 	ok := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("{}")) })
 	boom := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Error(w, "orca: exit 1\nmore", http.StatusBadGateway) })
+	held := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusConflict) })
 	for _, c := range []struct {
 		h              http.Handler
 		method, target string
@@ -53,6 +54,8 @@ func TestAccessLogLevels(t *testing.T) {
 		{ok, "POST", "/v1/hooks/claude", "level=DEBUG"},
 		{ok, "POST", "/v1/ack", "level=DEBUG"},
 		{boom, "GET", "/v1/workspaces", "level=ERROR"},
+		{held, "POST", "/v1/leases/automations", "level=DEBUG"},
+		{held, "POST", "/v1/orders", "level=WARN"},
 	} {
 		line := logged(t, c.h, c.method, c.target, nil)
 		if !strings.Contains(line, c.level) {

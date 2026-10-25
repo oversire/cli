@@ -45,6 +45,9 @@ func (s *Server) accessLog(via string, next http.Handler) http.Handler {
 		switch code := rec.code(); {
 		case code >= 500:
 			s.Log.Error("request", append(a, "err", rec.errText())...)
+		case code == http.StatusConflict && strings.HasPrefix(r.URL.Path, "/v1/leases/"):
+			// The lease has another holder. The renew of the other app gets this answer every 30 s.
+			s.Log.Debug("request", a...)
 		case code >= 400:
 			s.Log.Warn("request", append(a, "err", rec.errText())...)
 		case writes(r.Method) && !routine(r.URL.Path):
