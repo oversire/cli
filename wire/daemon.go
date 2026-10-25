@@ -62,6 +62,7 @@ type DaemonSession struct {
 	Prompt         string        `json:"prompt,omitempty"`
 	LastMessage    string        `json:"lastMessage,omitempty"`
 	StateSince     time.Time     `json:"stateSince"`
+	StartedAt      *time.Time    `json:"startedAt,omitempty"` // when the daemon first saw the session; a restart keeps it
 	UpdatedAt      time.Time     `json:"updatedAt"`
 	Sources        []string      `json:"sources"`
 	Key            string        `json:"key,omitempty"` // the start key of the order that made the session

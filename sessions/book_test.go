@@ -228,6 +228,9 @@ func TestPersistence(t *testing.T) {
 	if !ok || got.State != want.State || got.Repo != "app" || !got.UpdatedAt.Equal(want.UpdatedAt) || got.Machine != "mini" {
 		t.Fatalf("got %+v want %+v", got, want)
 	}
+	if got.StartedAt == nil || !got.StartedAt.Equal(at(0)) {
+		t.Fatalf("a restart keeps the start: %v", got.StartedAt)
+	}
 }
 
 func TestRun(t *testing.T) {
@@ -263,8 +266,13 @@ func TestSince(t *testing.T) {
 	p = orca("s", 2*time.Minute, wire.PhaseWorking)
 	p.Since = at(3 * time.Minute)
 	b.Apply(p)
-	if s, _ := b.Get("s"); !s.StateSince.Equal(at(2 * time.Minute)) {
+	s, _ := b.Get("s")
+	if !s.StateSince.Equal(at(2 * time.Minute)) {
 		t.Fatalf("got %v", s.StateSince)
+	}
+	// The start is the first time that the book knows, and a new state does not move it.
+	if s.StartedAt == nil || !s.StartedAt.Equal(at(10*time.Second)) {
+		t.Fatalf("started %v", s.StartedAt)
 	}
 }
 

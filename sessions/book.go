@@ -107,7 +107,12 @@ func (b *Book) Apply(p Patch) {
 		if p.End {
 			return
 		}
-		e = &entry{s: wire.DaemonSession{ID: p.ID, Machine: b.machine, State: wire.PhaseStarting, StateSince: p.At, UpdatedAt: p.At, Sources: []string{}}}
+		start := p.At
+		if !p.Since.IsZero() && p.Since.Before(start) {
+			start = p.Since
+		}
+		e = &entry{s: wire.DaemonSession{ID: p.ID, Machine: b.machine, State: wire.PhaseStarting, StateSince: p.At, StartedAt: &start,
+			UpdatedAt: p.At, Sources: []string{}}}
 		b.byID[p.ID] = e
 	}
 	before := copySession(e.s)

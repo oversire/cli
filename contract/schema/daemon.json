@@ -40,6 +40,7 @@
         "prompt": { "description": "The last user prompt.", "type": "string", "maxLength": 2000 },
         "lastMessage": { "description": "The last agent message.", "type": "string", "maxLength": 4000 },
         "stateSince": { "description": "The start of the current state.", "$ref": "#/$defs/Date" },
+        "startedAt": { "description": "When the daemon first saw the session. A restart of the daemon keeps it.", "$ref": "#/$defs/Date" },
         "updatedAt": { "description": "The last change of any field.", "$ref": "#/$defs/Date" },
         "sources": { "description": "The sources that gave data.", "type": "array", "items": { "enum": ["hook", "orca", "wire"] } },
         "key": { "description": "The start key of the sessionStart order that made the session (LaunchRequest.key).", "type": "string", "minLength": 1, "maxLength": 200, "pattern": "^[a-z]+:[A-Za-z0-9._-]+$" }

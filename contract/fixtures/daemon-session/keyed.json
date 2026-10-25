@@ -11,6 +11,7 @@
   "state": "working",
   "prompt": "Enhance OVERSIRE-317. End with one oversire-result block.",
   "stateSince": "2026-10-25T09:14:02Z",
+  "startedAt": "2026-10-25T09:02:47Z",
   "updatedAt": "2026-10-25T09:15:40Z",
   "sources": ["hook", "orca"],
   "key": "enhance:OVERSIRE-317"
