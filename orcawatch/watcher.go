@@ -193,6 +193,7 @@ func (w *Watcher) apply(cards []orca.WorktreeCard, terms []orca.Terminal) (busy 
 			continue
 		}
 		for _, a := range c.Agents {
+			a = a.Effective()
 			p, ok := w.patch(c, a, handles[a.PaneKey].Handle, at)
 			if !ok {
 				continue

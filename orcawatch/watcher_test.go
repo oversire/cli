@@ -364,3 +364,25 @@ func TestBookPrecedence(t *testing.T) {
 		t.Fatalf("Orca after the lag: %+v", s)
 	}
 }
+
+// Orca went to monitoring 3 minutes after the turn, on the recap of Claude, with no shell (OVERSIRE-335).
+func TestStaleMonitoring(t *testing.T) {
+	var a orca.AgentCard
+	card := `{"paneKey":"t:l","state":"working","workingMode":"monitoring","agentType":"claude","toolName":"Bash",
+		"mainAgent":{"state":"done","stateStartedAt":1792925979532},"stateStartedAt":1792926167685,"updatedAt":1792926167685}`
+	if err := json.Unmarshal([]byte(card), &a); err != nil {
+		t.Fatal(err)
+	}
+	c := newClock()
+	book := sessions.NewBook("mbp", "", nil, c.Now)
+	w := NewWatcher(&fakeLister{}, book, c)
+	done, end := wire.PhaseDone, wire.ReasonTurnEnd
+	book.Apply(sessions.Patch{ID: "t:l", Source: sessions.SourceHook, At: c.Now(), State: &done, Reason: &end})
+	c.advance(sessions.OrcaLag + time.Second)
+	if w.apply([]orca.WorktreeCard{{ID: "w1", Repo: "app", Path: "/p", Agents: []orca.AgentCard{a}}}, nil) {
+		t.Fatal("a stale monitoring card is not busy")
+	}
+	if s, _ := book.Get("t:l"); s.State != wire.PhaseDone || s.Reason != wire.ReasonTurnEnd {
+		t.Fatalf("%+v", s)
+	}
+}

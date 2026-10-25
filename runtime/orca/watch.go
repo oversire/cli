@@ -37,6 +37,22 @@ type AgentCard struct {
 	Interrupted          bool   `json:"interrupted"`
 	StateStartedAt       int64  `json:"stateStartedAt"`
 	UpdatedAt            int64  `json:"updatedAt"`
+	MainAgent            *struct {
+		State          string `json:"state"`
+		StateStartedAt int64  `json:"stateStartedAt"`
+	} `json:"mainAgent"`
+}
+
+// Effective gives the card with a stale monitoring state replaced by the state of the main agent.
+// A real background shell starts in the turn, so its monitoring state starts before the main agent finishes.
+// Orca can go to monitoring after the turn with no shell, for example on the recap of Claude.
+func (a AgentCard) Effective() AgentCard {
+	m := a.MainAgent
+	if a.State != "working" || a.WorkingMode != "monitoring" || m == nil || m.State != "done" || a.StateStartedAt <= m.StateStartedAt {
+		return a
+	}
+	a.State, a.WorkingMode, a.StateStartedAt = m.State, "", m.StateStartedAt
+	return a
 }
 
 // Terminal is one terminal of `orca terminal list`.
