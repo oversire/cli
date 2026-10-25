@@ -223,6 +223,9 @@ func (d *Direct) start(o wire.WorkOrder, r *http.Request) {
 		caller = "loopback"
 	}
 	log := d.Log.With("order", o.ID, "op", o.Payload.Op(), "runtime", o.Runtime, "via", "direct")
+	if l, ok := o.Payload.(wire.LaunchRequest); ok && l.Key != "" {
+		log = log.With("key", l.Key)
+	}
 	log.Info("order received", "caller", caller, "id", r.Header.Get(server.RequestID))
 	d.mu.Lock()
 	if _, ok := d.states[o.ID]; ok {

@@ -174,6 +174,8 @@ func (c *Channel) OnHook(ev hooks.Event) {
 	case ev.Name == "PostToolUse" && (p.ToolName == "AskUserQuestion" || p.ToolName == "ExitPlanMode"):
 		c.closeHook(s, p)
 		return
+	case ev.Name == "PermissionRequest" && (p.ToolName == "AskUserQuestion" || p.ToolName == "ExitPlanMode"):
+		// Claude Code also asks permission for these tools. PreToolUse gave the better question.
 	case ev.Name == "PermissionRequest":
 		input := toolInput(p.ToolInput)
 		id := ""

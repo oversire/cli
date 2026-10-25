@@ -463,6 +463,16 @@ func TestHookFormOpensAndCloses(t *testing.T) {
 	}
 }
 
+func TestHookFormStaysAfterItsPermissionRequest(t *testing.T) {
+	r := newRig(t)
+	r.session(wire.PhaseWaiting, "AskUserQuestion", "")
+	r.ch.OnHook(hookEvent(t, "PreToolUse-AskUserQuestion"))
+	r.ch.OnHook(hookEvent(t, "PermissionRequest-AskUserQuestion"))
+	if qs := r.ch.Open(); len(qs) != 1 || qs[0].ID != "form:toolu_01Q" || qs[0].Via != wire.ViaForm {
+		t.Fatalf("open: %+v", qs)
+	}
+}
+
 func TestHookPlanApproval(t *testing.T) {
 	r := newRig(t)
 	r.session(wire.PhaseWaiting, "ExitPlanMode", "")
