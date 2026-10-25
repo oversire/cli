@@ -33,7 +33,9 @@ Thus a new runtime (Conductor, Superset, Emdash) is a new driver in this repo. T
 
 ## 3. Add the optional parts
 
-Each part is a small interface in `runtime/runtime.go`. `runtime.Capabilities` gives the app a capability for each part that the driver has. Each runtime has `sessionInput`, `sessionTail`, `sessionHistory` and `hostFiles`. The daemon writes the files itself.
+Each part is a small interface in `runtime/runtime.go`. `runtime.Capabilities` gives the app a capability for each part that the driver has. Each runtime has `sessionInput`, `sessionTail`, `sessionHistory`, `hostFiles` and `sessionKey`. The daemon writes the files and keeps the start keys itself.
+
+Enhance needs only a start and `History`: it starts one keyed session and reads the result from the last message. A runtime needs no extra part for it.
 
 | Interface | Capability | Route |
 |---|---|---|
@@ -41,7 +43,6 @@ Each part is a small interface in `runtime/runtime.go`. `runtime.Capabilities` g
 | `Catalog` | `workspaces` | `GET /v1/repos`, `GET /v1/workspaces` |
 | `WorkspaceRemover` | `removeWorkspace` | `DELETE /v1/workspaces/{id}` |
 | `Revealer` | `reveal` | `POST /v1/reveal` (loopback only) |
-| `Supervisor` | `workers` | `/v1/workers` |
 | `Launcher`, `Submitter`, `ScrollbackReader` | none; better results for start, send and read | direct orders |
 
 A runtime that is not reachable gives no capabilities. The app then hides the features of that machine.

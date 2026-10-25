@@ -310,20 +310,13 @@ Orca does not let a local process pair by itself. The user makes a pairing link 
 - Take control sets the Orca terminal to the size of the view (`mobile-fit`). Release gives it back (`restore`). When the Orca app takes the size back, the viewer gets a take-back.
 - After 3 failed connects in a row, the views fall back to `poll` and `stream.reason` starts with "Pairing failed". Retry or a new link turns the live view on again.
 
-### Workers
+### Keyed sessions
 
-A worker is a supervised agent session for a short job, for example the intake Enhance of the app. It runs in the Orca of this machine. The daemon keeps one quiet coordinator terminal (`oversire-coordinator`) and its Orca Run. Each worker sends its result to the Run in a `worker_done`. The bodies are `WorkerStart`, `Worker` and `WorkerState` of `contract/schema/daemon.json`.
+A `sessionStart` order can carry `key`, for example `enhance:OVERSIRE-317`. The daemon keeps at most one live session for each key. A start with the key of a live session gives that session and starts nothing. A `sessionStop` frees the key at once, so a start after it makes a new session. Each runtime has the capability `sessionKey`.
 
-| Route | What it does |
-|---|---|
-| `POST /v1/workers` | Body `WorkerStart` `{runtime?, spec, title, path, agent}`. The default runtime is `orca`. Answers the `Worker`. Loopback and the apps of the group do not use the allow list. A daemon caller must pass the allow list for the agent and the path, as for a `sessionStart`: else 403. |
-| `GET /v1/workers/{id}` | Answers a `WorkerState`: `running`, `done` (with `outcome` and `body`) or `ended` (with `reason`). |
-| `POST /v1/workers/{id}/stop` | Stops the worker. Answers 204. |
-| `DELETE /v1/workers/{id}` | Closes the terminal of the worker and removes it. Answers 204. |
+The app runs Enhance this way: one keyed session in place, in the main checkout, with the read-only Enhance prompt. The agent asks with `AskUserQuestion`, so the questions come as `form` questions. The result is a fenced block with the info string `oversire-result` in the last message. The app reads it with `sessionHistory`.
 
-The daemon keeps each worker in `<data>/workers.json`, so a worker and its settled state survive a restart. An unknown id gets 404.
-
-A worker can ask with `orchestration ask`. `GET /v1/questions` then shows the ask with `via` `askReply` and `source` `mail`, and `POST /v1/questions/{id}/answer` sends the reply. A worker does not ask the user at the end of its turn: no `turn` question comes from a worker terminal.
+Before OVERSIRE-322 the daemon ran Enhance as Orca workers. At start, the daemon closes the open worker terminals of `<data>/workers.json`, then deletes the file. It also closes each live `oversire-coordinator` terminal. A failed close keeps the file, and the next start tries again.
 
 ## Service
 
@@ -388,7 +381,6 @@ The layout:
 | `runtime` | The `Runtime` interface, the registry and the runtime routes (`API`). `runtime/orca` is the Orca driver for the local Orca. `runtime/oversire` is the agent-wire driver. |
 | `digest` | The transcript readers that make a `SessionDigest`. |
 | `store` | The home store: the op log in SQLite and the `/v1/store/ops` routes. |
-| `workers` | The supervised workers, their journal and the `/v1/workers` routes. |
 | `allow` | The allow list. |
 | `config` | The config folder, `config.json` and `state.json`. |
 | `secret` | The token storage. |
