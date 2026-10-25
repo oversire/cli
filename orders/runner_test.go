@@ -20,6 +20,9 @@ type slowRuntimes struct {
 
 func (f *slowRuntimes) Has(id string) bool { return id == "oversire" }
 func (f *slowRuntimes) Do(_ context.Context, o wire.WorkOrder) (*wire.WorkOrderResult, error) {
+	if _, ok := o.Payload.(wire.StopPayload); ok {
+		return &wire.WorkOrderResult{}, nil
+	}
 	time.Sleep(20 * time.Millisecond)
 	f.mu.Lock()
 	f.calls++
@@ -50,7 +53,9 @@ func keyRig() (*Runner, *slowRuntimes, *sessions.Book) {
 	return r.WithKeys(book), rts, book
 }
 
-func trusted() context.Context { return server.WithCaller(context.Background(), server.Caller{Loopback: true}) }
+func trusted() context.Context {
+	return server.WithCaller(context.Background(), server.Caller{Loopback: true})
+}
 
 func TestKeyedOrdersStartOneSession(t *testing.T) {
 	r, rts, book := keyRig()
@@ -122,6 +127,24 @@ func TestKeyedOrderGivesTheTerminal(t *testing.T) {
 	want := wire.SessionRef{Workspace: wire.WorkspaceRef{Account: wire.AccountID{Provider: "orca", ID: "local"}, ID: "wt-1"}, ID: "term_1"}
 	if rts.count() != 0 || *res.Result.Session != want || res.Result.PaneKey != "tab-1:leaf-1" {
 		t.Fatalf("launches = %d, result = %+v", rts.count(), res.Result)
+	}
+}
+
+func TestStopFreesTheKey(t *testing.T) {
+	r, rts, book := keyRig()
+	book.Apply(sessions.Patch{ID: "tab-1:leaf-1", Source: sessions.SourceOrca, Runtime: ptr(wire.RuntimeOrca), Workspace: ptr("wt-1"),
+		Terminal: ptr("term_1"), Key: ptr("enhance:K-1")})
+	stop := order("wo-1", "claude", now.Add(time.Hour))
+	stop.Payload = wire.StopPayload{Session: wire.SessionRef{Workspace: wire.WorkspaceRef{ID: "wt-1"}, ID: "term_1"}}
+	if res, _ := r.Run(trusted(), stop, Hooks{}); res.State != wire.ResultDone {
+		t.Fatalf("stop = %+v", res.Result)
+	}
+	if _, ok := book.ByKey("enhance:K-1"); ok {
+		t.Fatal("the stopped session keeps its key")
+	}
+	r.Run(trusted(), keyed("wo-2", "enhance:K-1"), Hooks{})
+	if rts.count() != 1 {
+		t.Fatalf("launches = %d, want 1", rts.count())
 	}
 }
 

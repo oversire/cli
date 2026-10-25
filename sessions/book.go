@@ -327,6 +327,17 @@ func (b *Book) ByKey(key string) (wire.DaemonSession, bool) {
 	return wire.DaemonSession{}, false
 }
 
+// Unkey frees the start key of the session with the id or terminal ref. A stopped session can close late.
+func (b *Book) Unkey(ref string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for _, e := range b.byID {
+		if e.s.Key != "" && (e.s.ID == ref || e.s.Terminal == ref) {
+			e.s.Key = ""
+		}
+	}
+}
+
 // Tool gives the last tool and its input of a session.
 func (b *Book) Tool(id string) (tool, input string) {
 	b.mu.Lock()

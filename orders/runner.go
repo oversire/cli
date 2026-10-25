@@ -36,6 +36,7 @@ type Journal interface {
 type Keys interface {
 	ByKey(key string) (wire.DaemonSession, bool)
 	Apply(p sessions.Patch)
+	Unkey(ref string)
 }
 
 // startKey is the form of LaunchRequest.Key in the contract.
@@ -145,8 +146,16 @@ func (r *Runner) do(ctx context.Context, o wire.WorkOrder, h Hooks) wire.Result 
 }
 
 // start runs o. A sessionStart with a key gives the live session of the key, else it launches and keeps the key.
+// A sessionStop frees the key at once, so that a start after it launches again.
 // The lock of the key holds two orders with one key apart.
 func (r *Runner) start(ctx context.Context, o wire.WorkOrder) (*wire.WorkOrderResult, error) {
+	if stop, ok := o.Payload.(wire.StopPayload); ok && r.keys != nil {
+		out, err := r.runtimes.Do(ctx, o)
+		if err == nil {
+			r.keys.Unkey(stop.Session.ID)
+		}
+		return out, err
+	}
 	p, ok := o.Payload.(wire.LaunchRequest)
 	if !ok || p.Key == "" || r.keys == nil {
 		return r.runtimes.Do(ctx, o)
