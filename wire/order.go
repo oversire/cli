@@ -87,6 +87,7 @@ type WorkOrderResult struct {
 	Digest      *SessionDigest `json:"digest,omitempty"`
 	PaneKey     string         `json:"paneKey,omitempty"`     // sessionStart: the DaemonSession id
 	TurnStarted bool           `json:"turnStarted,omitempty"` // sessionStart, sessionSend
+	Reused      bool           `json:"reused,omitempty"`      // sessionStart: the live session of the start key, not a new one
 	Error       string         `json:"error,omitempty"`
 }
 

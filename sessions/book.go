@@ -325,12 +325,12 @@ func (b *Book) Get(id string) (wire.DaemonSession, bool) {
 	return copySession(e.s), true
 }
 
-// ByKey gives the live session with the start key. An ended session frees its key.
-func (b *Book) ByKey(key string) (wire.DaemonSession, bool) {
+// ByKey gives the live session of the runtime with the start key. An ended session frees its key.
+func (b *Book) ByKey(runtime, key string) (wire.DaemonSession, bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	for _, e := range b.byID {
-		if e.s.Key == key && e.ended.IsZero() {
+		if e.s.Key == key && e.s.Runtime == runtime && e.ended.IsZero() {
 			return copySession(e.s), true
 		}
 	}

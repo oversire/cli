@@ -18,7 +18,7 @@ type slowRuntimes struct {
 	calls int
 }
 
-func (f *slowRuntimes) Has(id string) bool { return id == "oversire" }
+func (f *slowRuntimes) Has(id string) bool { return id == "oversire" || id == wire.RuntimeOrca }
 func (f *slowRuntimes) Do(_ context.Context, o wire.WorkOrder) (*wire.WorkOrderResult, error) {
 	if _, ok := o.Payload.(wire.StopPayload); ok {
 		return &wire.WorkOrderResult{}, nil
@@ -73,7 +73,7 @@ func TestKeyedOrdersStartOneSession(t *testing.T) {
 			t.Fatalf("result = %+v", x)
 		}
 	}
-	if s, ok := book.ByKey("enhance:OVERSIRE-317"); !ok || s.ID != "s-1" || s.Workspace != "app/enhance" || s.Terminal != "" {
+	if s, ok := book.ByKey("oversire", "enhance:OVERSIRE-317"); !ok || s.ID != "s-1" || s.Workspace != "app/enhance" || s.Terminal != "" {
 		t.Fatalf("book = %+v %v", s, ok)
 	}
 }
@@ -123,9 +123,9 @@ func TestKeyedOrderGivesTheTerminal(t *testing.T) {
 	r, rts, book := keyRig()
 	book.Apply(sessions.Patch{ID: "tab-1:leaf-1", Source: sessions.SourceOrca, Runtime: ptr(wire.RuntimeOrca), Workspace: ptr("wt-1"),
 		Terminal: ptr("term_1"), Key: ptr("enhance:K-1")})
-	res, _ := r.Run(trusted(), keyed("wo-1", "enhance:K-1"), Hooks{})
+	res, _ := r.Run(trusted(), onOrca(keyed("wo-1", "enhance:K-1")), Hooks{})
 	want := wire.SessionRef{Workspace: wire.WorkspaceRef{Account: wire.AccountID{Provider: "orca", ID: "local"}, ID: "wt-1"}, ID: "term_1"}
-	if rts.count() != 0 || *res.Result.Session != want || res.Result.PaneKey != "tab-1:leaf-1" {
+	if rts.count() != 0 || *res.Result.Session != want || res.Result.PaneKey != "tab-1:leaf-1" || !res.Result.Reused {
 		t.Fatalf("launches = %d, result = %+v", rts.count(), res.Result)
 	}
 }
@@ -139,13 +139,40 @@ func TestStopFreesTheKey(t *testing.T) {
 	if res, _ := r.Run(trusted(), stop, Hooks{}); res.State != wire.ResultDone {
 		t.Fatalf("stop = %+v", res.Result)
 	}
-	if _, ok := book.ByKey("enhance:K-1"); ok {
+	if _, ok := book.ByKey(wire.RuntimeOrca, "enhance:K-1"); ok {
 		t.Fatal("the stopped session keeps its key")
 	}
-	r.Run(trusted(), keyed("wo-2", "enhance:K-1"), Hooks{})
+	r.Run(trusted(), onOrca(keyed("wo-2", "enhance:K-1")), Hooks{})
 	if rts.count() != 1 {
 		t.Fatalf("launches = %d, want 1", rts.count())
 	}
+}
+
+func TestKeyedOrderOnAnotherRuntimeLaunches(t *testing.T) {
+	r, rts, book := keyRig()
+	first, _ := r.Run(trusted(), keyed("wo-1", "work:MCPQ-52"), Hooks{})
+	if first.Result.Reused {
+		t.Fatalf("a new session is reused: %+v", first.Result)
+	}
+	again, _ := r.Run(trusted(), keyed("wo-2", "work:MCPQ-52"), Hooks{})
+	if rts.count() != 1 || !again.Result.Reused || again.Result.Session.ID != "s-1" {
+		t.Fatalf("same runtime: launches = %d, result = %+v", rts.count(), again.Result)
+	}
+	other, _ := r.Run(trusted(), onOrca(keyed("wo-3", "work:MCPQ-52")), Hooks{})
+	if rts.count() != 2 || other.Result.Reused || other.Result.Session.ID != "s-2" {
+		t.Fatalf("other runtime: launches = %d, result = %+v", rts.count(), other.Result)
+	}
+	if s, ok := book.ByKey("oversire", "work:MCPQ-52"); !ok || s.ID != "s-1" {
+		t.Fatalf("oversire key = %+v %v", s, ok)
+	}
+	if s, ok := book.ByKey(wire.RuntimeOrca, "work:MCPQ-52"); !ok || s.ID != "s-2" {
+		t.Fatalf("orca key = %+v %v", s, ok)
+	}
+}
+
+func onOrca(o wire.WorkOrder) wire.WorkOrder {
+	o.Runtime = wire.RuntimeOrca
+	return o
 }
 
 func ptr[T any](v T) *T { return &v }

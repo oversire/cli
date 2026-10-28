@@ -65,6 +65,7 @@ func setup() (*Orca, *replay) {
 	r := newReplay()
 	o := New("/bin/orca", r)
 	o.shellWait = 0
+	o.sendWait = 0
 	return o, r
 }
 
@@ -101,6 +102,63 @@ func TestStartInANewWorkspaceUsesTheShell(t *testing.T) {
 	}
 	if len(r.args("terminal wait")) != 2 {
 		t.Fatal("a second wait for a cold start")
+	}
+}
+
+// existing sets up a workspace with a live agent terminal, ready for the prompt.
+func existing(r *replay) {
+	r.on("worktree ps", `{"ok":true,"result":{"worktrees":[{"worktreeId":"c1","path":"/w","displayName":"ENG-4"}]}}`)
+	r.on("terminal create", `{"ok":true,"result":{"terminal":{"handle":"h2","worktreeId":"c1","tabId":"t2","leafId":"l1"}}}`)
+	r.on("terminal wait", `{"ok":true,"result":{"wait":{"satisfied":true}}}`)
+	r.on("terminal close", `{"ok":true,"result":{}}`)
+}
+
+const notSent = `{"ok":false,"error":{"code":"runtime_unavailable","message":"Orca could not verify prompt-delivery support, so no input was sent."}}`
+
+func TestPromptSendTriesAgainWhenOrcaSentNothing(t *testing.T) {
+	o, r := setup()
+	existing(r)
+	r.on("terminal send", notSent, `{"ok":true,"result":{"send":{"prompt":{"stages":["typed","turn_started"]}}}}`)
+	st, err := o.Launch(context.Background(), runtime.Order{}, wire.LaunchRequest{Repo: "/w", Name: "ENG-4", Agent: "claude", Prompt: "go"})
+	if err != nil || !st.TurnStarted {
+		t.Fatalf("started %#v, %v", st, err)
+	}
+	if n := len(r.args("terminal send")); n != 2 {
+		t.Fatalf("sends = %d, want 2", n)
+	}
+	if len(r.args("terminal close")) != 0 {
+		t.Fatal("a launch that worked closed its terminal")
+	}
+}
+
+func TestFailedPromptClosesTheTerminal(t *testing.T) {
+	o, r := setup()
+	existing(r)
+	r.on("terminal send", notSent)
+	_, err := o.Launch(context.Background(), runtime.Order{}, wire.LaunchRequest{Repo: "/w", Name: "ENG-4", Agent: "claude", Prompt: "go"})
+	want := "The agent started in ENG-4, but Orca did not send the prompt: Orca could not verify prompt-delivery support, so no input was sent. (runtime_unavailable) OverSire closed the new terminal."
+	if err == nil || err.Error() != want {
+		t.Fatalf("err = %v", err)
+	}
+	if n := len(r.args("terminal send")); n != 3 {
+		t.Fatalf("sends = %d, want 3", n)
+	}
+	if c := r.args("terminal close"); len(c) != 1 || c[0][3] != "h2" {
+		t.Fatalf("close %q", c)
+	}
+}
+
+func TestOtherSendErrorsFailAtOnce(t *testing.T) {
+	o, r := setup()
+	existing(r)
+	r.on("terminal send", `{"ok":false,"error":{"code":"terminal_not_found","message":"no terminal h2"}}`)
+	r.on("terminal close", `{"ok":false,"error":{"code":"terminal_not_found","message":"no terminal h2"}}`)
+	_, err := o.Launch(context.Background(), runtime.Order{}, wire.LaunchRequest{Repo: "/w", Name: "ENG-4", Agent: "claude", Prompt: "go"})
+	if err == nil || !strings.HasSuffix(err.Error(), "The new terminal is still open in Orca.") {
+		t.Fatalf("err = %v", err)
+	}
+	if n := len(r.args("terminal send")); n != 1 {
+		t.Fatalf("sends = %d, want 1", n)
 	}
 }
 

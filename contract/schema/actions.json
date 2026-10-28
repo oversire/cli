@@ -50,7 +50,7 @@
         "title": { "description": "The terminal title. Default: the agent name.", "type": "string" },
         "baseBranch": { "description": "The branch that a new workspace starts from. Default: the runtime default.", "type": "string" },
         "inPlace": { "description": "True: open a new terminal in the folder repo. The runtime makes no workspace and ignores name, note, branch and baseBranch.", "type": "boolean" },
-        "key": { "description": "The start key. The daemon starts at most one live session for each key. A start with the key of a live session gives that session. Example: enhance:OVERSIRE-317.", "type": "string", "minLength": 1, "maxLength": 200, "pattern": "^[a-z]+:[A-Za-z0-9._-]+$" },
+        "key": { "description": "The start key. The daemon starts at most one live session for each key. A start with the key of a live session on the same runtime gives that session. Example: enhance:OVERSIRE-317.", "type": "string", "minLength": 1, "maxLength": 200, "pattern": "^[a-z]+:[A-Za-z0-9._-]+$" },
         "model": { "description": "The vendor model id, for example claude-opus-5-5. Missing: the CLI default. A terminal runtime adds it as a flag, unless command has the flag already.", "type": "string", "minLength": 1, "maxLength": 200 },
         "effort": { "description": "The reasoning effort. Open set: low, medium, high, max. Missing: the CLI default.", "type": "string", "minLength": 1, "maxLength": 40 },
         "profile": { "description": "The OverSire agent name, for example claude-max. Display only: agent stays the base CLI.", "type": "string", "minLength": 1, "maxLength": 200 }

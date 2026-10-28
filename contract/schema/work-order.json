@@ -212,6 +212,7 @@
         "digest": { "description": "The digest that sessionHistory read.", "$ref": "session-digest.json#/$defs/SessionDigest" },
         "paneKey": { "description": "With sessionStart: the DaemonSession id of the new session, when the runtime knows it.", "type": "string" },
         "turnStarted": { "description": "With sessionStart and sessionSend: the agent started a turn on the prompt.", "type": "boolean" },
+        "reused": { "description": "With sessionStart: the daemon gave back the live session of the start key, and started no session.", "type": "boolean" },
         "error": { "description": "Why the order failed.", "type": "string" }
       },
       "additionalProperties": false

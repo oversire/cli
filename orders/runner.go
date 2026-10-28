@@ -34,7 +34,7 @@ type Journal interface {
 
 // Keys finds the live session of a start key and keeps the key, model, effort and profile of a new session (sessions.Book).
 type Keys interface {
-	ByKey(key string) (wire.DaemonSession, bool)
+	ByKey(runtime, key string) (wire.DaemonSession, bool)
 	Apply(p sessions.Patch)
 	Unkey(ref string)
 }
@@ -145,7 +145,7 @@ func (r *Runner) do(ctx context.Context, o wire.WorkOrder, h Hooks) wire.Result 
 	return wire.Result{Order: o.ID, State: wire.ResultDone, Result: out}
 }
 
-// start runs o. A sessionStart with a key gives the live session of the key, else it launches and keeps the key.
+// start runs o. A sessionStart with a key gives the live session of the key on its runtime, else it launches and keeps the key.
 // A sessionStop frees the key at once, so that a start after it launches again.
 // The lock of the key holds two orders with one key apart.
 func (r *Runner) start(ctx context.Context, o wire.WorkOrder) (*wire.WorkOrderResult, error) {
@@ -167,12 +167,12 @@ func (r *Runner) start(ctx context.Context, o wire.WorkOrder) (*wire.WorkOrderRe
 		}
 		unlock := r.lockKey(p.Key)
 		defer unlock()
-		if s, ok := r.keys.ByKey(p.Key); ok {
+		if s, ok := r.keys.ByKey(o.Runtime, p.Key); ok {
 			ref := wire.SessionRef{Workspace: wire.WorkspaceRef{Account: wire.AccountID{Provider: s.Runtime, ID: "local"}, ID: s.Workspace}, ID: s.ID}
 			if s.Terminal != "" {
 				ref.ID = s.Terminal
 			}
-			return &wire.WorkOrderResult{Session: &ref, PaneKey: s.ID}, nil
+			return &wire.WorkOrderResult{Session: &ref, PaneKey: s.ID, Reused: true}, nil
 		}
 	}
 	out, err := r.runtimes.Do(ctx, o)

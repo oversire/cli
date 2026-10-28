@@ -282,20 +282,20 @@ func TestByKey(t *testing.T) {
 	b.Apply(Patch{ID: "live", Source: SourceHook, At: at(0), Runtime: ptr(wire.RuntimeCLI), State: ptr(wire.PhaseWorking), Key: ptr("enhance:K-1")})
 	b.Apply(Patch{ID: "gone", Source: SourceHook, At: at(0), Runtime: ptr(wire.RuntimeCLI), State: ptr(wire.PhaseDone), Key: ptr("enhance:K-2")})
 	b.Apply(Patch{ID: "gone", Source: SourceHook, At: at(time.Second), End: true})
-	if s, ok := b.ByKey("enhance:K-1"); !ok || s.ID != "live" || s.Key != "enhance:K-1" {
+	if s, ok := b.ByKey(wire.RuntimeCLI, "enhance:K-1"); !ok || s.ID != "live" || s.Key != "enhance:K-1" {
 		t.Fatalf("live: %+v %v", s, ok)
 	}
-	if _, ok := b.ByKey("enhance:K-2"); ok {
+	if _, ok := b.ByKey(wire.RuntimeCLI, "enhance:K-2"); ok {
 		t.Fatal("an ended session keeps its key")
 	}
-	if _, ok := b.ByKey("enhance:K-3"); ok {
+	if _, ok := b.ByKey(wire.RuntimeCLI, "enhance:K-3"); ok {
 		t.Fatal("a missing key gives a session")
 	}
 	if err := b.Save(true); err != nil {
 		t.Fatal(err)
 	}
 	c, _ := newBook(path)
-	if s, ok := c.ByKey("enhance:K-1"); !ok || s.ID != "live" {
+	if s, ok := c.ByKey(wire.RuntimeCLI, "enhance:K-1"); !ok || s.ID != "live" {
 		t.Fatalf("after load: %+v %v", s, ok)
 	}
 }
@@ -309,10 +309,10 @@ func TestUnseenKeyedSessionExpires(t *testing.T) {
 		t.Fatalf("a key patch is no source: %+v", s)
 	}
 	b.Prune(at(UnseenTTL))
-	if _, ok := b.ByKey("enhance:K-1"); ok {
+	if _, ok := b.ByKey(wire.RuntimeOrca, "enhance:K-1"); ok {
 		t.Fatal("a session that no source reported keeps its key")
 	}
-	if _, ok := b.ByKey("enhance:K-2"); !ok {
+	if _, ok := b.ByKey(wire.RuntimeOrca, "enhance:K-2"); !ok {
 		t.Fatal("a reported session lost its key")
 	}
 }

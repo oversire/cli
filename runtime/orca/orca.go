@@ -57,6 +57,7 @@ type Orca struct {
 	run       Runner
 	stat      func(string) (os.FileInfo, error)
 	shellWait time.Duration
+	sendWait  time.Duration // between tries of a prompt that Orca did not send
 	// digests gives the transcript reader of a harness.
 	digests func(harness string) (digest.Reader, error)
 	now     func() time.Time
@@ -65,7 +66,7 @@ type Orca struct {
 }
 
 func New(exe string, run Runner) *Orca {
-	return &Orca{exe: exe, run: run, stat: os.Stat, shellWait: 300 * time.Millisecond, digests: digest.ForUser, now: time.Now}
+	return &Orca{exe: exe, run: run, stat: os.Stat, shellWait: 300 * time.Millisecond, sendWait: 3 * time.Second, digests: digest.ForUser, now: time.Now}
 }
 
 // WithPairing turns on the live view through a paired device.
@@ -123,13 +124,37 @@ func (o *Orca) Launch(ctx context.Context, _ runtime.Order, r wire.LaunchRequest
 	}
 	ref := wire.SessionRef{Workspace: wire.WorkspaceRef{Account: wire.AccountID{Provider: ID, ID: account}, ID: t.Worktree}, ID: t.Handle}
 	if err := o.waitIdle(ctx, t.Handle, name); err != nil {
-		return none, err
+		return none, o.abandon(ctx, t.Handle, err)
 	}
-	started, err := o.send(ctx, ref, r.Prompt)
+	started, err := o.sendPrompt(ctx, ref, r.Prompt)
 	if err != nil {
-		return none, err
+		return none, o.abandon(ctx, t.Handle, fmt.Errorf("The agent started in %s, but Orca did not send the prompt: %w", name, err))
 	}
 	return runtime.Started{Session: ref, PaneKey: t.paneKey(), TurnStarted: started}, nil
+}
+
+// sendPrompt tries again two times while Orca says that it sent no input.
+func (o *Orca) sendPrompt(ctx context.Context, s wire.SessionRef, text string) (bool, error) {
+	for i := 0; ; i++ {
+		started, err := o.send(ctx, s, text)
+		var e *Error
+		if err == nil || i == 2 || !errors.As(err, &e) || e.Code != "runtime_unavailable" {
+			return started, err
+		}
+		select {
+		case <-ctx.Done():
+			return false, err
+		case <-time.After(o.sendWait):
+		}
+	}
+}
+
+// abandon closes the terminal of a failed launch, so that a retry does not add a second agent.
+func (o *Orca) abandon(ctx context.Context, handle string, err error) error {
+	if _, cerr := o.call(context.WithoutCancel(ctx), 20*time.Second, "terminal", "close", "--terminal", handle); cerr != nil {
+		return fmt.Errorf("%w The new terminal is still open in Orca.", err)
+	}
+	return fmt.Errorf("%w OverSire closed the new terminal.", err)
 }
 
 // terminal is one row of `terminal list`, or the terminal of `terminal create`.
