@@ -3,12 +3,14 @@ package orders
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"regexp"
 	"sync"
 	"time"
 
+	"github.com/oversire/cli/runtime"
 	"github.com/oversire/cli/server"
 	"github.com/oversire/cli/sessions"
 	"github.com/oversire/cli/wire"
@@ -208,6 +210,47 @@ func (r *Runner) lockKey(key string) func() {
 	r.mu.Unlock()
 	l.Lock()
 	return l.Unlock
+}
+
+// self is the caller of an order that the daemon gives itself, for example a runbook step. It skips the allow list.
+var self = server.Caller{Loopback: true, Name: "daemon"}
+
+// Launch runs a sessionStart order of the daemon itself on the runtime rt. The hub never gets its result.
+func (r *Runner) Launch(ctx context.Context, rt string, o runtime.Order, req wire.LaunchRequest) (runtime.Started, error) {
+	res, err := r.own(ctx, wire.WorkOrder{ID: o.ID, Runtime: rt, Payload: req, ExpiresAt: o.ExpiresAt, CreatedAt: r.now()})
+	if err != nil {
+		return runtime.Started{}, err
+	}
+	if res.Session == nil {
+		return runtime.Started{}, errors.New("The runtime started no session.")
+	}
+	return runtime.Started{Session: *res.Session, PaneKey: res.PaneKey, TurnStarted: res.TurnStarted}, nil
+}
+
+// Stop runs a sessionStop order of the daemon itself, and frees the start key of the session.
+func (r *Runner) Stop(ctx context.Context, rt string, o runtime.Order, s wire.SessionRef) error {
+	_, err := r.own(ctx, wire.WorkOrder{ID: o.ID, Runtime: rt, Payload: wire.StopPayload{Session: s}, ExpiresAt: o.ExpiresAt, CreatedAt: r.now()})
+	return err
+}
+
+func (r *Runner) own(ctx context.Context, o wire.WorkOrder) (*wire.WorkOrderResult, error) {
+	res, out := r.Run(server.WithCaller(ctx, self), o, Hooks{})
+	if out == Busy {
+		return nil, fmt.Errorf("The order %s runs already.", o.ID)
+	}
+	r.MarkSent(o.ID)
+	switch {
+	case res.State == wire.ResultExpired:
+		return nil, fmt.Errorf("The order %s expired.", o.ID)
+	case res.State != wire.ResultDone && res.Result != nil:
+		return nil, errors.New(res.Result.Error)
+	case res.State != wire.ResultDone:
+		return nil, fmt.Errorf("The order %s failed.", o.ID)
+	}
+	if res.Result == nil {
+		return &wire.WorkOrderResult{}, nil
+	}
+	return res.Result, nil
 }
 
 // LogResult writes the end of an order that ran. An order that failed before the runtime started is refused.

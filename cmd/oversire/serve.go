@@ -19,6 +19,7 @@ import (
 	"github.com/oversire/cli/orders"
 	"github.com/oversire/cli/proc"
 	"github.com/oversire/cli/questions"
+	"github.com/oversire/cli/runbook"
 	"github.com/oversire/cli/runtime"
 	"github.com/oversire/cli/runtime/orca"
 	"github.com/oversire/cli/secret"
@@ -142,6 +143,10 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	srv.Handle(direct.Routes()...)
 	reports.add(book)
 	reports.add(direct)
+	runbooks := runbook.NewEngine(runbook.NewStore(filepath.Join(data, "runbooks")), runner, reg, book, cfg.Machine(), func(r wire.RunbookRun) {
+		srv.Notify(false, map[string]any{"type": "runbookRun", "run": r})
+	}, time.Now)
+	runbooks.Log = c.log
 
 	drain := func(ctx context.Context) error {
 		t := time.NewTicker(spoolInterval)
@@ -157,7 +162,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 			}
 		}
 	}
-	return []func(context.Context) error{srv.Run, book.Run, watcher.Run, syncer.Run, asks.Run, drain, c.pruneStore(oplog)}, nil
+	return []func(context.Context) error{srv.Run, book.Run, watcher.Run, syncer.Run, asks.Run, drain, c.pruneStore(oplog), runbooks.Run}, nil
 }
 
 // hookHealth is "live" when a harness has our hooks, else "off".

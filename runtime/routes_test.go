@@ -113,6 +113,48 @@ func TestAPIRuntimes(t *testing.T) {
 	}
 }
 
+func TestAPIRuntimesAddCapabilities(t *testing.T) {
+	dir := t.TempDir()
+	api := NewAPI(NewRegistry(&fake{}, &catalog{down: true}), dir, time.Now)
+	mux := http.NewServeMux()
+	for _, r := range api.Routes() {
+		mux.HandleFunc(r.Pattern, r.Handle)
+	}
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	var page wire.DaemonRuntimesPage
+	_ = call(t, srv, "GET", "/v1/runtimes", nil, &page)
+	if slices.Contains(page.Runtimes[1].Capabilities, CapRunbooks) {
+		t.Fatal("runbooks without the engine")
+	}
+	api.AddCapabilities(CapRunbooks)
+	_ = call(t, srv, "GET", "/v1/runtimes", nil, &page)
+	cat, plain := page.Runtimes[0], page.Runtimes[1]
+	if len(cat.Capabilities) != 0 || !slices.Contains(plain.Capabilities, CapRunbooks) {
+		t.Fatalf("%+v %+v", cat, plain)
+	}
+}
+
+func TestRegistryPick(t *testing.T) {
+	ctx := context.Background()
+	cases := []struct {
+		rts      []Runtime
+		id, want string
+	}{
+		{[]Runtime{&fake{}, &catalog{}}, "", "cat"},
+		{[]Runtime{&fake{}, &catalog{down: true}}, "", "fake"},
+		{[]Runtime{&fake{}, &catalog{}}, "fake", "fake"},
+		{[]Runtime{&catalog{down: true}}, "", ""},
+		{[]Runtime{&fake{}}, "orca", ""},
+	}
+	for _, c := range cases {
+		got, err := NewRegistry(c.rts...).Pick(ctx, c.id)
+		if got != c.want || (err != nil) != (c.want == "") {
+			t.Errorf("pick %q: %q %v", c.id, got, err)
+		}
+	}
+}
+
 type retrier struct {
 	catalog
 	tries int

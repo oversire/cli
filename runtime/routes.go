@@ -37,11 +37,19 @@ type API struct {
 
 	mu      sync.Mutex
 	failing map[string]string // the last workspaces error of each runtime
+	extra   []string
 }
 
 // NewAPI gives the routes of reg. POST /v1/files writes into a new folder in files for each call.
 func NewAPI(reg *Registry, files string, now func() time.Time) *API {
 	return &API{Log: slog.Default(), reg: reg, files: files, now: now, failing: map[string]string{}}
+}
+
+// AddCapabilities adds caps to each reachable runtime of GET /v1/runtimes: parts that the daemon gives, not the runtime.
+func (a *API) AddCapabilities(caps ...string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.extra = append(a.extra, caps...)
 }
 
 func (a *API) Routes() []server.Route {
@@ -60,7 +68,15 @@ func (a *API) Routes() []server.Route {
 }
 
 func (a *API) runtimes(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, wire.DaemonRuntimesPage{Runtimes: a.reg.Status(r.Context())})
+	list := a.reg.Status(r.Context())
+	a.mu.Lock()
+	for i := range list {
+		if list[i].Reachable {
+			list[i].Capabilities = append(list[i].Capabilities, a.extra...)
+		}
+	}
+	a.mu.Unlock()
+	writeJSON(w, http.StatusOK, wire.DaemonRuntimesPage{Runtimes: list})
 }
 
 func (a *API) retry(w http.ResponseWriter, r *http.Request) {

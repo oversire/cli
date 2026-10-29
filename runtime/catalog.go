@@ -2,7 +2,9 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"slices"
 	"sync"
 
 	"github.com/oversire/cli/wire"
@@ -19,6 +21,8 @@ const (
 	CapWorkspaces      = "workspaces"
 	CapSessionStream   = "sessionStream"
 	CapSessionKey      = "sessionKey"
+	// CapRunbooks is not a part of the runtime: the daemon runs runbook steps on it (API.AddCapabilities).
+	CapRunbooks = "runbooks"
 )
 
 // Capabilities are the parts that rt has. Each runtime takes files and keys: the daemon does them, not the runtime.
@@ -45,6 +49,33 @@ func (r *Registry) Status(ctx context.Context) []wire.DaemonRuntime {
 	out := make([]wire.DaemonRuntime, len(ids))
 	r.each(ids, func(i int, rt Runtime) { out[i] = probe(ctx, rt) })
 	return out
+}
+
+// Pick gives the runtime of a launch: id when the registry has it.
+// An empty id gives the first reachable runtime with workspaces, else the first reachable runtime, as the app does.
+func (r *Registry) Pick(ctx context.Context, id string) (string, error) {
+	if id != "" {
+		if !r.Has(id) {
+			return "", fmt.Errorf("%w: %s", ErrNoRuntime, id)
+		}
+		return id, nil
+	}
+	first := ""
+	for _, d := range r.Status(ctx) {
+		if !d.Reachable {
+			continue
+		}
+		if slices.Contains(d.Capabilities, CapWorkspaces) {
+			return d.ID, nil
+		}
+		if first == "" {
+			first = d.ID
+		}
+	}
+	if first == "" {
+		return "", errors.New("No agent runtime runs on this machine.")
+	}
+	return first, nil
 }
 
 // Retry connects the live view of runtime id again, when it can, and gives its new state.

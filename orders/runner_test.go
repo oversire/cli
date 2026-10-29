@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/oversire/cli/runtime"
 	"github.com/oversire/cli/server"
 	"github.com/oversire/cli/sessions"
 	"github.com/oversire/cli/wire"
@@ -189,5 +190,37 @@ func TestStartKeepsModelEffortAndProfile(t *testing.T) {
 	s, ok := book.Get("s-1")
 	if !ok || s.Model != "claude-opus-5-5" || s.Effort != "max" || s.Profile != "claude-max" || s.Key != "" {
 		t.Fatalf("book = %+v %v", s, ok)
+	}
+}
+
+func TestLaunchAndStopOfTheDaemon(t *testing.T) {
+	r, rts, book := keyRig()
+	o := runtime.Order{ID: "runbook-rb_1.plan.1", ExpiresAt: now.Add(time.Hour)}
+	req := wire.LaunchRequest{Repo: "/r", Agent: "codex", Key: "runbook:rb_1.plan.1", Profile: "codex", Prompt: "go"}
+	st, err := r.Launch(context.Background(), "oversire", o, req)
+	if err != nil || st.Session.ID != "s-1" || st.PaneKey != "s-1" {
+		t.Fatalf("launch = %+v %v", st, err)
+	}
+	if s, ok := book.ByKey("oversire", req.Key); !ok || s.Profile != "codex" {
+		t.Fatalf("book = %+v %v", s, ok)
+	}
+	if !r.journal.(*memJournal).sent[o.ID] {
+		t.Fatal("the hub gets the result")
+	}
+	again, err := r.Launch(context.Background(), "oversire", o, req)
+	if err != nil || again.Session.ID != "s-1" || rts.count() != 1 {
+		t.Fatalf("the same order launched again: %+v %v", again, err)
+	}
+	if err := r.Stop(context.Background(), "oversire", runtime.Order{ID: "stop-1", ExpiresAt: now.Add(time.Hour)}, st.Session); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := book.ByKey("oversire", req.Key); ok {
+		t.Fatal("the stop keeps the key")
+	}
+	if _, err := r.Launch(context.Background(), "orca", runtime.Order{ID: "x", ExpiresAt: now.Add(-time.Hour)}, req); err == nil {
+		t.Fatal("an expired order launched")
+	}
+	if _, err := r.Launch(context.Background(), "nope", runtime.Order{ID: "y", ExpiresAt: now.Add(time.Hour)}, req); err == nil {
+		t.Fatal("an unknown runtime launched")
 	}
 }
