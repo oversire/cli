@@ -309,7 +309,7 @@ Each change of a run sends the frame `{"type":"runbookRun","run":<RunbookRun>}` 
 
 How a run goes:
 
-- The daemon picks the runtime of the start, else the first reachable runtime with workspaces. Each step is a keyed session start with the key `runbook:<run>.<step>.<round>`, the terminal title `<KEY> · <n> <Step name>` (plus ` · r<round>` after round 1), and the agent of the step. In Orca, all steps of an item use the workspace of the item key. The `oversire` runtime uses the worktree of the item key.
+- The daemon picks the runtime of the start, else the first reachable runtime with workspaces. Each step is a keyed session start with the key `runbook:<run>.<step>.<round>`, the terminal title `<KEY> · <n> <Step name>` (plus ` · r<round>` after round 1), and the agent of the step. An agent can set its own title: `claude -n <KEY>` shows the item key. In Orca, all steps of an item use the workspace of the item key. The `oversire` runtime uses the worktree of the item key.
 - The prompt fills `{key}`, `{url}`, `{title}`, `{item}`, `{workspace}`, `{project}`, `{round}`, `{notes}` (the notes of the start, then the note of each step), `{worktree}` (`.wt/<key>`) and `{done}` (`oversire step done --run <id> --step <step>`).
 - A review with `gaps` starts its fix step, and then the review again as the next round. After `review.rounds` rounds with gaps, the run pauses. A review with `pass` skips its fix step.
 - The step follows its session: a question or a permission is `asks`. A session that ends with no verdict, or a launch that fails, pauses the run.
