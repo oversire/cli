@@ -1,0 +1,90 @@
+{
+  "id": "rb_0d5e77b1",
+  "item": {
+    "project": {
+      "account": {
+        "provider": "plane",
+        "id": "ocral"
+      },
+      "id": "9ba476d7",
+      "key": "OVERSIRE"
+    },
+    "id": "cbf1e6b5",
+    "key": "OVERSIRE-341",
+    "url": "https://app.plane.so/ocral/browse/OVERSIRE-341/"
+  },
+  "title": "Retry a failed sync with backoff",
+  "machine": "mini",
+  "runtime": "oversire",
+  "repo": "/Users/ada/Projects/oversire-workspace",
+  "runbook": {
+    "id": "small",
+    "name": "Small",
+    "steps": [
+      {
+        "id": "implement",
+        "name": "Implement",
+        "agent": "claude",
+        "prompt": "Implement {key} ({url}) in worktree group {worktree}. Then run {done} --verdict done --note \"<one line>\"."
+      },
+      {
+        "id": "review",
+        "name": "Review Implementation",
+        "agent": "claude",
+        "prompt": "Check the work in {worktree} against {key}. Then run {done} --verdict pass or {done} --verdict gaps, with --note.",
+        "review": {
+          "fix": "fixes",
+          "rounds": 0
+        }
+      },
+      {
+        "id": "fixes",
+        "name": "Implement Fixes",
+        "agent": "claude",
+        "prompt": "Fix each gap of the last review comment on {key}. Then run {done} --verdict done."
+      }
+    ]
+  },
+  "agents": {
+    "claude": {
+      "cli": "claude",
+      "command": "claude -n OVERSIRE-341 --dangerously-skip-permissions",
+      "profile": "claude"
+    }
+  },
+  "started": "2026-10-29T09:14:00Z",
+  "notes": "Implement: done by hand.",
+  "state": "done",
+  "steps": [
+    {
+      "step": "implement",
+      "round": 1,
+      "state": "skipped"
+    },
+    {
+      "step": "review",
+      "round": 1,
+      "state": "pass",
+      "session": {
+        "workspace": {
+          "account": {
+            "provider": "oversire",
+            "id": "mini"
+          },
+          "id": "oversire-341"
+        },
+        "id": "s-7c21"
+      },
+      "daemonSession": "s-7c21",
+      "note": "No gaps.",
+      "started": "2026-10-29T11:00:00Z",
+      "ended": "2026-10-29T11:09:00Z"
+    },
+    {
+      "step": "fixes",
+      "round": 1,
+      "state": "skipped"
+    }
+  ],
+  "updated": "2026-10-29T11:09:01Z"
+}

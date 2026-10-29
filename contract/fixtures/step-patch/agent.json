@@ -1,0 +1,7 @@
+{
+  "agent": "codex",
+  "launch": {
+    "cli": "codex",
+    "profile": "codex"
+  }
+}

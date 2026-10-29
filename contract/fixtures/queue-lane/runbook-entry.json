@@ -1,0 +1,14 @@
+{
+  "project": "plane/ocral/9ba476d7",
+  "identifier": "OVERSIRE",
+  "entries": [
+    {
+      "key": "OVERSIRE-341",
+      "title": "Retry a failed sync with backoff",
+      "condition": "slot",
+      "added": "2026-10-29T09:00:00Z",
+      "source": "you",
+      "runbook": "full"
+    }
+  ]
+}

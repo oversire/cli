@@ -1,0 +1,3 @@
+{
+  "prompt": "Implement {key} in {worktree}, only the store part. Then run {done} --verdict done."
+}

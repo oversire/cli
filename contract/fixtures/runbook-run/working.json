@@ -1,0 +1,189 @@
+{
+  "id": "rb_3f9a01c2",
+  "item": {
+    "project": {
+      "account": {
+        "provider": "plane",
+        "id": "ocral"
+      },
+      "id": "9ba476d7",
+      "key": "OVERSIRE"
+    },
+    "id": "cbf1e6b5",
+    "key": "OVERSIRE-341",
+    "url": "https://app.plane.so/ocral/browse/OVERSIRE-341/"
+  },
+  "title": "Retry a failed sync with backoff",
+  "machine": "mbp",
+  "runtime": "orca",
+  "repo": "/Users/ada/Projects/oversire-workspace",
+  "runbook": {
+    "id": "full",
+    "name": "Full",
+    "steps": [
+      {
+        "id": "plan",
+        "name": "Plan & Refine",
+        "agent": "claude-max",
+        "prompt": "Plan {key} ({url}) in worktree group {worktree}. Post a plan comment on {key}. Then run {done} --verdict done --note \"<one line>\"."
+      },
+      {
+        "id": "review-plan",
+        "name": "Review Plan",
+        "agent": "claude",
+        "prompt": "Review the plan of {key} (round {round}). Notes so far: {notes}. Then run {done} --verdict pass or {done} --verdict gaps, with --note.",
+        "review": {
+          "fix": "plan-fixes",
+          "rounds": 1
+        }
+      },
+      {
+        "id": "plan-fixes",
+        "name": "Implement Plan Fixes",
+        "agent": "claude-max",
+        "prompt": "Read the last review comment on {key} and close each gap. Then run {done} --verdict done --note \"<one line>\"."
+      },
+      {
+        "id": "implement",
+        "name": "Implement",
+        "agent": "claude",
+        "prompt": "Implement {key} ({url}) in worktree group {worktree}. Then run {done} --verdict done --note \"<one line>\".",
+        "pauseBefore": true
+      },
+      {
+        "id": "review",
+        "name": "Review Implementation",
+        "agent": "claude-max",
+        "prompt": "Check the work in {worktree} against {key}. Then run {done} --verdict pass or {done} --verdict gaps, with --note.",
+        "review": {
+          "fix": "fixes",
+          "rounds": 1
+        }
+      },
+      {
+        "id": "fixes",
+        "name": "Implement Fixes",
+        "agent": "claude-max",
+        "prompt": "Fix each gap of the last review comment on {key} in {worktree}. Then run {done} --verdict done --note \"<one line>\"."
+      }
+    ]
+  },
+  "agents": {
+    "claude": {
+      "cli": "claude",
+      "command": "claude -n OVERSIRE-341 --dangerously-skip-permissions",
+      "profile": "claude"
+    },
+    "claude-max": {
+      "cli": "claude",
+      "command": "claude -n OVERSIRE-341 --dangerously-skip-permissions",
+      "model": "claude-opus-5-5",
+      "effort": "max",
+      "profile": "claude-max"
+    }
+  },
+  "started": "2026-10-29T09:14:00Z",
+  "state": "running",
+  "current": "implement",
+  "steps": [
+    {
+      "step": "plan",
+      "round": 1,
+      "state": "done",
+      "session": {
+        "workspace": {
+          "account": {
+            "provider": "orca",
+            "id": "mbp"
+          },
+          "id": "wt-oversire-341"
+        },
+        "id": "term_1"
+      },
+      "daemonSession": "tab1:leaf1",
+      "terminal": "term_1",
+      "note": "3 sub-items, store first.",
+      "started": "2026-10-29T09:14:02Z",
+      "ended": "2026-10-29T09:41:10Z"
+    },
+    {
+      "step": "review-plan",
+      "round": 1,
+      "state": "gaps",
+      "session": {
+        "workspace": {
+          "account": {
+            "provider": "orca",
+            "id": "mbp"
+          },
+          "id": "wt-oversire-341"
+        },
+        "id": "term_2"
+      },
+      "daemonSession": "tab1:leaf2",
+      "terminal": "term_2",
+      "note": "352 has no crash test.",
+      "started": "2026-10-29T09:41:12Z",
+      "ended": "2026-10-29T09:47:00Z"
+    },
+    {
+      "step": "plan-fixes",
+      "round": 1,
+      "state": "done",
+      "session": {
+        "workspace": {
+          "account": {
+            "provider": "orca",
+            "id": "mbp"
+          },
+          "id": "wt-oversire-341"
+        },
+        "id": "term_3"
+      },
+      "daemonSession": "tab1:leaf3",
+      "terminal": "term_3",
+      "note": "Added the crash test.",
+      "started": "2026-10-29T09:47:02Z",
+      "ended": "2026-10-29T09:58:00Z"
+    },
+    {
+      "step": "review-plan",
+      "round": 2,
+      "state": "pass",
+      "session": {
+        "workspace": {
+          "account": {
+            "provider": "orca",
+            "id": "mbp"
+          },
+          "id": "wt-oversire-341"
+        },
+        "id": "term_4"
+      },
+      "daemonSession": "tab1:leaf4",
+      "terminal": "term_4",
+      "note": "All 3 items have files, flow and tests.",
+      "started": "2026-10-29T09:58:02Z",
+      "ended": "2026-10-29T10:01:30Z"
+    },
+    {
+      "step": "implement",
+      "round": 1,
+      "state": "working",
+      "session": {
+        "workspace": {
+          "account": {
+            "provider": "orca",
+            "id": "mbp"
+          },
+          "id": "wt-oversire-341"
+        },
+        "id": "term_5"
+      },
+      "daemonSession": "tab1:leaf5",
+      "terminal": "term_5",
+      "started": "2026-10-29T10:02:10Z"
+    }
+  ],
+  "updated": "2026-10-29T10:33:00Z"
+}

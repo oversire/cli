@@ -1,0 +1,51 @@
+{
+  "id": "full",
+  "name": "Full",
+  "steps": [
+    {
+      "id": "plan",
+      "name": "Plan & Refine",
+      "agent": "claude-max",
+      "prompt": "Plan {key} ({url}) in worktree group {worktree}. Post a plan comment on {key}. Then run {done} --verdict done --note \"<one line>\"."
+    },
+    {
+      "id": "review-plan",
+      "name": "Review Plan",
+      "agent": "claude",
+      "prompt": "Review the plan of {key} (round {round}). Notes so far: {notes}. Then run {done} --verdict pass or {done} --verdict gaps, with --note.",
+      "review": {
+        "fix": "plan-fixes",
+        "rounds": 1
+      }
+    },
+    {
+      "id": "plan-fixes",
+      "name": "Implement Plan Fixes",
+      "agent": "claude-max",
+      "prompt": "Read the last review comment on {key} and close each gap. Then run {done} --verdict done --note \"<one line>\"."
+    },
+    {
+      "id": "implement",
+      "name": "Implement",
+      "agent": "claude",
+      "prompt": "Implement {key} ({url}) in worktree group {worktree}. Then run {done} --verdict done --note \"<one line>\".",
+      "pauseBefore": true
+    },
+    {
+      "id": "review",
+      "name": "Review Implementation",
+      "agent": "claude-max",
+      "prompt": "Check the work in {worktree} against {key}. Then run {done} --verdict pass or {done} --verdict gaps, with --note.",
+      "review": {
+        "fix": "fixes",
+        "rounds": 1
+      }
+    },
+    {
+      "id": "fixes",
+      "name": "Implement Fixes",
+      "agent": "claude-max",
+      "prompt": "Fix each gap of the last review comment on {key} in {worktree}. Then run {done} --verdict done --note \"<one line>\"."
+    }
+  ]
+}

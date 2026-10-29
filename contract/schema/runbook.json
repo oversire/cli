@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oversire.dev/contract/runbook.json",
+  "title": "OverSire runbooks",
+  "description": "A runbook takes one item from plan to merge in a fixed list of steps. Each step is a fresh agent session. The daemon of the sessions machine runs the steps in order (/v1/runbook-runs). The app keeps the runbooks in config.json. Dates are ISO 8601 UTC.",
+  "x-oversire-schema": 1,
+  "$defs": {
+    "Date": { "type": "string", "format": "date-time" },
+    "StepID": { "description": "Unique in a runbook. Lowercase.", "type": "string", "pattern": "^[a-z0-9-]+$", "minLength": 1, "maxLength": 40 },
+    "RunID": { "type": "string", "pattern": "^rb_[0-9a-f]{8}$" },
+    "Review": {
+      "description": "The step is a review. Verdict gaps runs the fix step, then the review again, up to rounds more times. Verdict pass skips the fix step.",
+      "type": "object",
+      "properties": {
+        "fix": { "description": "A later step that is not a review. One fix step serves one review.", "$ref": "#/$defs/StepID" },
+        "rounds": { "description": "The fix rounds. 0: gaps pauses the run at once.", "type": "integer", "minimum": 0, "maximum": 5 }
+      },
+      "required": ["fix", "rounds"],
+      "additionalProperties": false
+    },
+    "RunbookStep": {
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "#/$defs/StepID" },
+        "name": { "type": "string", "minLength": 1 },
+        "agent": { "description": "An OverSire agent name of Settings › Agents, for example claude-max.", "type": "string", "minLength": 1 },
+        "prompt": { "description": "The first prompt of the session. Placeholders: {key} {url} {title} {item} {workspace} {project} {round} {notes} {worktree} {done}.", "type": "string", "minLength": 1 },
+        "pauseBefore": { "description": "The run waits at a gate for your approval before the step starts.", "type": "boolean" },
+        "review": { "$ref": "#/$defs/Review" }
+      },
+      "required": ["id", "name", "agent", "prompt"],
+      "additionalProperties": false
+    },
+    "Runbook": {
+      "description": "In config.json runtime.runbooks. A run keeps a full copy.",
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "#/$defs/StepID" },
+        "name": { "type": "string", "minLength": 1 },
+        "steps": { "type": "array", "items": { "$ref": "#/$defs/RunbookStep" }, "minItems": 1 }
+      },
+      "required": ["id", "name", "steps"],
+      "additionalProperties": false
+    },
+    "AgentLaunch": {
+      "description": "One agent, resolved by the app at the start. The fields go into LaunchRequest.",
+      "type": "object",
+      "properties": {
+        "cli": { "description": "LaunchRequest.agent: the base CLI.", "type": "string", "minLength": 1 },
+        "command": { "description": "LaunchRequest.command: the resolved start command.", "type": "string" },
+        "model": { "type": "string", "minLength": 1 },
+        "effort": { "type": "string", "minLength": 1 },
+        "profile": { "description": "LaunchRequest.profile: the agent name.", "type": "string", "minLength": 1 }
+      },
+      "required": ["cli", "profile"],
+      "additionalProperties": false
+    },
+    "RunbookStart": {
+      "description": "The body of POST /v1/runbook-runs. HTTP 400: the runbook is not valid, with the problems. HTTP 409: the item has an open run.",
+      "type": "object",
+      "properties": {
+        "item": { "$ref": "refs.json#/$defs/ItemRef" },
+        "title": { "description": "The item title, for {title}.", "type": "string" },
+        "repo": { "description": "LaunchRequest.repo of each step.", "type": "string", "minLength": 1 },
+        "runtime": { "description": "The runtime of the daemon, for example orca. Absent: the first runtime that runs and has workspaces.", "type": "string", "minLength": 1 },
+        "runbook": { "$ref": "#/$defs/Runbook" },
+        "agents": { "description": "Each agent that a step names.", "type": "object", "additionalProperties": { "$ref": "#/$defs/AgentLaunch" } },
+        "startAt": { "description": "The first step. The steps before it are skipped.", "$ref": "#/$defs/StepID" },
+        "notes": { "description": "Text for {notes} before the first note of a step.", "type": "string" }
+      },
+      "required": ["item", "repo", "runbook", "agents"],
+      "additionalProperties": false
+    },
+    "RunState": {
+      "description": "gate: waits for your approval. paused: needs you (no verdict, blocked, round limit, or Pause).",
+      "enum": ["running", "gate", "paused", "done", "failed", "stopped"]
+    },
+    "StepState": {
+      "description": "pass and gaps: the verdict of a review. done and skipped: the verdict of another step. blocked: the agent cannot go on. ended: the session ended with no verdict. failed: the session did not start.",
+      "enum": ["waits", "starting", "working", "asks", "pass", "gaps", "done", "skipped", "blocked", "ended", "failed"]
+    },
+    "StepRun": {
+      "description": "One round of one step. Round 1 is the first run. A retry or a review round adds an entry.",
+      "type": "object",
+      "properties": {
+        "step": { "$ref": "#/$defs/StepID" },
+        "round": { "type": "integer", "minimum": 1 },
+        "state": { "$ref": "#/$defs/StepState" },
+        "session": { "$ref": "refs.json#/$defs/SessionRef" },
+        "daemonSession": { "description": "The DaemonSession id of the session.", "type": "string" },
+        "terminal": { "description": "The terminal handle in the runtime.", "type": "string" },
+        "note": { "description": "The note of oversire step done.", "type": "string", "maxLength": 300 },
+        "started": { "$ref": "#/$defs/Date" },
+        "ended": { "$ref": "#/$defs/Date" }
+      },
+      "required": ["step", "round", "state"],
+      "additionalProperties": false
+    },
+    "RunbookRun": {
+      "description": "The answer of the /v1/runbook-runs routes, and the run of a runbookRun frame on the event stream.",
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "#/$defs/RunID" },
+        "item": { "$ref": "refs.json#/$defs/ItemRef" },
+        "title": { "type": "string" },
+        "machine": { "$ref": "daemon.json#/$defs/MachineName" },
+        "runtime": { "type": "string", "minLength": 1 },
+        "repo": { "type": "string", "minLength": 1 },
+        "runbook": { "$ref": "#/$defs/Runbook" },
+        "agents": { "type": "object", "additionalProperties": { "$ref": "#/$defs/AgentLaunch" } },
+        "notes": { "type": "string" },
+        "state": { "$ref": "#/$defs/RunState" },
+        "reason": { "description": "Why the run is paused or failed. User text.", "type": "string" },
+        "current": { "description": "The step that works, asks, or waits at the gate.", "$ref": "#/$defs/StepID" },
+        "steps": { "type": "array", "items": { "$ref": "#/$defs/StepRun" } },
+        "started": { "$ref": "#/$defs/Date" },
+        "updated": { "$ref": "#/$defs/Date" }
+      },
+      "required": ["id", "item", "machine", "runtime", "repo", "runbook", "agents", "state", "steps", "started", "updated"],
+      "additionalProperties": false
+    },
+    "Verdict": { "description": "pass and gaps for a review step, done and skipped for another step, blocked for all.", "enum": ["pass", "gaps", "done", "skipped", "blocked"] },
+    "StepDone": {
+      "description": "The body of POST /v1/runbook-runs/{id}/steps/{step}/done. HTTP 409: the step is not current.",
+      "type": "object",
+      "properties": {
+        "verdict": { "$ref": "#/$defs/Verdict" },
+        "note": { "type": "string", "maxLength": 300 }
+      },
+      "required": ["verdict"],
+      "additionalProperties": false
+    },
+    "StepPatch": {
+      "description": "The body of PATCH /v1/runbook-runs/{id}/steps/{step}, only for a step that did not start (else HTTP 409). It changes the copy of the run.",
+      "type": "object",
+      "properties": {
+        "agent": { "type": "string", "minLength": 1 },
+        "launch": { "description": "The resolved agent. Needed when agents of the run does not have the agent.", "$ref": "#/$defs/AgentLaunch" },
+        "prompt": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  }
+}
