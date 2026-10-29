@@ -28,7 +28,9 @@ var (
 // Validate checks the rules of the app (Runbook.validate), but not the agent list.
 func Validate(b wire.Runbook) []Problem {
 	var out []Problem
-	add := func(step, format string, a ...any) { out = append(out, Problem{Step: step, Text: fmt.Sprintf(format, a...)}) }
+	add := func(step, format string, a ...any) {
+		out = append(out, Problem{Step: step, Text: fmt.Sprintf(format, a...)})
+	}
 	if strings.TrimSpace(b.Name) == "" {
 		add("", "The runbook needs a name.")
 	}

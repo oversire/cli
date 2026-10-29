@@ -46,6 +46,8 @@ Usage:
   oversire digest --harness claude --session <id or file> [--markers]
                   [--source S] [--earlier N] [--full N] [--max-chars N]
                                                        print the history digest of a session
+  oversire step done --run <id> --step <step> --verdict pass|gaps|done|skipped|blocked [--note <text>]
+                                                       end a runbook step (the agent of the step runs it)
   oversire update                                      install the latest release now
   oversire version                                     show the version
 `
@@ -135,6 +137,8 @@ func (c *cli) dispatch(ctx context.Context, args []string) error {
 		return c.pair(ctx, rest[1:])
 	case cmd == "orca":
 		return c.orca(ctx, rest)
+	case cmd == "step":
+		return c.step(ctx, rest)
 	case cmd == "update":
 		return c.update(ctx)
 	case cmd == "version" || cmd == "--version" || cmd == "-v":

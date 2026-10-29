@@ -147,6 +147,8 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 		srv.Notify(false, map[string]any{"type": "runbookRun", "run": r})
 	}, time.Now)
 	runbooks.Log = c.log
+	srv.Handle(runbook.NewRoutes(runbooks).Routes()...)
+	runtimeAPI.AddCapabilities(runtime.CapRunbooks)
 
 	drain := func(ctx context.Context) error {
 		t := time.NewTicker(spoolInterval)

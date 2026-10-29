@@ -75,7 +75,9 @@ type Error struct {
 
 func (e *Error) Error() string { return e.Text }
 
-func refuse(k Kind, format string, a ...any) *Error { return &Error{Kind: k, Text: fmt.Sprintf(format, a...)} }
+func refuse(k Kind, format string, a ...any) *Error {
+	return &Error{Kind: k, Text: fmt.Sprintf(format, a...)}
+}
 
 // Engine runs each runbook run as a state machine. It keeps the runs in the store, so a run goes on after a restart.
 type Engine struct {
@@ -662,7 +664,9 @@ func (e *Engine) changed(r *wire.RunbookRun) {
 func (e *Engine) now() time.Time { return e.clock().UTC().Truncate(time.Second) }
 
 // stepKey is the start key of a step round. Run and step ids have no dot, so the key parses back.
-func stepKey(run, step string, round int) string { return fmt.Sprintf("runbook:%s.%s.%d", run, step, round) }
+func stepKey(run, step string, round int) string {
+	return fmt.Sprintf("runbook:%s.%s.%d", run, step, round)
+}
 
 func verdictState(st wire.RunbookStep, v wire.Verdict) (wire.StepState, error) {
 	if v == wire.VerdictBlocked {

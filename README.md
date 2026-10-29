@@ -158,6 +158,7 @@ The budget of the order has caps: 50 earlier turns, 10 last turns and 20000 char
 | `oversire group request-code`, `admit <machine> <code>` | Join the other way: the new machine shows a code, and a member admits it. |
 | `oversire group remove <machine or device>`, `home <machine>`, `rotate` | Remove a member or an app, move home, or make a new group secret. |
 | `oversire join <host> <code>` | Join the group of the member at host. `-` reads the code from stdin. |
+| `oversire step done --run <id> --step <step> --verdict pass\|gaps\|done\|skipped\|blocked [--note <text>]` | End a runbook step. The agent of the step runs it. See "Runbooks". |
 | `oversire update` | Install the latest release now. The running daemon does the update and restarts. Without a daemon, the command updates the binary itself. |
 | `oversire version` | Show the version. |
 
@@ -271,7 +272,7 @@ The daemon owns the agent runtimes of this machine: `oversire`, and `orca` when 
 
 | Route | What it does |
 |---|---|
-| `GET /v1/runtimes` | A `DaemonRuntimesPage`: for each runtime, `installed`, `reachable`, `version`, `error` and the `capabilities` (Capability raw values of the app). A runtime that is not reachable has no capabilities. `stream` tells the state of the live session view: `live`, `pairing` or `textOnly` (with the `reason`). |
+| `GET /v1/runtimes` | A `DaemonRuntimesPage`: for each runtime, `installed`, `reachable`, `version`, `error` and the `capabilities` (Capability raw values of the app). A runtime that is not reachable has no capabilities. The serve role adds `runbooks` to each reachable runtime: the daemon runs runbook steps on it (see "Runbooks"). `stream` tells the state of the live session view: `live`, `pairing` or `textOnly` (with the `reason`). |
 | `POST /v1/runtimes/{id}/retry` | Connects the live view of the runtime again, when the runtime can, and probes it. Answers the new `DaemonRuntime`. 404: no such runtime. Settings › Machines of the app calls it. |
 | `POST /v1/runtimes/{id}/pair` | Body `RuntimePair` `{link}`. The daemon checks the link with the runtime, then keeps it in the Keychain. Answers the new `DaemonRuntime`. 400: the link did not pair. 404: no such runtime. 501: the runtime takes no link. `stream.pairable` tells which runtimes take one. |
 | `DELETE /v1/runtimes/{id}/pair` | Forgets the pairing link. Answers the new `DaemonRuntime`. |
@@ -281,6 +282,41 @@ The daemon owns the agent runtimes of this machine: `oversire`, and `orca` when 
 | `POST /v1/files` | Body `WorkspaceFiles` (1 to 20 files, 25 MB together, base64 data). Plain file names only: no `/`, no leading dot, no two files with the same name. The daemon writes the files into a new folder `<data>/files/<id>/` and answers `WorkspaceFilesResult` `{paths}`. It removes the folders older than 7 days. |
 | `GET /v1/agents/{agent}/models` | An `AgentModels` `{agent, models, source, reason?}`: the models of one agent CLI on this machine, through agent-wire (`source` `wire`). The list stays in a cache for 10 minutes. A CLI that cannot list, or a probe that fails, gives an empty list, `source` `none` and the `reason`. 404: the daemon does not know the agent. The Agents card of the app reads it from the "Run sessions on" machine. |
 | `POST /v1/reveal` | Loopback only. Body: a `SessionRef`. Shows the terminal in the runtime UI, and answers 204. 404: no such runtime or session. 501: the runtime cannot show it. |
+
+### Runbooks
+
+A runbook is a fixed list of steps on one item (OVERSIRE-349). Each step is one agent session in the workspace of the item, and the step ends when its agent runs `oversire step done`. The bodies are in `contract/schema/runbook.json`. The daemon keeps each run in `<data>/runbooks/<run>.json`, so a run goes on after a restart. The app finds these routes by the capability `runbooks` in `GET /v1/runtimes`.
+
+All routes need member access. A daemon credential only reads: a change gets 403.
+
+| Route | What it does |
+|---|---|
+| `POST /v1/runbook-runs` | Body `RunbookStart`. Starts the run and answers 201 with the `RunbookRun`. 400: the runbook is not valid. 409: the item has an open run. |
+| `GET /v1/runbook-runs?item=<KEY>&open=1` | The runs as a JSON array, newest first. `item` and `open` are optional. |
+| `GET /v1/runbook-runs/{id}` | One `RunbookRun`. 404: no such run. |
+| `POST /v1/runbook-runs/{id}/approve` | Starts the step that waits at a gate (`pauseBefore`). |
+| `POST /v1/runbook-runs/{id}/pause` | Pauses the run. A live step goes on, and the run stops after it. |
+| `POST /v1/runbook-runs/{id}/resume` | Goes on. A step that ended, failed or is blocked starts again as a new round. After the round limit of a review, the fix step and the review run one more round. |
+| `POST /v1/runbook-runs/{id}/stop` | Ends the run and stops the session of the live step. The workspace stays. |
+| `POST /v1/runbook-runs/{id}/steps/{step}/done` | Body `StepDone` `{verdict, note?}`. A review takes `pass`, `gaps` or `blocked`. Other steps take `done`, `skipped` or `blocked`. 400: a wrong verdict. 409: the step is not the current step. |
+| `POST /v1/runbook-runs/{id}/steps/{step}/retry` | Starts a new round of the step. 409: a step runs now. |
+| `POST /v1/runbook-runs/{id}/steps/{step}/skip` | Skips the current step, or a later step before it starts. |
+| `PATCH /v1/runbook-runs/{id}/steps/{step}` | Body `StepPatch` `{agent?, launch?, prompt?}`. Changes a step of this run before it starts. A `launch` adds the agent to the run. 400: an agent that the run does not have, with no launch. 409: a round of the step started. |
+
+A change answers the new `RunbookRun`. A refused call answers `{"error":"<text>"}` with 400, 404 or 409. A runbook that is not valid adds the broken rules: `{"error":"The runbook is not valid.","problems":[{"step":"<step id or empty>","text":"<text>"}]}`.
+
+Each change of a run sends the frame `{"type":"runbookRun","run":<RunbookRun>}` on `GET /v1/connect`.
+
+How a run goes:
+
+- The daemon picks the runtime of the start, else the first reachable runtime with workspaces. Each step is a keyed session start with the key `runbook:<run>.<step>.<round>`, the terminal title `<KEY> · <n> <Step name>` (plus ` · r<round>` after round 1), and the agent of the step. In Orca, all steps of an item use the workspace of the item key. The `oversire` runtime uses the worktree of the item key.
+- The prompt fills `{key}`, `{url}`, `{title}`, `{item}`, `{workspace}`, `{project}`, `{round}`, `{notes}` (the notes of the start, then the note of each step), `{worktree}` (`.wt/<key>`) and `{done}` (`oversire step done --run <id> --step <step>`).
+- A review with `gaps` starts its fix step, and then the review again as the next round. After `review.rounds` rounds with gaps, the run pauses. A review with `pass` skips its fix step.
+- The step follows its session: a question or a permission is `asks`. A session that ends with no verdict, or a launch that fails, pauses the run.
+- The daemon stops an `oversire` step session 10 s after the verdict, because it holds a session slot. An Orca terminal stays open.
+- After a restart, a step that is still `starting` with no session after 2 min pauses the run. A step whose session the book does not know 60 s after the start pauses the run.
+
+`oversire step done` calls the loopback API. It prints `Step <n> of <m> <Step name>: <verdict>. Next: <next step, or done, or the run state>.` The note is cut to 300 characters. On a refusal it writes the error of the daemon to stderr and exits with 1.
 
 ### Session stream
 
