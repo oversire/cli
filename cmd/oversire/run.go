@@ -22,7 +22,6 @@ import (
 	"github.com/oversire/cli/proc"
 	"github.com/oversire/cli/runtime"
 	"github.com/oversire/cli/runtime/orca"
-	"github.com/oversire/cli/runtime/oversire"
 	"github.com/oversire/cli/update"
 	"github.com/oversire/cli/wire"
 )
@@ -30,9 +29,12 @@ import (
 // stopWait is the wait after a refused token or hello, so that the service does not retry fast.
 const stopWait = time.Hour
 
-// registry has ov, and orca when its CLI is on this machine.
+// registry has ov when it is not nil, and orca when its CLI is on this machine.
 func (c *cli) registry(ov runtime.Runtime) *runtime.Registry {
-	rts := []runtime.Runtime{ov}
+	var rts []runtime.Runtime
+	if ov != nil {
+		rts = append(rts, ov)
+	}
 	if exe, ok := orca.FindCLI(); ok {
 		rts = append(rts, orca.New(exe, c.cmds))
 	}
@@ -60,18 +62,23 @@ func (c *cli) run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// agents lists the models of each harness. The sessions run in the visor. The ledger stops the
+	// agent processes that a daemon from before the visor left behind.
 	agents := agentwire.New(agentwire.Options{ClientName: "oversire", ClientVersion: version, LedgerPath: filepath.Join(data, "agents.json"), Logger: c.log})
 	_ = agents.Reconcile()
 	var client *hub.Client
 	reps := &reports{}
-	ov := oversire.New(oversire.Options{Runner: cfg.Device, DataDir: data, Slots: cfg.Sessions()}, agents, c.cmds, reps)
+	local, err := c.openSessions(ctx, cfg, data, reps)
+	if err != nil {
+		return err
+	}
 	defer func() {
 		ctx, done := context.WithTimeout(context.Background(), 30*time.Second)
 		defer done()
-		ov.Close(ctx)
+		local.Close(ctx)
 		agents.Close(ctx)
 	}()
-	reg := c.registry(ov)
+	reg := c.registry(local.Runtime())
 	c.log.Info("daemon start", "version", version, "roles", cfg.Roles, "hub", cfg.Hub, "device", cfg.Device, "runtimes", reg.IDs(), "data", data)
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -111,9 +118,11 @@ func (c *cli) run(ctx context.Context) error {
 		}
 		tasks = append(tasks, serve...)
 	}
-	if len(tasks) == 0 {
-		tasks = append(tasks, func(ctx context.Context) error { <-ctx.Done(); return nil })
+	// Boot after the sinks are in, so that each sink gets the sessions that run already.
+	if err := local.Boot(ctx, reps); err != nil {
+		return err
 	}
+	tasks = append(tasks, local.Serve)
 
 	done := make(chan error, len(tasks))
 	for _, t := range tasks {
@@ -159,16 +168,23 @@ func (c *cli) hubTask(client *hub.Client) func(context.Context) error {
 // the hub client, the session book and the direct orders. Without a sink, it drops them.
 type reports struct {
 	mu    sync.Mutex
-	sinks []oversire.Reporter
+	sinks []reporter
 }
 
-func (r *reports) add(s oversire.Reporter) {
+// reporter gets the session reports of the oversire runtime. A pathsReporter also gets the changed paths.
+type reporter interface{ Report(s wire.RunnerSession) }
+
+type pathsReporter interface {
+	ReportPaths(order string, p wire.ChangedPaths)
+}
+
+func (r *reports) add(s reporter) {
 	r.mu.Lock()
 	r.sinks = append(r.sinks, s)
 	r.mu.Unlock()
 }
 
-func (r *reports) all() []oversire.Reporter {
+func (r *reports) all() []reporter {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return slices.Clone(r.sinks)
@@ -180,9 +196,23 @@ func (r *reports) Report(s wire.RunnerSession) {
 	}
 }
 
+// staleEnder is a sink that keeps sessions of the runtime from before a restart.
+type staleEnder interface {
+	EndRunnerSessions(known func(id string) bool)
+}
+
+// booted ends the kept sessions that the runtime does not know after its boot.
+func (r *reports) booted(known func(id string) bool) {
+	for _, sink := range r.all() {
+		if e, ok := sink.(staleEnder); ok {
+			e.EndRunnerSessions(known)
+		}
+	}
+}
+
 func (r *reports) ReportPaths(order string, p wire.ChangedPaths) {
 	for _, sink := range r.all() {
-		if pr, ok := sink.(oversire.PathsReporter); ok {
+		if pr, ok := sink.(pathsReporter); ok {
 			pr.ReportPaths(order, p)
 		}
 	}

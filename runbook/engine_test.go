@@ -40,6 +40,8 @@ type launcher struct {
 	stops []wire.SessionRef
 	fail  map[string]error
 	turn  bool
+	// book gets the session of an oversire launch, as the oversire runtime reports it at its start.
+	book *book
 }
 
 func (l *launcher) Launch(_ context.Context, rt string, o runtime.Order, r wire.LaunchRequest) (runtime.Started, error) {
@@ -56,7 +58,11 @@ func (l *launcher) Launch(_ context.Context, rt string, o runtime.Order, r wire.
 	}
 	n := len(l.reqs)
 	s := wire.SessionRef{Workspace: wire.WorkspaceRef{Account: wire.AccountID{Provider: rt, ID: "local"}, ID: "ws-" + r.Item.Key}, ID: fmt.Sprintf("term-%d", n)}
-	return runtime.Started{Session: s, PaneKey: fmt.Sprintf("pane-%d", n), TurnStarted: l.turn}, nil
+	pane := fmt.Sprintf("pane-%d", n)
+	if rt == wire.RuntimeOversire && l.book != nil {
+		l.book.set(wire.DaemonSession{ID: pane, Runtime: rt, Key: r.Key, State: wire.PhaseStarting})
+	}
+	return runtime.Started{Session: s, PaneKey: pane, TurnStarted: l.turn}, nil
 }
 
 func (l *launcher) Stop(_ context.Context, _ string, _ runtime.Order, s wire.SessionRef) error {
@@ -156,7 +162,8 @@ func newRig(t *testing.T, dir string) *rig {
 	if dir == "" {
 		dir = t.TempDir()
 	}
-	g := &rig{l: &launcher{fail: map[string]error{}, turn: true}, b: newFakeBook(), c: &clock{t: t0}, dir: dir}
+	b := newFakeBook()
+	g := &rig{l: &launcher{fail: map[string]error{}, turn: true, book: b}, b: b, c: &clock{t: t0}, dir: dir}
 	g.e = g.reopen()
 	return g
 }
@@ -839,5 +846,38 @@ func TestPatchKeepsTheStartCopy(t *testing.T) {
 	}
 	if _, ok := agents["x"]; ok || b.Steps[1].Prompt != prompt("Build {key}.") {
 		t.Fatal("the patch changed the start")
+	}
+}
+
+// TestOversireStepsDoNotWait: the oversire runtime reports its sessions before the engine starts,
+// so a step with no session ends at once.
+func TestOversireStepsDoNotWait(t *testing.T) {
+	g := newRig(t, "")
+	r, err := g.e.Start(context.Background(), wire.RunbookStart{Item: item, Repo: "/r/app", Runtime: "oversire", Runbook: linear(), Agents: agents})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r = g.run(t, r.ID)
+	expect(t, r, wire.RunRunning, "plan", "plan.1:working")
+	// The daemon restarts, and the runtime does not know the session.
+	g.b.drop(r.Steps[0].DaemonSession)
+	e := g.reopen()
+	e.check()
+	r = g.run(t, r.ID)
+	expect(t, r, wire.RunPaused, "plan", "plan.1:ended")
+
+	g = newRig(t, "")
+	g.l.fail["plan"] = errors.New("crash")
+	r, _ = g.e.Start(context.Background(), wire.RunbookStart{Item: item, Repo: "/r/app", Runtime: "oversire", Runbook: linear(), Agents: agents})
+	r = g.run(t, r.ID)
+	raw, _ := g.e.Get(r.ID)
+	raw.State, raw.Reason, raw.Steps[0].State, raw.Steps[0].Ended = wire.RunRunning, "", wire.StepStarting, nil
+	g.e.store.Save(raw)
+	e = g.reopen()
+	e.check()
+	r = g.run(t, r.ID)
+	expect(t, r, wire.RunPaused, "plan", "plan.1:failed")
+	if r.Reason != reasonNoStart {
+		t.Fatal(r.Reason)
 	}
 }

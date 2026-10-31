@@ -19,9 +19,11 @@ import (
 
 const (
 	// StartWait is how long a step can be in starting with no session. Then the run pauses.
+	// The oversire runtime gives the session at the launch, so its steps do not wait (until OVERSIRE-362 for Orca).
 	StartWait = 2 * time.Minute
 	// SyncWait is the time after the daemon start in which the sources report the sessions again.
-	// After it, a step whose session the book does not know ends.
+	// After it, a step whose session the book does not know ends. The oversire runtime reports its sessions
+	// before the engine starts, so its steps do not wait.
 	SyncWait = 60 * time.Second
 	// MaxNote is the length of a step note in characters.
 	MaxNote   = 300
@@ -569,13 +571,14 @@ func (e *Engine) follow(r *wire.RunbookRun, now time.Time) bool {
 	}
 	before := *sr
 	key := stepKey(r.ID, sr.Step, sr.Round)
+	wait := r.Runtime != wire.RuntimeOversire
 	if sr.DaemonSession == "" {
 		if e.launching[key] {
 			return false
 		}
 		if ds, ok := e.sessions.ByKey(r.Runtime, key); ok {
 			sr.DaemonSession = ds.ID
-		} else if sr.Started == nil || now.Sub(*sr.Started) >= StartWait {
+		} else if !wait || sr.Started == nil || now.Sub(*sr.Started) >= StartWait {
 			sr.State, sr.Ended = wire.StepFailed, &now
 			e.pause(r, reasonNoStart)
 			return true
@@ -586,7 +589,7 @@ func (e *Engine) follow(r *wire.RunbookRun, now time.Time) bool {
 	s, ok := e.sessions.Get(sr.DaemonSession)
 	if !ok {
 		// The sources report a session some time after the daemon start and after the launch.
-		if now.Sub(e.since) < SyncWait || sr.Started != nil && now.Sub(*sr.Started) < SyncWait {
+		if wait && (now.Sub(e.since) < SyncWait || sr.Started != nil && now.Sub(*sr.Started) < SyncWait) {
 			return *sr != before
 		}
 		e.end(r, sr, now)

@@ -1,3 +1,5 @@
+//go:build !windows
+
 // Package oversire runs agent sessions without Orca, on agent-visor. Each item session gets a
 // git worktree (a visor workdir with the item key), and the visor holds the harness process.
 // A session lives through a restart of the daemon. OverSire keeps the queue, the item, the

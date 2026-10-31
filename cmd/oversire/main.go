@@ -48,6 +48,8 @@ Usage:
                                                        print the history digest of a session
   oversire step done --run <id> --step <step> --verdict pass|gaps|done|skipped|blocked [--note <text>]
                                                        end a runbook step (the agent of the step runs it)
+  oversire visor ls | session | workdir | project | harness | status
+                                                       show and control the agent sessions of the daemon
   oversire update                                      install the latest release now
   oversire version                                     show the version
 `
@@ -95,6 +97,10 @@ func main() {
 		// The hook of an agent CLI: it must be fast and always exit 0.
 		_ = hookCLI().hook(context.Background(), os.Args[2:])
 		os.Exit(0)
+	}
+	if os.Args[1] == "visor" {
+		// The holders and the hooks of the visor sessions run this. It makes no config folder.
+		exit(visorCLI(os.Args[2:]))
 	}
 	if os.Args[1] == "digest" {
 		// digest also runs on hosts without a daemon setup, so it makes no config folder.

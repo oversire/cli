@@ -36,3 +36,27 @@ func TestBookReport(t *testing.T) {
 		t.Fatalf("%+v", s)
 	}
 }
+
+func TestEndRunnerSessions(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sessions.json")
+	b, _ := newBook(path)
+	for _, id := range []string{"s-live", "s-lost"} {
+		b.Report(wire.RunnerSession{ID: id, Agent: "claude", State: wire.SessionWorking, StartedAt: at(0), UpdatedAt: at(0)})
+	}
+	b.Apply(Patch{ID: "hook-1", Source: SourceHook, State: ptr(wire.PhaseWorking)})
+	if err := b.Save(true); err != nil {
+		t.Fatal(err)
+	}
+	// The daemon restarts. The runtime knows only s-live.
+	b, _ = newBook(path)
+	b.EndRunnerSessions(func(id string) bool { return id == "s-live" })
+	if s, _ := b.Get("s-live"); s.State != wire.PhaseWorking {
+		t.Fatalf("live: %+v", s)
+	}
+	if s, _ := b.Get("s-lost"); s.State != wire.PhaseFailed || s.LastMessage != "The daemon stopped during the session." {
+		t.Fatalf("lost: %+v", s)
+	}
+	if s, _ := b.Get("hook-1"); s.State != wire.PhaseWorking {
+		t.Fatalf("hook: %+v", s)
+	}
+}

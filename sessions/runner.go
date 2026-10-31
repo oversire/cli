@@ -40,3 +40,21 @@ func RunnerPatch(s wire.RunnerSession) Patch {
 	}
 	return p
 }
+
+// EndRunnerSessions fails each live session of the oversire runtime that known does not have.
+// The daemon calls it after the boot of the runtime, so that no session of a lost run stays live.
+func (b *Book) EndRunnerSessions(known func(id string) bool) {
+	b.mu.Lock()
+	var stale []string
+	for id, e := range b.byID {
+		ended := e.s.State == wire.PhaseDone || e.s.State == wire.PhaseFailed || !e.ended.IsZero()
+		if e.s.Runtime == wire.RuntimeOversire && !ended && !known(id) {
+			stale = append(stale, id)
+		}
+	}
+	b.mu.Unlock()
+	for _, id := range stale {
+		state, reason, msg := wire.PhaseFailed, wire.ReasonError, "The daemon stopped during the session."
+		b.Apply(Patch{ID: id, Source: SourceWire, State: &state, Reason: &reason, LastMessage: &msg, End: true})
+	}
+}
