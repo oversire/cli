@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	agentvisor "github.com/trebi-ai/agent-visor"
 	agentwire "github.com/trebi-ai/agent-wire"
 
 	"github.com/oversire/cli/wire"
@@ -76,9 +77,9 @@ func parseAsk(p *agentwire.Permission, round int, at time.Time) (*openQuestion, 
 
 // askQuestion shows an AskUserQuestion request as the question of the session. It gives false when the
 // input does not parse; the caller then shows it as a permission. Call it with s.mu held.
-func (s *session) askQuestion(p *agentwire.Permission) bool {
+func (s *session) askQuestion(p *agentwire.Permission, at time.Time) bool {
 	s.rounds++
-	oq, err := parseAsk(p, s.rounds, s.rt.now().UTC())
+	oq, err := parseAsk(p, s.rounds, at.UTC())
 	if err != nil {
 		s.rounds--
 		return false
@@ -88,11 +89,8 @@ func (s *session) askQuestion(p *agentwire.Permission) bool {
 	for _, it := range oq.question.Items {
 		s.log.add("? " + it.Text)
 	}
-	if len(s.permissions) == 0 {
-		s.change(wire.SessionWaitingInput)
-	} else {
-		s.publish()
-	}
+	s.show()
+	s.publish()
 	return true
 }
 
@@ -133,9 +131,9 @@ func (s *session) answerQuestion(ctx context.Context, a wire.QuestionAnswer) err
 	}
 	s.clearQuestion()
 	s.log.add("= " + a.ID + " answered")
-	aw := s.aw
+	vid := s.vid
 	s.mu.Unlock()
-	return aw.AnswerPermission(ctx, a.ID, agentwire.Decision{Allow: true, UpdatedInput: updated})
+	return s.rt.host.Answer(ctx, vid, a.ID, agentvisor.Answer{Allow: true, UpdatedInput: updated})
 }
 
 // clearQuestion drops the open question and goes on working. Call it with s.mu held.
@@ -145,9 +143,6 @@ func (s *session) clearQuestion() {
 	}
 	s.question = nil
 	s.info.Question = nil
-	if len(s.permissions) == 0 {
-		s.change(wire.SessionWorking)
-	} else {
-		s.publish()
-	}
+	s.show()
+	s.publish()
 }

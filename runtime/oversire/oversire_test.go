@@ -2,16 +2,21 @@ package oversire
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	goruntime "runtime"
 	"slices"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
+	agentvisor "github.com/trebi-ai/agent-visor"
+	"github.com/trebi-ai/agent-visor/holder"
 	agentwire "github.com/trebi-ai/agent-wire"
 
 	"github.com/oversire/cli/proc"
@@ -108,38 +113,115 @@ func gitRepo(t *testing.T) string {
 }
 
 type fixture struct {
-	rt   *Runtime
-	rec  *recorder
-	repo string
-	data string
+	rt    *Runtime
+	rec   *recorder
+	repo  string
+	data  string
+	visor *agentvisor.Visor
+}
+
+// TestMain runs the test binary as a visor holder when the visor starts one.
+func TestMain(m *testing.M) {
+	if len(os.Args) == 3 && os.Args[1] == "hold" {
+		os.Exit(runHolder(os.Args[2]))
+	}
+	os.Exit(m.Run())
+}
+
+func runHolder(id string) int {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
+	cfg, err := holder.ReadConfig(os.Stdin, id)
+	if err == nil {
+		err = holder.Run(ctx, cfg)
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	return 0
+}
+
+// shortHome is a visor home with a short path, for its sockets.
+func shortHome(t *testing.T) string {
+	t.Helper()
+	home, err := os.MkdirTemp("", "ov")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(home) })
+	return home
+}
+
+// newVisor runs the fake harness with driver in the visor process.
+func newVisor(t *testing.T, home string, driver agentwire.Driver) *agentvisor.Visor {
+	t.Helper()
+	v, err := agentvisor.New(context.Background(), agentvisor.Options{
+		Home: home, Client: "oversire-test",
+		Drivers: map[string]agentwire.Driver{string(agentwire.Fake): driver},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return v
 }
 
 func setup(t *testing.T, script string, opts Options) fixture {
 	t.Helper()
-	return setupWith(t, script, opts, func(aw *agentwire.Runtime) Harnesses { return aw })
+	return setupWith(t, script, opts, func(v *agentvisor.Visor) Host { return v })
 }
 
-// setupWith lets a test wrap the agent-wire runtime.
-func setupWith(t *testing.T, script string, opts Options, wrap func(*agentwire.Runtime) Harnesses) fixture {
+// setupWith lets a test wrap the visor.
+func setupWith(t *testing.T, script string, opts Options, wrap func(*agentvisor.Visor) Host) fixture {
+	t.Helper()
+	return setupDriver(t, agentwire.FakeDriver{Script: script}, opts, wrap)
+}
+
+// setupDriver lets a test give the driver of the fake harness.
+func setupDriver(t *testing.T, driver agentwire.Driver, opts Options, wrap func(*agentvisor.Visor) Host) fixture {
 	t.Helper()
 	if goruntime.GOOS == "windows" {
 		t.Skip("the fake harness needs a POSIX sh")
 	}
-	aw := agentwire.New(agentwire.Options{ClientName: "oversire-runner-test"})
-	aw.SetDriver(agentwire.Fake, agentwire.FakeDriver{Script: script})
+	f := fixture{rec: &recorder{}, repo: gitRepo(t)}
+	f.visor = newVisor(t, shortHome(t), driver)
 	opts.Runner, opts.Fake = "r1", true
 	if opts.DataDir == "" {
 		opts.DataDir = t.TempDir()
 	}
-	f := fixture{rec: &recorder{}, repo: gitRepo(t), data: opts.DataDir}
-	f.rt = New(opts, wrap(aw), proc.Local{}, f.rec)
+	f.data = opts.DataDir
+	f.rt = New(opts, wrap(f.visor), proc.Local{}, f.rec)
+	if err := f.rt.Boot(context.Background()); err != nil {
+		t.Fatal(err)
+	}
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		f.rt.Close(ctx)
-		aw.Close(ctx)
+		_ = f.visor.Close(ctx)
 	})
 	return f
+}
+
+// again opens a second runtime on the visor of f, as after a restart of the daemon.
+func (f fixture) again(t *testing.T, rec Reporter) *Runtime {
+	t.Helper()
+	rt := New(Options{Runner: "r1", DataDir: f.data, Fake: true}, f.visor, proc.Local{}, rec)
+	if err := rt.Boot(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { rt.Close(context.Background()) })
+	return rt
+}
+
+// workdir gives the visor workdir of key.
+func (f fixture) workdir(t *testing.T, key string) agentvisor.Workdir {
+	t.Helper()
+	wds, err := f.visor.Workdirs(context.Background(), agentvisor.Filter{Key: key})
+	if err != nil || len(wds) != 1 {
+		t.Fatalf("workdirs of %s: %v %v", key, wds, err)
+	}
+	return wds[0]
 }
 
 func (f fixture) launch(t *testing.T, name string, o runtime.Order) wire.SessionRef {
@@ -170,8 +252,9 @@ func TestStartReadSendStop(t *testing.T) {
 	if got := f.rec.states(ref.ID); !slices.Equal(got, []wire.RunnerSessionState{"queued", "starting", "working", "waitingInput"}) {
 		t.Fatalf("states %v", got)
 	}
-	if _, err := os.Stat(filepath.Join(f.data, "worktrees", "app", "APP-2", ".git")); err != nil {
-		t.Fatal("no worktree:", err)
+	w := f.workdir(t, "APP-2")
+	if _, err := os.Stat(filepath.Join(w.Path, ".git")); err != nil || w.Kind != agentvisor.WorkdirWorktree || w.Branch != "app-2" {
+		t.Fatalf("no worktree: %+v %v", w, err)
 	}
 
 	if err := f.rt.Send(ctx, wire.SendPayload{Session: ref, Text: "more"}); err != nil {
@@ -204,17 +287,31 @@ func TestStartReadSendStop(t *testing.T) {
 	if err := f.rt.Stop(ctx, ref); err != nil {
 		t.Fatal("second stop:", err)
 	}
-	if _, err := os.Stat(filepath.Join(f.data, "worktrees", "app", "APP-2")); err != nil {
+	if _, err := os.Stat(w.Path); err != nil {
 		t.Fatal("stop removed the worktree")
 	}
 
-	// A new runtime reads the transcript file.
-	again := New(Options{DataDir: f.data, Fake: true}, agentwire.New(agentwire.Options{}), proc.Local{}, nil)
+	// A new runtime reads the session from the events of the visor.
+	rec := &recorder{}
+	again := f.again(t, rec)
 	if lines, err := again.Read(ctx, ref, 2); err != nil || !slices.Equal(lines, []string{"> more", "turn 2"}) {
-		t.Fatalf("file %q %v", lines, err)
+		t.Fatalf("again %q %v", lines, err)
+	}
+	if s, _ := rec.latest(ref.ID); s.State != wire.SessionDone || s.Summary != "turn 2" || s.Item == nil || s.Item.Key != "APP-2" || s.Session != ref || s.Order != "o1" {
+		t.Fatalf("again %#v", s)
 	}
 	if _, err := again.Read(ctx, wire.SessionRef{ID: "../config"}, 2); err == nil {
 		t.Fatal("a bad session id passed")
+	}
+}
+
+func TestReadsOldTranscriptFile(t *testing.T) {
+	data := t.TempDir()
+	os.MkdirAll(filepath.Join(data, "sessions"), 0o700)
+	os.WriteFile(filepath.Join(data, "sessions", "s-0a.log"), []byte("> go\nturn 1\n"), 0o600)
+	rt := New(Options{DataDir: data}, nil, nil, nil)
+	if lines, err := rt.Read(context.Background(), wire.SessionRef{ID: "s-0a"}, 1); err != nil || !slices.Equal(lines, []string{"turn 1"}) {
+		t.Fatalf("lines %q %v", lines, err)
 	}
 }
 
@@ -337,44 +434,43 @@ func TestStartRefuses(t *testing.T) {
 			t.Errorf("%s: start passed", name)
 		}
 	}
-	real := New(Options{DataDir: t.TempDir()}, agentwire.New(agentwire.Options{}), proc.Local{}, nil)
+	real := New(Options{DataDir: t.TempDir()}, f.visor, proc.Local{}, nil)
 	_, err := real.Start(ctx, runtime.Order{ID: "o"}, wire.LaunchRequest{Repo: f.repo, Name: "A-1", Agent: "fake", Prompt: "go"})
 	if err == nil || !strings.Contains(err.Error(), `agent "fake"`) {
 		t.Fatalf("fake without the test option: %v", err)
 	}
 }
 
-func TestWorktreeCreateAndReuse(t *testing.T) {
-	repo := gitRepo(t)
-	root := t.TempDir()
-	w := NewWorktrees(root, proc.Local{})
+func TestWorkdirKeyAndAdopt(t *testing.T) {
+	f := setup(t, chat, Options{})
 	ctx := context.Background()
-	dir, err := w.Ensure(ctx, repo, "APP-2", "app-2")
-	if err != nil || dir != filepath.Join(root, "app", "APP-2") {
-		t.Fatal(dir, err)
+	w, err := f.rt.ensureWorkdir(ctx, f.repo, "APP-2", "app-2", "")
+	if err != nil || w.Kind != agentvisor.WorkdirWorktree || gitOut(t, w.Path, "branch", "--show-current") != "app-2" {
+		t.Fatal(w, err)
 	}
-	if b := gitOut(t, dir, "branch", "--show-current"); b != "app-2" {
-		t.Fatalf("branch %q", b)
-	}
-	os.WriteFile(filepath.Join(dir, "work.txt"), []byte("x"), 0o600)
-	again, err := w.Ensure(ctx, repo, "APP-2", "app-2")
-	if err != nil || again != dir {
+	os.WriteFile(filepath.Join(w.Path, "work.txt"), []byte("x"), 0o600)
+	again, err := f.rt.ensureWorkdir(ctx, f.repo, "APP-2", "app-2", "")
+	if err != nil || again.ID != w.ID || again.Path != w.Path {
 		t.Fatal(again, err)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "work.txt")); err != nil {
+	if _, err := os.Stat(filepath.Join(w.Path, "work.txt")); err != nil {
 		t.Fatal("reuse lost the work")
 	}
 
 	// An existing branch gets a worktree without -b.
-	gitOut(t, repo, "branch", "app-3")
-	dir3, err := w.Ensure(ctx, repo, "APP-3", "app-3")
-	if err != nil || gitOut(t, dir3, "branch", "--show-current") != "app-3" {
-		t.Fatal(dir3, err)
+	gitOut(t, f.repo, "branch", "app-3")
+	w3, err := f.rt.ensureWorkdir(ctx, f.repo, "APP-3", "app-3", "")
+	if err != nil || gitOut(t, w3.Path, "branch", "--show-current") != "app-3" {
+		t.Fatal(w3, err)
 	}
 
-	os.MkdirAll(filepath.Join(root, "app", "APP-4"), 0o700)
-	if _, err := w.Ensure(ctx, repo, "APP-4", "app-4"); err == nil || !strings.Contains(err.Error(), "not a git worktree") {
-		t.Fatalf("plain folder: %v", err)
+	// The visor adopts a worktree from before agent-visor.
+	old := filepath.Join(f.data, "worktrees", "app", "APP-4")
+	gitOut(t, f.repo, "worktree", "add", "-b", "app-4", old)
+	w4, err := f.rt.ensureWorkdir(ctx, f.repo, "APP-4", "app-4", "")
+	real, _ := filepath.EvalSymlinks(old)
+	if err != nil || w4.Path != real || w4.Kind != agentvisor.WorkdirWorktree || w4.Branch != "app-4" {
+		t.Fatal(w4, err)
 	}
 }
 
@@ -417,24 +513,24 @@ func TestClipAndTail(t *testing.T) {
 	}
 }
 
-// startSpy keeps the last agent-wire StartRequest.
+// startSpy keeps the last StartSpec.
 type startSpy struct {
-	*agentwire.Runtime
-	mu  sync.Mutex
-	req agentwire.StartRequest
+	*agentvisor.Visor
+	mu   sync.Mutex
+	spec agentvisor.StartSpec
 }
 
-func (s *startSpy) Start(ctx context.Context, req agentwire.StartRequest) (agentwire.Session, error) {
+func (s *startSpy) Start(ctx context.Context, spec agentvisor.StartSpec) (agentvisor.Session, error) {
 	s.mu.Lock()
-	s.req = req
+	s.spec = spec
 	s.mu.Unlock()
-	return s.Runtime.Start(ctx, req)
+	return s.Visor.Start(ctx, spec)
 }
 
 func TestStartPassesModelAndEffort(t *testing.T) {
 	var spy *startSpy
-	f := setupWith(t, chat, Options{}, func(aw *agentwire.Runtime) Harnesses {
-		spy = &startSpy{Runtime: aw}
+	f := setupWith(t, chat, Options{}, func(v *agentvisor.Visor) Host {
+		spy = &startSpy{Visor: v}
 		return spy
 	})
 	ref, err := f.rt.Start(context.Background(), runtime.Order{ID: "o1"}, wire.LaunchRequest{Repo: f.repo, Name: "APP-9", Agent: "fake", Prompt: "go",
@@ -445,7 +541,8 @@ func TestStartPassesModelAndEffort(t *testing.T) {
 	f.rec.wait(t, ref.ID, wire.SessionWaitingInput)
 	spy.mu.Lock()
 	defer spy.mu.Unlock()
-	if spy.req.Model != "claude-opus-5-5" || spy.req.Effort != "max" {
-		t.Fatalf("start request %#v", spy.req)
+	sp := spy.spec
+	if sp.Model != "claude-opus-5-5" || sp.Effort != "max" || sp.Kind != agentvisor.KindWire || sp.Restart.Mode != agentvisor.RestartResume || sp.Labels[LabelSession] != ref.ID || sp.Labels[LabelRuntime] != ID {
+		t.Fatalf("start spec %#v", sp)
 	}
 }

@@ -3,8 +3,10 @@ package oversire
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
+	agentvisor "github.com/trebi-ai/agent-visor"
 	agentwire "github.com/trebi-ai/agent-wire"
 
 	"github.com/oversire/cli/wire"
@@ -19,8 +21,8 @@ type openPermission struct {
 }
 
 // ask shows a permission request. With no answer before the expiry time, the runner denies it.
-// Call it with s.mu held.
-func (s *session) ask(p *agentwire.Permission) {
+// The expiry time starts at the request, also after a restart. Call it with s.mu held.
+func (s *session) ask(p *agentwire.Permission, at time.Time) {
 	tool := p.Tool
 	if tool == "" {
 		tool = string(p.Kind)
@@ -29,23 +31,30 @@ func (s *session) ask(p *agentwire.Permission) {
 	if text == "" {
 		text = p.Input
 	}
-	timeout := s.rt.opts.PermissionTimeout
-	op := &openPermission{prompt: wire.PermissionPrompt{ID: p.ID, Tool: tool, Text: clip(text, maxText), ExpiresAt: s.rt.now().Add(timeout).UTC()}}
-	op.timer = time.AfterFunc(timeout, func() { _ = s.answer(context.Background(), p.ID, false, expiredReason) })
+	op := &openPermission{prompt: wire.PermissionPrompt{ID: p.ID, Tool: tool, Text: clip(text, maxText), ExpiresAt: at.Add(s.rt.opts.PermissionTimeout).UTC()}}
 	s.permissions = append(s.permissions, op)
 	s.log.add("? " + tool + ": " + op.prompt.Text)
-	s.showPermission()
+	if s.live {
+		s.arm(op)
+	}
+	s.show()
+}
+
+// arm starts the expiry timer of p. Call it with s.mu held.
+func (s *session) arm(p *openPermission) {
+	if p.timer != nil {
+		return
+	}
+	id := p.prompt.ID
+	p.timer = time.AfterFunc(max(p.prompt.ExpiresAt.Sub(s.rt.now()), 0), func() {
+		_ = s.answer(context.Background(), id, false, expiredReason)
+	})
 }
 
 // answer gives the decision for the open prompt id to the agent.
 func (s *session) answer(ctx context.Context, id string, allow bool, reason string) error {
 	s.mu.Lock()
-	i := -1
-	for n, p := range s.permissions {
-		if p.prompt.ID == id {
-			i = n
-		}
-	}
+	i := slices.IndexFunc(s.permissions, func(p *openPermission) bool { return p.prompt.ID == id })
 	if i < 0 {
 		open := len(s.permissions)
 		s.mu.Unlock()
@@ -54,9 +63,7 @@ func (s *session) answer(ctx context.Context, id string, allow bool, reason stri
 		}
 		return fmt.Errorf("The session %s has no open permission prompt %s.", s.id, id)
 	}
-	s.permissions[i].timer.Stop()
-	s.permissions = append(s.permissions[:i], s.permissions[i+1:]...)
-	aw := s.aw
+	s.removePermission(i)
 	word := "deny"
 	if allow {
 		word = "allow"
@@ -65,23 +72,41 @@ func (s *session) answer(ctx context.Context, id string, allow bool, reason stri
 		word += " (" + reason + ")"
 	}
 	s.log.add("= " + id + " " + word)
-	s.showPermission()
+	s.show()
+	vid := s.vid
 	s.mu.Unlock()
-	return aw.AnswerPermission(ctx, id, agentwire.Decision{Allow: allow, Message: reason})
+	return s.rt.host.Answer(ctx, vid, id, agentvisor.Answer{Allow: allow, Message: reason})
 }
 
-// showPermission shows the first open prompt, else goes back to working. Call it with s.mu held.
-func (s *session) showPermission() {
-	if len(s.permissions) == 0 {
-		s.info.Permission = nil
-		if s.question != nil {
-			s.change(wire.SessionWaitingInput)
-		} else {
-			s.change(wire.SessionWorking)
-		}
+// closeRequest drops a request that someone answered in another place, for example in the visor CLI.
+// Call it with s.mu held.
+func (s *session) closeRequest(id string) {
+	if i := slices.IndexFunc(s.permissions, func(p *openPermission) bool { return p.prompt.ID == id }); i >= 0 {
+		s.removePermission(i)
+		s.log.add("= " + id + " answered")
+		s.show()
 		return
 	}
-	p := s.permissions[0].prompt
-	s.info.Permission = &p
-	s.change(wire.SessionWaitingPermission)
+	if s.question != nil && s.question.question.ID == id {
+		s.log.add("= " + id + " answered")
+		s.clearQuestion()
+	}
+}
+
+// removePermission drops the open prompt at i. Call it with s.mu held.
+func (s *session) removePermission(i int) {
+	if t := s.permissions[i].timer; t != nil {
+		t.Stop()
+	}
+	s.permissions = slices.Delete(s.permissions, i, i+1)
+}
+
+// dropRequests drops the open prompts and the open question. Call it with s.mu held.
+func (s *session) dropRequests() {
+	for len(s.permissions) > 0 {
+		s.removePermission(0)
+	}
+	s.info.Permission = nil
+	s.question = nil
+	s.info.Question = nil
 }

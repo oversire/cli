@@ -1,16 +1,18 @@
-// Package oversire runs agent sessions without Orca. Each session gets a git worktree, and
-// agent-wire drives the harness CLI over its structured protocol.
+// Package oversire runs agent sessions without Orca, on agent-visor. Each item session gets a
+// git worktree (a visor workdir with the item key), and the visor holds the harness process.
+// A session lives through a restart of the daemon. OverSire keeps the queue, the item, the
+// permission expiry and the reports.
 package oversire
 
 import (
 	"bufio"
-	"cmp"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -20,6 +22,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	agentvisor "github.com/trebi-ai/agent-visor"
 	agentwire "github.com/trebi-ai/agent-wire"
 
 	"github.com/oversire/cli/digest"
@@ -39,6 +42,21 @@ const (
 	forget    = 24 * time.Hour
 )
 
+// The labels that OverSire puts on a visor session.
+const (
+	LabelRuntime = "oversire.runtime"
+	LabelSession = "oversire.session"
+	labelOrder   = "oversire.order"
+	labelRepo    = "oversire.repo"
+	labelBranch  = "oversire.branch"
+	labelItem    = "oversire.item"
+	labelRunner  = "oversire.runner"
+	labelKey     = "oversire.key"
+)
+
+// restartPrompt is the first turn of a session that the visor resumes after a lost process.
+const restartPrompt = "The machine or the session host restarted during your turn. Go on with the task."
+
 // Reporter receives each new state of a session. Report must not block.
 type Reporter interface {
 	Report(s wire.RunnerSession)
@@ -55,16 +73,27 @@ type PathsReporter interface {
 	ReportPaths(order string, p wire.ChangedPaths)
 }
 
-// Harnesses starts agent-wire sessions. *agentwire.Runtime is the real one.
-type Harnesses interface {
-	Driver(h agentwire.Harness) (agentwire.Driver, bool)
-	Start(ctx context.Context, req agentwire.StartRequest) (agentwire.Session, error)
+// Host is the part of agent-visor that the runtime uses. *agentvisor.Visor and *agentvisor.Client have it.
+type Host interface {
+	Info(ctx context.Context) (agentvisor.Info, error)
+	Start(ctx context.Context, spec agentvisor.StartSpec) (agentvisor.Session, error)
+	Session(ctx context.Context, id string) (agentvisor.Session, error)
+	Sessions(ctx context.Context, f agentvisor.Filter) ([]agentvisor.Session, error)
+	Send(ctx context.Context, id string, in agentvisor.Input) (agentvisor.Delivery, error)
+	Interrupt(ctx context.Context, id string) error
+	Answer(ctx context.Context, id, requestID string, a agentvisor.Answer) error
+	Stop(ctx context.Context, id string) error
+	Events(ctx context.Context, f agentvisor.Filter, after uint64) (*agentvisor.EventStream, error)
+	Projects(ctx context.Context, f agentvisor.Filter) ([]agentvisor.Project, error)
+	Workdirs(ctx context.Context, f agentvisor.Filter) ([]agentvisor.Workdir, error)
+	EnsureWorkdir(ctx context.Context, w agentvisor.WorkdirSpec) (agentvisor.Workdir, error)
+	RemoveWorkdir(ctx context.Context, id string, force bool) error
 }
 
 type Options struct {
 	// Runner is the device id of this runner.
 	Runner string
-	// DataDir holds worktrees/ and sessions/.
+	// DataDir holds the worktrees and the transcripts of the sessions from before agent-visor.
 	DataDir string
 	// Slots is the maximum of sessions that run at the same time. Zero is DefaultSlots.
 	Slots int
@@ -72,34 +101,43 @@ type Options struct {
 	PermissionTimeout time.Duration
 	// Fake permits the agent "fake", for tests.
 	Fake bool
+	Log  *slog.Logger
 }
 
 type Runtime struct {
-	opts      Options
-	agents    Harnesses
-	worktrees *Worktrees
-	slots     *Slots
-	report    Reporter
-	now       func() time.Time
+	opts   Options
+	host   Host
+	git    Runner
+	slots  *Slots
+	report Reporter
+	now    func() time.Time
+	log    *slog.Logger
 	// digests gives the transcript reader of a harness.
 	digests func(harness string) (digest.Reader, error)
 
 	mu       sync.Mutex
-	sessions map[string]*session
+	sessions map[string]*session // by OverSire id
+	byVisor  map[string]*session // by visor session id
+	live     bool
+	cancel   context.CancelFunc
+	done     chan struct{}
 }
 
-func New(opts Options, agents Harnesses, git Runner, report Reporter) *Runtime {
+func New(opts Options, host Host, git Runner, report Reporter) *Runtime {
 	if opts.Slots <= 0 {
 		opts.Slots = DefaultSlots
 	}
 	if opts.PermissionTimeout <= 0 {
 		opts.PermissionTimeout = DefaultPermissionTimeout
 	}
+	if opts.Log == nil {
+		opts.Log = slog.Default()
+	}
 	return &Runtime{
-		opts: opts, agents: agents, report: report, now: time.Now, digests: digest.ForUser,
-		worktrees: NewWorktrees(filepath.Join(opts.DataDir, "worktrees"), git),
-		slots:     NewSlots(opts.Slots),
-		sessions:  map[string]*session{},
+		opts: opts, host: host, git: git, report: report, now: time.Now, digests: digest.ForUser, log: opts.Log.With("source", "oversire"),
+		slots:    NewSlots(opts.Slots),
+		sessions: map[string]*session{},
+		byVisor:  map[string]*session{},
 	}
 }
 
@@ -109,6 +147,151 @@ var (
 	workspaceKey = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 	sessionID    = regexp.MustCompile(`^s-[0-9a-f]+$`)
 )
+
+// Boot reads the sessions of the visor and follows its events. It returns when the state of each
+// session is known, so the reports are right before the daemon serves.
+func (rt *Runtime) Boot(ctx context.Context) error {
+	info, err := rt.host.Info(ctx)
+	if err != nil {
+		return fmt.Errorf("read the session host: %w", err)
+	}
+	all, err := rt.host.Sessions(ctx, agentvisor.Filter{Labels: map[string]string{LabelRuntime: ID}})
+	if err != nil {
+		return fmt.Errorf("read the sessions of the session host: %w", err)
+	}
+	rt.mu.Lock()
+	for _, vs := range all {
+		rt.adoptLocked(vs)
+	}
+	rt.mu.Unlock()
+	follow, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	stream, err := rt.host.Events(follow, agentvisor.Filter{Labels: map[string]string{LabelRuntime: ID}}, 0)
+	if err != nil {
+		cancel()
+		return fmt.Errorf("follow the session host: %w", err)
+	}
+	caught := make(chan struct{})
+	rt.mu.Lock()
+	rt.cancel, rt.done = cancel, make(chan struct{})
+	rt.mu.Unlock()
+	go rt.follow(follow, stream, info.Seq, caught)
+	select {
+	case <-caught:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// follow applies the events of the visor. The events up to head are the replay: they set the state
+// with no reports. At head each session reports once and arms its permission expiry.
+func (rt *Runtime) follow(ctx context.Context, stream *agentvisor.EventStream, head uint64, caught chan struct{}) {
+	defer close(rt.done)
+	defer stream.Close() //nolint:errcheck // Close of a stream gives nil
+	live := false
+	goLive := func() {
+		live = true
+		rt.mu.Lock()
+		rt.live = true
+		rt.prune()
+		rt.mu.Unlock()
+		for _, s := range rt.all() {
+			s.wake()
+		}
+		close(caught)
+	}
+	if head == 0 {
+		goLive()
+	}
+	for {
+		e, err := stream.Next(ctx)
+		if err != nil {
+			if ctx.Err() == nil {
+				rt.log.Warn("the event stream of the session host ended", "err", err)
+			}
+			if !live {
+				goLive()
+			}
+			return
+		}
+		if s := rt.forVisor(ctx, e.Session); s != nil {
+			s.apply(e)
+		}
+		if !live && e.Seq >= head {
+			goLive()
+		}
+	}
+}
+
+// forVisor gives the session of a visor session id. A session that the follow sees before Start
+// returns gets its labels from the visor.
+func (rt *Runtime) forVisor(ctx context.Context, vid string) *session {
+	if vid == "" {
+		return nil
+	}
+	rt.mu.Lock()
+	s := rt.byVisor[vid]
+	rt.mu.Unlock()
+	if s != nil {
+		return s
+	}
+	vs, err := rt.host.Session(ctx, vid)
+	if err != nil || vs.Labels[LabelRuntime] != ID {
+		return nil
+	}
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	return rt.adoptLocked(vs)
+}
+
+// adoptLocked gives the session of a visor session, and makes it from the labels when it is new.
+// Call it with rt.mu held.
+func (rt *Runtime) adoptLocked(vs agentvisor.Session) *session {
+	if s := rt.byVisor[vs.ID]; s != nil {
+		return s
+	}
+	id := vs.Labels[LabelSession]
+	s := rt.sessions[id]
+	if s == nil {
+		s = sessionOf(rt, vs)
+		s.live = rt.live
+		s.slot = vs.State != agentvisor.StateExited && rt.slots.Take()
+		rt.sessions[id] = s
+	}
+	rt.bindLocked(s, vs)
+	return s
+}
+
+// bind links a session to its visor session.
+func (rt *Runtime) bind(s *session, vs agentvisor.Session) {
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	rt.bindLocked(s, vs)
+}
+
+// bindLocked is bind with rt.mu held.
+func (rt *Runtime) bindLocked(s *session, vs agentvisor.Session) {
+	rt.byVisor[vs.ID] = s
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.vid = vs.ID
+	if s.vstate == "" {
+		s.vstate = vs.State
+	}
+	if s.vendorID == "" {
+		s.vendorID = vs.VendorID
+	}
+}
+
+func (rt *Runtime) all() []*session {
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	out := make([]*session, 0, len(rt.sessions))
+	for _, s := range rt.sessions {
+		out = append(out, s)
+	}
+	return out
+}
 
 // Start makes the worktree and gives the session at once. The agent starts when a slot is free.
 // A session that has no slot at o.ExpiresAt fails. agent-wire has no command line, so r.Command has no effect.
@@ -124,8 +307,7 @@ func (rt *Runtime) Start(ctx context.Context, o runtime.Order, r wire.LaunchRequ
 	if !filepath.IsAbs(r.Repo) {
 		return none, fmt.Errorf("The repo %q is not a local path.", r.Repo)
 	}
-	h := agentwire.Harness(r.Agent)
-	if _, ok := rt.agents.Driver(h); !ok || (h == agentwire.Fake && !rt.opts.Fake) {
+	if !rt.knows(agentwire.Harness(r.Agent)) {
 		return none, fmt.Errorf("The oversire runtime does not know the agent %q.", r.Agent)
 	}
 	repo := filepath.Clean(r.Repo)
@@ -133,29 +315,16 @@ func (rt *Runtime) Start(ctx context.Context, o runtime.Order, r wire.LaunchRequ
 	if branch == "" {
 		branch = strings.ToLower(key)
 	}
-	dir, err := rt.worktrees.Ensure(ctx, repo, key, branch)
+	w, err := rt.ensureWorkdir(ctx, repo, key, branch, r.BaseBranch)
 	if err != nil {
 		return none, err
 	}
 	id := "s-" + randomHex(8)
-	log, err := openLog(rt.logPath(id))
-	if err != nil {
-		return none, err
-	}
-	turns, err := openTurns(rt.turnsPath(id))
-	if err != nil {
-		_ = log.Close()
-		return none, err
-	}
-	ref := wire.SessionRef{Workspace: wire.WorkspaceRef{Account: wire.AccountID{Provider: ID, ID: Local}, ID: filepath.Base(repo) + "/" + key}, ID: id}
+	ref := sessionRef(repo, key, id)
 	now := rt.now().UTC()
-	s := &session{
-		id: id, rt: rt, req: r, dir: dir, ended: make(chan struct{}),
-		log: &transcript{file: log}, turns: turns,
-		info: wire.RunnerSession{ID: id, Runner: rt.opts.Runner, Session: ref, Order: o.ID, Agent: r.Agent, Repo: r.Repo, Branch: branch, Item: r.Item, State: wire.SessionQueued, StartedAt: now, UpdatedAt: now},
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	s.cancel = cancel
+	s := newSession(rt, wire.RunnerSession{ID: id, Runner: rt.opts.Runner, Session: ref, Order: o.ID, Agent: r.Agent, Repo: r.Repo, Branch: w.Branch, Item: r.Item,
+		State: wire.SessionQueued, StartedAt: now, UpdatedAt: now}, w.Path)
+	s.req, s.workdir, s.live = r, w.ID, true
 	rt.mu.Lock()
 	rt.prune()
 	rt.sessions[id] = s
@@ -164,7 +333,7 @@ func (rt *Runtime) Start(ctx context.Context, o runtime.Order, r wire.LaunchRequ
 	s.mu.Lock()
 	s.publish()
 	s.mu.Unlock()
-	go s.run(ctx, o.ExpiresAt)
+	go s.run(context.WithoutCancel(ctx), o.ExpiresAt)
 	return ref, nil
 }
 
@@ -177,6 +346,13 @@ func (rt *Runtime) Launch(ctx context.Context, o runtime.Order, r wire.LaunchReq
 	return runtime.Started{Session: ref, PaneKey: ref.ID}, nil
 }
 
+func (rt *Runtime) knows(h agentwire.Harness) bool {
+	if h == agentwire.Fake {
+		return rt.opts.Fake
+	}
+	return h != agentwire.Native && slices.Contains(agentwire.Harnesses(), h)
+}
+
 func (rt *Runtime) Stop(ctx context.Context, ref wire.SessionRef) error {
 	s, err := rt.session(ref)
 	if err != nil {
@@ -185,7 +361,7 @@ func (rt *Runtime) Stop(ctx context.Context, ref wire.SessionRef) error {
 	return s.stop(ctx)
 }
 
-// Read gives the last lines of the transcript. After a restart of the runner it reads the transcript file.
+// Read gives the last lines of the transcript. A session from before agent-visor reads its transcript file.
 func (rt *Runtime) Read(_ context.Context, ref wire.SessionRef, lines int) ([]string, error) {
 	if s, err := rt.session(ref); err == nil {
 		s.mu.Lock()
@@ -224,13 +400,13 @@ func (rt *Runtime) Send(ctx context.Context, p wire.SendPayload) error {
 	return s.say(ctx, p.Text)
 }
 
-// History reads the transcript of the harness session. After a restart of the runner it reads the session file.
+// History reads the transcript of the harness session. A session from before agent-visor reads its session file.
 func (rt *Runtime) History(_ context.Context, ref wire.SessionRef, b wire.HistoryBudget) (wire.SessionDigest, error) {
 	var m sessionMeta
 	s, err := rt.session(ref)
 	if err == nil {
 		s.mu.Lock()
-		m = sessionMeta{Agent: s.req.Agent, HarnessSession: s.harnessID}
+		m = sessionMeta{Agent: s.info.Agent, HarnessSession: s.vendorID}
 		s.mu.Unlock()
 	} else if !sessionID.MatchString(ref.ID) {
 		return wire.SessionDigest{}, err
@@ -251,29 +427,44 @@ func (rt *Runtime) History(_ context.Context, ref wire.SessionRef, b wire.Histor
 	return d, err
 }
 
-// Close stops all sessions. The worktrees stay.
-func (rt *Runtime) Close(ctx context.Context) {
+// Known tells whether the runtime has the session id. The daemon ends the sessions in its book that the runtime does not know.
+func (rt *Runtime) Known(id string) bool {
 	rt.mu.Lock()
-	all := make([]*session, 0, len(rt.sessions))
-	for _, s := range rt.sessions {
-		all = append(all, s)
+	defer rt.mu.Unlock()
+	_, ok := rt.sessions[id]
+	return ok
+}
+
+// Close stops the follow and the queued sessions. The visor keeps the sessions that run, and
+// the next Boot finds them again.
+func (rt *Runtime) Close(ctx context.Context) {
+	for _, s := range rt.all() {
+		s.dropQueued()
 	}
+	rt.mu.Lock()
+	cancel, done := rt.cancel, rt.done
 	rt.mu.Unlock()
-	for _, s := range all {
-		_ = s.stop(ctx)
+	if cancel == nil {
+		return
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-ctx.Done():
 	}
 }
 
-// prune forgets the sessions that ended a day ago. Read still finds their transcript file.
-// Call it with rt.mu held.
+// prune forgets the sessions that ended a day ago. Call it with rt.mu held.
 func (rt *Runtime) prune() {
 	old := rt.now().Add(-forget)
 	for id, s := range rt.sessions {
 		s.mu.Lock()
 		gone := s.info.State.Ended() && s.info.UpdatedAt.Before(old)
+		vid := s.vid
 		s.mu.Unlock()
 		if gone {
 			delete(rt.sessions, id)
+			delete(rt.byVisor, vid)
 		}
 	}
 }
@@ -288,6 +479,8 @@ func (rt *Runtime) session(ref wire.SessionRef) (*session, error) {
 	return s, nil
 }
 
+// The files of a session from before agent-visor.
+
 func (rt *Runtime) logPath(id string) string {
 	return filepath.Join(rt.opts.DataDir, "sessions", id+".log")
 }
@@ -296,370 +489,23 @@ func (rt *Runtime) metaPath(id string) string {
 	return filepath.Join(rt.opts.DataDir, "sessions", id+".json")
 }
 
-// sessionMeta lets History find the harness session after a restart of the runner.
+func (rt *Runtime) turnsPath(id string) string {
+	return filepath.Join(rt.opts.DataDir, "sessions", id+".turns.jsonl")
+}
+
+// sessionMeta lets History find the harness session of a session from before agent-visor.
 type sessionMeta struct {
 	Agent          string `json:"agent"`
 	HarnessSession string `json:"harnessSession"`
 }
 
-type session struct {
-	id     string
-	rt     *Runtime
-	req    wire.LaunchRequest
-	dir    string
-	cancel func()
-	// ended closes when the session is done or failed.
-	ended chan struct{}
-
-	mu      sync.Mutex
-	info    wire.RunnerSession
-	aw      agentwire.Session
-	log     *transcript
-	turns   *turnLog
-	partial string
-	last    string
-	lastErr string
-	// failure fails the session at its exit, also after a clean exit.
-	failure     string
-	stopped     bool
-	permissions []*openPermission
-	// question is the open AskUserQuestion request. rounds counts the questions of the session.
-	question *openQuestion
-	rounds   int
-	// harnessID is the session id of the harness, for History.
-	harnessID string
-
-	// scan keeps one paths scan at a time. lastPaths is the set of the last report.
-	scan      sync.Mutex
-	lastPaths []string
-}
-
-func (s *session) run(ctx context.Context, expires time.Time) {
-	wait := ctx
-	if !expires.IsZero() {
-		var cancel func()
-		wait, cancel = context.WithDeadline(ctx, expires)
-		defer cancel()
-	}
-	if err := s.rt.slots.Acquire(wait); err != nil {
-		s.end("The order expired before a session slot was free.")
-		return
-	}
-	defer s.rt.slots.Release()
-	if !s.set(wire.SessionStarting) {
-		s.end("")
-		return
-	}
-	aw, err := s.rt.agents.Start(ctx, agentwire.StartRequest{
-		Harness:      agentwire.Harness(s.req.Agent),
-		Model:        s.req.Model,
-		Effort:       s.req.Effort,
-		WorkingDir:   s.dir,
-		Instructions: s.instructions(),
-		Permissions:  agentwire.PermissionPolicy{Mode: agentwire.PermissionAsk},
-	})
-	if err != nil {
-		s.end(err.Error())
-		return
-	}
-	s.mu.Lock()
-	s.aw = aw
-	stopped := s.stopped
-	s.log.add("> " + s.req.Prompt)
-	s.addTurn(wire.RoleUser, s.req.Prompt)
-	s.mu.Unlock()
-	if stopped {
-		go aw.Close(ctx)
-	} else if err := aw.Prompt(ctx, agentwire.Prompt{Text: s.req.Prompt}); err != nil {
-		s.mu.Lock()
-		s.failure = err.Error()
-		s.mu.Unlock()
-		go aw.Close(ctx)
-	} else {
-		s.set(wire.SessionWorking)
-	}
-	for ev := range aw.Events() {
-		s.handle(ev)
-	}
-}
-
-func (s *session) instructions() string {
-	text := fmt.Sprintf("You work in the git worktree %s on the branch %s. Commit your changes to this branch.", s.dir, s.info.Branch)
-	if s.req.Item != nil {
-		text += fmt.Sprintf(" The task is %s: %s", s.req.Item.Key, s.req.Item.URL)
-	}
-	return text
-}
-
-func (s *session) handle(ev agentwire.Event) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if ev.SessionID != "" && ev.SessionID != s.harnessID {
-		s.harnessID = ev.SessionID
-		s.saveMeta()
-	}
-	if ev.Type == agentwire.EventAssistant && ev.Delta {
-		s.partial += ev.Text
-		return
-	}
-	// The full block repeats its deltas (claude, codex). Keep only the deltas after it.
-	if rest, ok := strings.CutPrefix(s.partial, ev.Text); ok && ev.Type == agentwire.EventAssistant && ev.Text != "" {
-		s.partial = rest
-	} else {
-		s.flushPartial()
-	}
-	switch ev.Type {
-	case agentwire.EventAssistant:
-		s.addText(ev.Text)
-		// The agent went on, for example after an answer in a terminal.
-		s.clearQuestion()
-		if s.info.State == wire.SessionWaitingInput {
-			s.change(wire.SessionWorking)
-		}
-	case agentwire.EventTool:
-		if ev.Tool == nil {
-			break
-		}
-		if ev.Tool.Status == "started" {
-			s.log.add("· " + ev.Tool.Name + " " + clip(ev.Tool.Input, 200))
-		}
-		s.turns.tool(ev.Tool, s.rt.now().UTC())
-	case agentwire.EventPermission:
-		if ev.Permission == nil {
-			break
-		}
-		if ev.Permission.Tool == askTool && s.askQuestion(ev.Permission) {
-			break
-		}
-		s.ask(ev.Permission)
-	case agentwire.EventResult:
-		text := s.last
-		if text == "" && ev.Result != nil {
-			text = ev.Result.Text
-		}
-		s.info.Summary = tail(strings.TrimSpace(text), maxText)
-		s.info.Error = ""
-		if ev.Result != nil && ev.Result.IsError {
-			s.info.Error = ev.Result.Text
-		}
-		s.question = nil
-		s.info.Question = nil
-		if len(s.permissions) == 0 {
-			s.info.State = wire.SessionWaitingInput
-		}
-		s.last = ""
-		s.publish()
-		go s.reportPaths()
-	case agentwire.EventError:
-		s.lastErr = ev.Error
-		if s.lastErr == "" {
-			s.lastErr = ev.Code
-		}
-		s.log.add("! " + s.lastErr)
-		s.addTurn(wire.RoleSystem, s.lastErr)
-	case agentwire.EventExit:
-		// The last classified error tells more than the exit status.
-		reason := s.failure
-		if reason == "" && ev.Error != "" {
-			reason = cmp.Or(s.lastErr, ev.Error)
-		}
-		s.finish(reason)
-	}
-}
-
-// saveMeta writes the session file. Call it with s.mu held.
-func (s *session) saveMeta() {
-	data, _ := json.Marshal(sessionMeta{Agent: s.req.Agent, HarnessSession: s.harnessID})
-	_ = os.WriteFile(s.rt.metaPath(s.id), data, 0o600)
-}
-
-// addText keeps one assistant text block.
-func (s *session) addText(text string) {
-	if strings.TrimSpace(text) == "" {
-		return
-	}
-	s.last = text
-	s.log.add(text)
-	s.addTurn(wire.RoleAssistant, text)
-}
-
-// addTurn adds a turn to the chat view. Call it with s.mu held.
-func (s *session) addTurn(role wire.TurnRole, text string) {
-	s.turns.add(wire.SessionTurn{Role: role, At: s.rt.now().UTC(), Text: text})
-}
-
-func (s *session) flushPartial() {
-	if s.partial != "" {
-		s.addText(s.partial)
-		s.partial = ""
-	}
-}
-
-// say sends a user message. A message during a turn joins the turn or waits for its end.
-func (s *session) say(ctx context.Context, text string) error {
-	s.mu.Lock()
-	aw, state := s.aw, s.info.State
-	s.mu.Unlock()
-	if state.Ended() {
-		return fmt.Errorf("The session %s has ended.", s.id)
-	}
-	if aw == nil {
-		return fmt.Errorf("The session %s has not started yet.", s.id)
-	}
-	if _, err := agentwire.Send(ctx, aw, agentwire.Prompt{Text: text}); err != nil {
-		return err
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.log.add("> " + text)
-	s.addTurn(wire.RoleUser, text)
-	if s.info.State == wire.SessionWaitingInput {
-		s.change(wire.SessionWorking)
-	}
-	return nil
-}
-
-func (s *session) interrupt(ctx context.Context) error {
-	s.mu.Lock()
-	aw, state := s.aw, s.info.State
-	s.mu.Unlock()
-	if state.Ended() {
-		return fmt.Errorf("The session %s has ended.", s.id)
-	}
-	if aw == nil {
-		return fmt.Errorf("The session %s has not started yet.", s.id)
-	}
-	return aw.Interrupt(ctx)
-}
-
-func (s *session) stop(ctx context.Context) error {
-	s.mu.Lock()
-	if s.info.State.Ended() {
-		s.mu.Unlock()
-		return nil
-	}
-	s.stopped = true
-	aw := s.aw
-	s.mu.Unlock()
-	if aw == nil {
-		s.cancel()
-	} else {
-		_ = aw.Close(ctx)
-	}
-	select {
-	case <-s.ended:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-// set changes the state, unless the session is stopped. It gives false for a stopped session.
-func (s *session) set(state wire.RunnerSessionState) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.stopped {
-		return false
-	}
-	s.change(state)
-	return true
-}
-
-// end makes the session done, or failed with reason. Only the first call has an effect.
-func (s *session) end(reason string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.finish(reason)
-}
-
-// finish is end with s.mu held. A stopped session is done.
-func (s *session) finish(reason string) {
-	if s.info.State.Ended() {
-		return
-	}
-	if s.stopped {
-		reason = ""
-	}
-	for _, p := range s.permissions {
-		p.timer.Stop()
-	}
-	s.permissions = nil
-	s.info.Permission = nil
-	s.question = nil
-	s.info.Question = nil
-	state := wire.SessionDone
-	if reason != "" {
-		state = wire.SessionFailed
-		s.info.Error = reason
-		s.log.add("! " + reason)
-		if reason != s.lastErr {
-			s.addTurn(wire.RoleSystem, reason)
-		}
-	}
-	s.change(state)
-	s.log.close()
-	s.turns.close()
-	s.cancel()
-	close(s.ended)
-	go s.reportPaths()
-}
-
-// reportPaths sends the changed paths of an item session, only when the set changed since the last report.
-func (s *session) reportPaths() {
-	pr, ok := s.rt.report.(PathsReporter)
-	if !ok || s.req.Item == nil {
-		return
-	}
-	s.scan.Lock()
-	defer s.scan.Unlock()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	paths, err := s.rt.worktrees.Changed(ctx, filepath.Clean(s.req.Repo), s.dir)
-	if err != nil {
-		return
-	}
-	p := wire.NewItemPaths(*s.req.Item, paths, s.rt.now())
-	if slices.Equal(p.Paths, s.lastPaths) {
-		return
-	}
-	s.lastPaths = p.Paths
-	pr.ReportPaths(s.info.Order, p)
-}
-
-// change sets the state and reports it. Call it with s.mu held.
-func (s *session) change(state wire.RunnerSessionState) {
-	s.info.State = state
-	s.publish()
-}
-
-// publish reports the session. Call it with s.mu held, so that the reports keep their order.
-func (s *session) publish() {
-	s.info.UpdatedAt = s.rt.now().UTC()
-	if s.rt.report != nil {
-		s.rt.report.Report(s.info)
-	}
-}
-
-// transcript keeps the last lines in memory and appends all lines to a file.
+// transcript keeps the last lines.
 type transcript struct {
 	lines []string
-	file  *os.File
-}
-
-func openLog(path string) (*os.File, error) {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return nil, err
-	}
-	return os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 }
 
 func (t *transcript) add(text string) {
-	for _, l := range strings.Split(strings.TrimRight(text, "\n"), "\n") {
-		t.lines = append(t.lines, l)
-		if t.file != nil {
-			_, _ = t.file.WriteString(l + "\n")
-		}
-	}
+	t.lines = append(t.lines, strings.Split(strings.TrimRight(text, "\n"), "\n")...)
 	if len(t.lines) > 2*keepLines {
 		t.lines = append([]string(nil), t.lines[len(t.lines)-keepLines:]...)
 	}
@@ -671,13 +517,6 @@ func (t *transcript) tail(n int) []string {
 		lines = lines[len(lines)-n:]
 	}
 	return append([]string{}, lines...)
-}
-
-func (t *transcript) close() {
-	if t.file != nil {
-		_ = t.file.Close()
-		t.file = nil
-	}
 }
 
 // clip keeps the first n characters of text.

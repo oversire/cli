@@ -3,13 +3,13 @@ package oversire
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	agentwire "github.com/trebi-ai/agent-wire"
 
-	"github.com/oversire/cli/proc"
 	"github.com/oversire/cli/runtime"
 	"github.com/oversire/cli/term"
 	"github.com/oversire/cli/wire"
@@ -124,8 +124,8 @@ func TestChatTurns(t *testing.T) {
 		t.Fatal("the live turns did not end with the session")
 	}
 
-	// A new runtime reads the log: the same seqs, and no live turns.
-	again := New(Options{DataDir: f.data, Fake: true}, agentwire.New(agentwire.Options{}), proc.Local{}, nil)
+	// A new runtime builds the turns from the events of the visor: the same seqs, and no live turns.
+	again := f.again(t, nil)
 	src, _ = again.Chat(ctx, wire.DaemonSession{ID: ref.ID})
 	history, live, err = src.Turns(ctx, 3)
 	if err != nil {
@@ -136,15 +136,25 @@ func TestChatTurns(t *testing.T) {
 		t.Fatal("live turns after a restart")
 	}
 
-	// The seq goes on in a log that opens again.
-	l, err := openTurns(again.turnsPath(ref.ID))
-	if err != nil {
-		t.Fatal(err)
+}
+
+func TestChatOfOldSession(t *testing.T) {
+	data := t.TempDir()
+	os.MkdirAll(filepath.Join(data, "sessions"), 0o700)
+	lines := `{"seq":1,"role":"user","at":"2026-01-01T00:00:00Z","text":"go"}
+{"seq":2,"role":"tool","at":"2026-01-01T00:00:00Z","tool":{"name":"Bash","status":"running"}}
+{"seq":2,"role":"tool","at":"2026-01-01T00:00:00Z","tool":{"name":"Bash","status":"done"}}
+`
+	os.WriteFile(filepath.Join(data, "sessions", "s-0c.turns.jsonl"), []byte(lines), 0o600)
+	rt := New(Options{DataDir: data}, nil, nil, nil)
+	src, _ := rt.Chat(context.Background(), wire.DaemonSession{ID: "s-0c"})
+	history, live, err := src.Turns(context.Background(), 0)
+	if err != nil || len(history) != 2 || history[1].Tool.Status != wire.ToolDone {
+		t.Fatalf("%+v %v", history, err)
 	}
-	l.add(wire.SessionTurn{Role: wire.RoleSystem, Text: "x"})
-	l.close()
-	all, _ := readTurns(again.turnsPath(ref.ID), 6)
-	equal(t, all, brief{7, wire.RoleSystem, "x"})
+	if _, ok := <-live; ok {
+		t.Fatal("live turns of an old session")
+	}
 }
 
 func TestChatDeltasThenFullBlock(t *testing.T) {
@@ -161,7 +171,9 @@ func TestChatDeltasThenFullBlock(t *testing.T) {
 		{Type: agentwire.EventAssistant, Text: "Only", Delta: true},
 		{Type: agentwire.EventResult},
 	} {
-		s.handle(ev)
+		s.mu.Lock()
+		s.handle(ev, time.Now())
+		s.mu.Unlock()
 	}
 	src, err := f.rt.Chat(context.Background(), wire.DaemonSession{ID: ref.ID})
 	if err != nil {
@@ -175,15 +187,11 @@ func TestChatDeltasThenFullBlock(t *testing.T) {
 }
 
 func TestChatClipsTools(t *testing.T) {
-	l, err := openTurns(t.TempDir() + "/s-1.turns.jsonl")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer l.close()
+	l := newTurnLog()
 	l.tool(&agentwire.ToolEvent{ID: "t", Name: "Bash", Input: strings.Repeat("a", 300), Status: "started"}, time.Now())
 	l.tool(&agentwire.ToolEvent{ID: "t", Name: "Bash", Output: strings.Repeat("b", 3000), Status: "failed"}, time.Now())
 	l.tool(&agentwire.ToolEvent{Name: "Read", Status: "completed"}, time.Now())
-	ts, _ := readTurns(l.file.Name(), 0)
+	ts := l.turns
 	if len(ts) != 2 || ts[0].Seq != 1 || ts[1].Seq != 2 {
 		t.Fatalf("%+v", ts)
 	}
@@ -205,13 +213,12 @@ func TestChatFromTranscript(t *testing.T) {
 	if err := f.rt.Stop(ctx, ref); err != nil {
 		t.Fatal(err)
 	}
-	// An old session has no turn log.
-	if err := os.Remove(f.rt.turnsPath(ref.ID)); err != nil {
-		t.Fatal(err)
-	}
-	again := New(Options{DataDir: f.data, Fake: true}, agentwire.New(agentwire.Options{}), proc.Local{}, nil)
+	// A session from before agent-visor has no turn log: the transcript of the harness gives the turns.
+	os.MkdirAll(filepath.Join(f.data, "sessions"), 0o700)
+	os.WriteFile(filepath.Join(f.data, "sessions", "s-0d.json"), []byte(`{"agent":"fake","harnessSession":"sess-1"}`), 0o600)
+	again := New(Options{DataDir: f.data, Fake: true}, nil, nil, nil)
 	again.digests = readers(root)
-	src, _ := again.Chat(ctx, wire.DaemonSession{ID: ref.ID})
+	src, _ := again.Chat(ctx, wire.DaemonSession{ID: "s-0d"})
 	history, _, err := src.Turns(ctx, 0)
 	if err != nil || len(history) < 2 || history[0].Seq != 1 || history[0].Role != wire.RoleUser {
 		t.Fatalf("%+v %v", history, err)

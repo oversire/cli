@@ -31,12 +31,9 @@ func TestChangedPaths(t *testing.T) {
 	write(t, filepath.Join(repo, ".gitignore"), "*.log\n")
 	gitOut(t, repo, "add", ".")
 	gitOut(t, repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "files")
-	w := NewWorktrees(t.TempDir(), proc.Local{})
+	dir := filepath.Join(t.TempDir(), "APP-1")
+	gitOut(t, repo, "worktree", "add", "-b", "app-1", dir)
 	ctx := context.Background()
-	dir, err := w.Ensure(ctx, repo, "APP-1", "app-1")
-	if err != nil {
-		t.Fatal(err)
-	}
 	write(t, filepath.Join(dir, "src", "b.txt"), "changed")        // a change, not committed
 	write(t, filepath.Join(dir, "new", "c.txt"), "c")              // a new file
 	write(t, filepath.Join(dir, "x.log"), "ignored")               // ignored
@@ -51,7 +48,7 @@ func TestChangedPaths(t *testing.T) {
 	gitOut(t, repo, "add", ".")
 	gitOut(t, repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "main")
 
-	got, err := w.Changed(ctx, repo, dir)
+	got, err := gitCLI{proc.Local{}}.changed(ctx, repo, dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +87,7 @@ func TestTurnReportsChangedPathsOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec.wait(t, ref.ID, wire.SessionWaitingInput)
-	dir := filepath.Join(f.data, "worktrees", "app", "APP-9")
+	dir := f.workdir(t, "APP-9").Path
 	write(t, filepath.Join(dir, "x.go"), "x")
 	turn := func(text string) {
 		t.Helper()

@@ -8,10 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	agentwire "github.com/trebi-ai/agent-wire"
-
 	"github.com/oversire/cli/digest"
-	"github.com/oversire/cli/proc"
 	"github.com/oversire/cli/runtime"
 	"github.com/oversire/cli/wire"
 )
@@ -67,8 +64,8 @@ func TestHistory(t *testing.T) {
 		t.Fatalf("%+v", d)
 	}
 
-	// A new runtime finds the harness session in the session file.
-	again := New(Options{DataDir: f.data, Fake: true}, agentwire.New(agentwire.Options{}), proc.Local{}, nil)
+	// A new runtime finds the harness session in the events of the visor.
+	again := f.again(t, nil)
 	again.digests = readers(root)
 	if d2, err := again.History(ctx, ref, wire.HistoryBudget{}); err != nil || d2.SessionID != d.SessionID {
 		t.Fatal(d2, err)
@@ -85,6 +82,17 @@ func TestHistory(t *testing.T) {
 	again.digests = digest.ForUser
 	if _, err := again.History(ctx, ref, wire.HistoryBudget{}); err == nil || !strings.Contains(err.Error(), `"fake"`) {
 		t.Fatal(err)
+	}
+}
+
+func TestHistoryOfOldSession(t *testing.T) {
+	data := t.TempDir()
+	os.MkdirAll(filepath.Join(data, "sessions"), 0o700)
+	os.WriteFile(filepath.Join(data, "sessions", "s-0b.json"), []byte(`{"agent":"fake","harnessSession":"sess-1"}`), 0o600)
+	rt := New(Options{DataDir: data}, nil, nil, nil)
+	rt.digests = readers(projects(t))
+	if d, err := rt.History(context.Background(), wire.SessionRef{ID: "s-0b"}, wire.HistoryBudget{}); err != nil || d.Turns == 0 {
+		t.Fatal(d, err)
 	}
 }
 

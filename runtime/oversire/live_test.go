@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	agentwire "github.com/trebi-ai/agent-wire"
+	agentvisor "github.com/trebi-ai/agent-visor"
 
 	"github.com/oversire/cli/proc"
 	"github.com/oversire/cli/runtime"
@@ -21,13 +21,19 @@ func TestLive(t *testing.T) {
 	}
 	agent := cmp.Or(os.Getenv("OVERSIRE_LIVE_AGENT"), "claude")
 	repo := gitRepo(t)
-	aw := agentwire.New(agentwire.Options{ClientName: "oversire-runner-live"})
+	v, err := agentvisor.New(context.Background(), agentvisor.Options{Home: shortHome(t), Client: "oversire-live"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	rec := &recorder{}
-	rt := New(Options{Runner: "live", DataDir: t.TempDir()}, aw, proc.Local{}, rec)
+	rt := New(Options{Runner: "live", DataDir: t.TempDir()}, v, proc.Local{}, rec)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	defer aw.Close(ctx)
+	defer v.Close(ctx)
 	defer rt.Close(ctx)
+	if err := rt.Boot(ctx); err != nil {
+		t.Fatal(err)
+	}
 
 	ref, err := rt.Start(ctx, runtime.Order{ID: "live"}, wire.LaunchRequest{Repo: repo, Name: "LIVE-1", Agent: agent, Prompt: "Answer with the one word hello. Do not use tools."})
 	if err != nil {

@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -24,49 +23,42 @@ const (
 	maxToolSummary = 2000
 )
 
-// turnLog appends the chat turns of one session to <id>.turns.jsonl and feeds the live viewers.
-// A tool turn that changes state goes again with the same seq. The last line of a seq wins.
+// maxTurns is the number of turns that a session keeps in memory.
+const maxTurns = 5000
+
+// turnLog keeps the chat turns of one session and feeds the live viewers. The visor keeps the events,
+// so a restart builds the turns again. A tool turn that changes state goes again with the same seq.
 type turnLog struct {
 	mu     sync.Mutex
-	file   *os.File
+	turns  []wire.SessionTurn // contiguous seqs
 	seq    int
-	tools  map[string]wire.SessionTurn // the running tools by tool id
+	tools  map[string]int // the seq of each running tool, by tool id
 	feeds  map[*feed]struct{}
 	closed bool
 }
 
-// openTurns opens the log for append. The seq goes on from the last line of the file.
-func openTurns(path string) (*turnLog, error) {
-	old, err := readTurns(path, 0)
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return nil, err
-	}
-	f, err := openLog(path)
-	if err != nil {
-		return nil, err
-	}
-	l := &turnLog{file: f, tools: map[string]wire.SessionTurn{}, feeds: map[*feed]struct{}{}}
-	if len(old) > 0 {
-		l.seq = old[len(old)-1].Seq
-	}
-	return l, nil
+func newTurnLog() *turnLog {
+	return &turnLog{tools: map[string]int{}, feeds: map[*feed]struct{}{}}
 }
 
-// add gives t the next seq, writes it and gives it to the viewers.
+// add gives t the next seq, keeps it and gives it to the viewers.
 func (l *turnLog) add(t wire.SessionTurn) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.seq++
 	t.Seq = l.seq
-	l.write(t)
+	l.put(t)
 }
 
 // tool adds a turn when a tool starts. The end of the tool changes that turn.
 func (l *turnLog) tool(ev *agentwire.ToolEvent, at time.Time) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	t, running := l.tools[ev.ID]
-	if !running {
+	var t wire.SessionTurn
+	seq, running := l.tools[ev.ID]
+	if i := l.index(seq); running && i >= 0 {
+		t = l.turns[i]
+	} else {
 		l.seq++
 		t = wire.SessionTurn{Seq: l.seq, Role: wire.RoleTool, At: at, Tool: &wire.TurnTool{Name: ev.Name}}
 	}
@@ -87,20 +79,37 @@ func (l *turnLog) tool(ev *agentwire.ToolEvent, at time.Time) {
 	}
 	t.Tool = &tool
 	if tool.Status == wire.ToolRunning && ev.ID != "" {
-		l.tools[ev.ID] = t
+		l.tools[ev.ID] = t.Seq
 	} else {
 		delete(l.tools, ev.ID)
 	}
-	l.write(t)
+	l.put(t)
 }
 
-// write appends one line. Call it with l.mu held.
-func (l *turnLog) write(t wire.SessionTurn) {
+// index gives the place of seq in l.turns, or -1. Call it with l.mu held.
+func (l *turnLog) index(seq int) int {
+	if len(l.turns) == 0 {
+		return -1
+	}
+	i := seq - l.turns[0].Seq
+	if i < 0 || i >= len(l.turns) {
+		return -1
+	}
+	return i
+}
+
+// put keeps t, a new turn or a change of a turn, and gives it to the viewers. Call it with l.mu held.
+func (l *turnLog) put(t wire.SessionTurn) {
 	if l.closed {
 		return
 	}
-	if data, err := json.Marshal(t); err == nil {
-		_, _ = l.file.Write(append(data, '\n'))
+	if i := l.index(t.Seq); i >= 0 {
+		l.turns[i] = t
+	} else {
+		l.turns = append(l.turns, t)
+		if len(l.turns) > maxTurns {
+			l.turns = append([]wire.SessionTurn(nil), l.turns[len(l.turns)-maxTurns/2:]...)
+		}
 	}
 	for f := range l.feeds {
 		f.push(t)
@@ -108,12 +117,14 @@ func (l *turnLog) write(t wire.SessionTurn) {
 }
 
 // follow gives the turns after the seq after, then the live turns until the session ends or ctx ends.
-func (l *turnLog) follow(ctx context.Context, path string, after int) ([]wire.SessionTurn, <-chan wire.SessionTurn, error) {
+func (l *turnLog) follow(ctx context.Context, after int) ([]wire.SessionTurn, <-chan wire.SessionTurn) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	history, err := readTurns(path, after)
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return nil, nil, err
+	var history []wire.SessionTurn
+	for _, t := range l.turns {
+		if t.Seq > after {
+			history = append(history, t)
+		}
 	}
 	f := newFeed()
 	if l.closed {
@@ -126,7 +137,7 @@ func (l *turnLog) follow(ctx context.Context, path string, after int) ([]wire.Se
 		delete(l.feeds, f)
 		l.mu.Unlock()
 	})
-	return history, f.out, nil
+	return history, f.out
 }
 
 // close ends the live feeds after their last turns.
@@ -137,13 +148,12 @@ func (l *turnLog) close() {
 		return
 	}
 	l.closed = true
-	_ = l.file.Close()
 	for f := range l.feeds {
 		f.end()
 	}
 }
 
-// readTurns reads the turns after the seq after, in seq order.
+// readTurns reads the turn file of a session from before agent-visor: the turns after the seq after, in seq order.
 func readTurns(path string, after int) ([]wire.SessionTurn, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -237,7 +247,7 @@ func (rt *Runtime) Terminal(context.Context, wire.DaemonSession) (term.Source, e
 	return nil, term.ErrNoView
 }
 
-// Chat opens the chat view of a session. A session from before a restart gives its history only.
+// Chat opens the chat view of a session. A session from before agent-visor gives its history only.
 func (rt *Runtime) Chat(_ context.Context, s wire.DaemonSession) (term.TurnSource, error) {
 	if !sessionID.MatchString(s.ID) {
 		return nil, fmt.Errorf("The oversire runtime has no session %s.", s.ID)
@@ -250,21 +260,17 @@ func (rt *Runtime) StreamState() wire.RuntimeStream {
 	return wire.RuntimeStream{State: wire.StreamLive}
 }
 
-func (rt *Runtime) turnsPath(id string) string {
-	return filepath.Join(rt.opts.DataDir, "sessions", id+".turns.jsonl")
-}
-
 type chatView struct {
 	rt  *Runtime
 	ref wire.SessionRef
 }
 
 func (c chatView) Turns(ctx context.Context, after int) ([]wire.SessionTurn, <-chan wire.SessionTurn, error) {
-	path := c.rt.turnsPath(c.ref.ID)
 	if s, err := c.rt.session(c.ref); err == nil {
-		return s.turns.follow(ctx, path, after)
+		history, live := s.turns.follow(ctx, after)
+		return history, live, nil
 	}
-	turns, err := readTurns(path, after)
+	turns, err := readTurns(c.rt.turnsPath(c.ref.ID), after)
 	if errors.Is(err, fs.ErrNotExist) {
 		turns, err = c.digestTurns(ctx, after)
 	}

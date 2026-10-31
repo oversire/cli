@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	agentvisor "github.com/trebi-ai/agent-visor"
 	agentwire "github.com/trebi-ai/agent-wire"
 
 	"github.com/oversire/cli/runtime"
@@ -37,15 +38,15 @@ echo '{"type":"result","subtype":"success"}'
 while read -r l; do :; done`, ask, next)
 }
 
-// askHarness gives the fake permission its input and records each decision.
+// askHarness is a fake driver that gives the fake permission its input and records each decision.
 type askHarness struct {
-	*agentwire.Runtime
+	agentwire.FakeDriver
 	mu        sync.Mutex
 	decisions []agentwire.Decision
 }
 
 func (h *askHarness) Start(ctx context.Context, req agentwire.StartRequest) (agentwire.Session, error) {
-	s, err := h.Runtime.Start(ctx, req)
+	s, err := h.FakeDriver.Start(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -85,11 +86,8 @@ func (s *askSession) AnswerPermission(ctx context.Context, id string, d agentwir
 
 func setupAsk(t *testing.T, script string) (fixture, *askHarness) {
 	t.Helper()
-	var h *askHarness
-	f := setupWith(t, script, Options{}, func(aw *agentwire.Runtime) Harnesses {
-		h = &askHarness{Runtime: aw}
-		return h
-	})
+	h := &askHarness{FakeDriver: agentwire.FakeDriver{Script: script}}
+	f := setupDriver(t, h, Options{}, func(v *agentvisor.Visor) Host { return v })
 	return f, h
 }
 

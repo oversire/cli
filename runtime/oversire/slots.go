@@ -18,3 +18,13 @@ func (s *Slots) Acquire(ctx context.Context) error {
 }
 
 func (s *Slots) Release() { <-s.free }
+
+// Take takes a free slot with no wait, for a session that runs already. It gives false when no slot is free.
+func (s *Slots) Take() bool {
+	select {
+	case s.free <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
