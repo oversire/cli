@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -53,6 +54,7 @@ type localSessions struct {
 	visor *agentvisor.Visor
 	rt    *oversire.Runtime
 	sock  string
+	log   *slog.Logger
 }
 
 func (c *cli) openSessions(ctx context.Context, cfg config.Config, data string, reps *reports) (*localSessions, error) {
@@ -72,7 +74,7 @@ func (c *cli) openSessions(ctx context.Context, cfg config.Config, data string, 
 		return nil, err
 	}
 	rt := oversire.New(oversire.Options{Runner: cfg.Device, DataDir: data, Slots: cfg.Sessions()}, v, c.cmds, reps)
-	return &localSessions{visor: v, rt: rt, sock: sock}, nil
+	return &localSessions{visor: v, rt: rt, sock: sock, log: c.log}, nil
 }
 
 func (l *localSessions) Runtime() runtime.Runtime { return l.rt }
@@ -86,9 +88,16 @@ func (l *localSessions) Boot(ctx context.Context, reps *reports) error {
 	return nil
 }
 
-// Serve serves the visor on its socket, for the hooks and for oversire visor.
+// Serve serves the visor on its socket, for the hooks and for oversire visor. Without the socket,
+// the sessions of the daemon still run, so a listen error does not stop the daemon.
 func (l *localSessions) Serve(ctx context.Context) error {
-	return agentvisor.Serve(ctx, l.visor, l.sock)
+	ln, err := agentvisor.Listen(ctx, l.sock)
+	if err != nil {
+		l.log.Error("visor socket", "err", err)
+		<-ctx.Done()
+		return nil
+	}
+	return agentvisor.ServeListener(ctx, l.visor, ln)
 }
 
 // Close stops the follow of the runtime and closes the visor. The sessions keep running.
