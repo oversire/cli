@@ -107,18 +107,21 @@ The hub shows a summary of the list (the runtimes, the agents and the number of 
 
 ## runtime:oversire
 
-The `oversire` runtime drives the agent CLI directly through [agent-wire](https://github.com/trebi-ai/agent-wire), over the structured protocol of the CLI.
+The `oversire` runtime runs each session in an embedded [agent-visor](https://github.com/trebi-ai/agent-visor) (OVERSIRE-359). The visor drives the agent CLI through [agent-wire](https://github.com/trebi-ai/agent-wire), over the structured protocol of the CLI.
 It uses the CLI and the login that are on the machine.
+The visor keeps its state in `<data>/visor`, and it serves its API on `<data>/visor/visor.sock`. Each session runs in a holder process (`oversire visor hold`), so a session lives through a restart or an update of the daemon. At the start, the daemon reads the sessions of the visor again, and it fails each `oversire` session of the session book that the visor does not have.
+`oversire visor` shows and controls the visor sessions, for example `oversire visor ls`. agent-visor does not run on Windows, so the daemon there has no `oversire` runtime.
 
 | Topic | Rule |
 |---|---|
 | Agents | `claude`, `codex`, `opencode`, `opencode2`, `pi`, `copilot`, `cursor` and `gemini` (the agent-wire harness names). For a hub order, the allow list must also have the agent. |
-| Worktree | Each item gets one git worktree at `<data>/worktrees/<repo name>/<item key>`. The branch is the item key in lowercase, for example `towertail-2`. Without an item, the launch name is the key. A second launch for the same key uses the worktree and the branch again. `sessionStop` keeps the worktree. |
+| Worktree | Each item gets one visor workdir with the item key: a git worktree at `<data>/visor/worktrees/<repo name>-<project id>/<item key>`. The branch is the item key in lowercase, for example `towertail-2`. Without an item, the launch name is the key. A second launch for the same key uses the worktree and the branch again. `sessionStop` keeps the worktree. A worktree from before the visor, at `<data>/worktrees/<repo name>/<item key>`, stays in use. |
 | Session | `sessionStart` gives the session at once. The workspace id is `<repo name>/<key>`, and the session id starts with `s-`. The state goes from `queued` to `starting` to `working`, then `waitingInput` at the end of each turn, and `done` or `failed` at the end. |
 | Slots | At most `maxSessions` sessions run at the same time (default 2). A new session waits in `queued`. If the order expires before a slot is free, the session is `failed`. |
 | Permissions | The agent asks before it uses a tool. The session goes to `waitingPermission` with a prompt. Answer it with `sessionSend` and a `permission` answer. With no answer in 10 minutes, the daemon denies the request. |
-| Transcript | `sessionRead` gives the last lines of the transcript. The full transcript is in `<data>/sessions/<session id>.log`. |
-| History | `sessionHistory` reads the harness transcript of the session as a digest. The daemon keeps the harness session id in `<data>/sessions/<session id>.json`, so the order also works after a restart. See [History](#history). |
+| Transcript | `sessionRead` gives the last lines of the transcript. The daemon makes the transcript from the events of the visor, also after a restart. A session from before the visor reads `<data>/sessions/<session id>.log`. |
+| History | `sessionHistory` reads the harness transcript of the session as a digest. The visor keeps the harness session id, so the order also works after a restart. See [History](#history). |
+| Restart | The visor resumes a session whose agent stopped during a turn, and tells the agent that its last turn stopped. |
 | Reports | Each change of state, summary or permission prompt goes to the hub as a `session` message. Without a connection, the daemon keeps the latest state and sends it after the next welcome. |
 
 To change the data folder or the number of slots, set `dataDir` or `maxSessions` in `config.json`. `hub pair` keeps these fields.
@@ -132,7 +135,7 @@ The budget of the order has caps: 50 earlier turns, 10 last turns and 20000 char
 
 | Runtime | How the daemon finds the transcript |
 |---|---|
-| `oversire` | agent-wire gives the harness session id at the start of the session. |
+| `oversire` | The visor gives the harness session id of the session. |
 | `orca` | `orca terminal show` gives the agent, the workspace path and the title of the terminal. Then `orca search` gives the newest session of the agent at that path with the title as its name, and its transcript path. |
 
 ## Commands
@@ -159,6 +162,7 @@ The budget of the order has caps: 50 earlier turns, 10 last turns and 20000 char
 | `oversire group remove <machine or device>`, `home <machine>`, `rotate` | Remove a member or an app, move home, or make a new group secret. |
 | `oversire join <host> <code>` | Join the group of the member at host. `-` reads the code from stdin. |
 | `oversire step done --run <id> --step <step> --verdict pass\|gaps\|done\|skipped\|blocked [--note <text>]` | End a runbook step. The agent of the step runs it. See "Runbooks". |
+| `oversire visor ls\|session\|workdir\|project\|harness\|status` | Show and control the agent sessions of the `oversire` runtime. See "runtime:oversire". |
 | `oversire update` | Install the latest release now. The running daemon does the update and restarts. Without a daemon, the command updates the binary itself. |
 | `oversire version` | Show the version. |
 
@@ -314,7 +318,7 @@ How a run goes:
 - A review with `gaps` starts its fix step, and then the review again as the next round. After `review.rounds` rounds with gaps, the run pauses. A review with `pass` skips its fix step.
 - The step follows its session: a question or a permission is `asks`. A session that ends with no verdict, or a launch that fails, pauses the run.
 - The daemon stops an `oversire` step session 10 s after the verdict, because it holds a session slot. An Orca terminal stays open.
-- After a restart, a step that is still `starting` with no session after 2 min pauses the run. A step whose session the book does not know 60 s after the start pauses the run.
+- After a restart, a step that is still `starting` with no session after 2 min pauses the run. A step whose session the book does not know 60 s after the start pauses the run. A step on the `oversire` runtime does not wait: the runtime reports its sessions before the runbooks start.
 
 `oversire step done` calls the loopback API. It prints `Step <n> of <m> <Step name>: <verdict>. Next: <next step, or done, or the run state>.` The note is cut to 300 characters. On a refusal it writes the error of the daemon to stderr and exits with 1.
 
@@ -348,7 +352,7 @@ The chat view:
 
 `ended` `{reason}` (`exited`, `removed` or `closed`) comes before the daemon closes the socket. The app does not connect again after it.
 
-The `oversire` runtime writes the turns of each session to `<data>/sessions/<id>.turns.jsonl`. A tool input is clipped to 200 characters, and a tool result to 2000. An old session with no turn log gets its turns from the transcript of the harness.
+The `oversire` runtime makes the turns of each session from the events of the visor. A tool input is clipped to 200 characters, and a tool result to 2000. A session from before the visor reads `<data>/sessions/<id>.turns.jsonl`. An old session with no turn log gets its turns from the transcript of the harness.
 
 ### Orca pairing
 
@@ -429,7 +433,7 @@ The layout:
 | `agents` | The route `GET /v1/agents/{agent}/models`. |
 | `term` | The route `GET /v1/sessions/{id}/stream`: the viewers, the acks, the size lease and the `Source` and `TurnSource` interfaces of the runtimes. |
 | `orders` | The one run path of each order (`Runner`), and the direct orders from the apps of the group (`Direct`). |
-| `runtime` | The `Runtime` interface, the registry and the runtime routes (`API`). `runtime/orca` is the Orca driver for the local Orca. `runtime/oversire` is the agent-wire driver. |
+| `runtime` | The `Runtime` interface, the registry and the runtime routes (`API`). `runtime/orca` is the Orca driver for the local Orca. `runtime/oversire` is the agent-visor client. |
 | `digest` | The transcript readers that make a `SessionDigest`. |
 | `store` | The home store: the op log in SQLite and the `/v1/store/ops` routes. |
 | `lease` | The leases of the home member: the book in `leases.json` and the `/v1/leases` routes. |
