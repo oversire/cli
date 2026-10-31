@@ -156,7 +156,9 @@ func (s *session) spec() agentvisor.StartSpec {
 		Workdir: s.workdir, WorkingDir: s.dir, Instructions: s.instructions(), Prompt: s.req.Prompt,
 		Permissions: agentvisor.Permissions{Mode: agentwire.PermissionAsk},
 		Labels:      labels,
-		Restart:     agentvisor.RestartPolicy{Mode: agentvisor.RestartResume, Prompt: restartPrompt},
+		// The hook command drops the calls of a session with this env, so the book has no copy of it.
+		Env:     map[string]string{"OVERSIRE_SESSION": s.id},
+		Restart: agentvisor.RestartPolicy{Mode: agentvisor.RestartResume, Prompt: restartPrompt},
 	}
 }
 

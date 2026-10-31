@@ -544,7 +544,7 @@ func TestStartPassesModelAndEffort(t *testing.T) {
 	spy.mu.Lock()
 	defer spy.mu.Unlock()
 	sp := spy.spec
-	if sp.Model != "claude-opus-5-5" || sp.Effort != "max" || sp.Kind != agentvisor.KindWire || sp.Restart.Mode != agentvisor.RestartResume || sp.Labels[LabelSession] != ref.ID || sp.Labels[LabelRuntime] != ID {
+	if sp.Model != "claude-opus-5-5" || sp.Effort != "max" || sp.Kind != agentvisor.KindWire || sp.Restart.Mode != agentvisor.RestartResume || sp.Labels[LabelSession] != ref.ID || sp.Labels[LabelRuntime] != ID || sp.Env["OVERSIRE_SESSION"] != ref.ID {
 		t.Fatalf("start spec %#v", sp)
 	}
 }
