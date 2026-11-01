@@ -48,6 +48,10 @@ Usage:
                                                        print the history digest of a session
   oversire step done --run <id> --step <step> --verdict pass|gaps|done|skipped|blocked [--note <text>]
                                                        end a runbook step (the agent of the step runs it)
+  oversire review ready [--key K] [--kind code|plan] [--note <text>] [--plan <file.md>]
+                                                       hand off a group or a plan for review (the agent runs it)
+  oversire review reply [--key K] <comment id> "<text>"  answer a review comment (the agent runs it)
+  oversire review ls [--kind code|plan] [--json]       show the reviews of this machine
   oversire visor ls | session | workdir | project | harness | status
                                                        show and control the agent sessions of the daemon
   oversire update                                      install the latest release now
@@ -86,6 +90,7 @@ type cli struct {
 	migrate func(context.Context) (migrate.Report, error)
 	exe     string
 	home    string
+	wd      string // the working folder of the review command; empty is the folder of the process
 }
 
 func main() {
@@ -145,6 +150,8 @@ func (c *cli) dispatch(ctx context.Context, args []string) error {
 		return c.orca(ctx, rest)
 	case cmd == "step":
 		return c.step(ctx, rest)
+	case cmd == "review":
+		return c.review(ctx, rest)
 	case cmd == "update":
 		return c.update(ctx)
 	case cmd == "version" || cmd == "--version" || cmd == "-v":

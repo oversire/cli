@@ -24,6 +24,8 @@ const (
 	CapSessionHandover = "sessionHandover"
 	// CapRunbooks is not a part of the runtime: the daemon runs runbook steps on it (API.AddCapabilities).
 	CapRunbooks = "runbooks"
+	// CapReviews is not a part of the runtime: the review gate of the daemon starts sessions on it (OVERSIRE-365).
+	CapReviews = "reviews"
 )
 
 // Capabilities are the parts that rt has. Each runtime takes files and keys: the daemon does them, not the runtime.

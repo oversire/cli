@@ -115,7 +115,7 @@ The visor keeps its state in `<data>/visor`, and it serves its API on `<data>/vi
 | Topic | Rule |
 |---|---|
 | Agents | `claude`, `codex`, `opencode`, `opencode2`, `pi`, `copilot`, `cursor` and `gemini` (the agent-wire harness names). For a hub order, the allow list must also have the agent. |
-| Worktree | Each item gets one visor workdir with the item key: a git worktree at `<data>/visor/worktrees/<repo name>-<project id>/<item key>`. The branch is the item key in lowercase, for example `towertail-2`. Without an item, the launch name is the key. A second launch for the same key uses the worktree and the branch again. `sessionStop` keeps the worktree. A worktree from before the visor, at `<data>/worktrees/<repo name>/<item key>`, stays in use. |
+| Worktree | Each item gets one visor workdir with the item key: a git worktree at `<data>/visor/worktrees/<repo name>-<project id>/<item key>`. The branch is the item key in lowercase, for example `towertail-2`. Without an item, the launch name is the key. A second launch for the same key uses the worktree and the branch again. `sessionStop` keeps the worktree. A worktree from before the visor, at `<data>/worktrees/<repo name>/<item key>`, stays in use. A start with `inPlace` works in the folder `repo` itself, as a folder workdir with no worktree: for example a worktree group of the review gate. |
 | Session | `sessionStart` gives the session at once. The workspace id is `<repo name>/<key>`, and the session id starts with `s-`. The state goes from `queued` to `starting` to `working`, then `waitingInput` at the end of each turn, and `done` or `failed` at the end. |
 | Slots | At most `maxSessions` sessions run at the same time (default 2). A new session waits in `queued`. If the order expires before a slot is free, the session is `failed`. |
 | Permissions | The agent asks before it uses a tool. The session goes to `waitingPermission` with a prompt. Answer it with `sessionSend` and a `permission` answer. With no answer in 10 minutes, the daemon denies the request. |
@@ -162,6 +162,9 @@ The budget of the order has caps: 50 earlier turns, 10 last turns and 20000 char
 | `oversire group remove <machine or device>`, `home <machine>`, `rotate` | Remove a member or an app, move home, or make a new group secret. |
 | `oversire join <host> <code>` | Join the group of the member at host. `-` reads the code from stdin. |
 | `oversire step done --run <id> --step <step> --verdict pass\|gaps\|done\|skipped\|blocked [--note <text>]` | End a runbook step. The agent of the step runs it. See "Runbooks". |
+| `oversire review ready [--key K] [--kind code\|plan] [--note <text>] [--plan <file.md>]` | Hand off a worktree group or a plan for review. The agent runs it. See "Reviews". |
+| `oversire review reply [--key K] <comment id> "<text>"` | Answer a review comment. The agent runs it. |
+| `oversire review ls [--kind code\|plan] [--json]` | Show the reviews of this machine. |
 | `oversire visor ls\|session\|workdir\|project\|harness\|status` | Show and control the agent sessions of the `oversire` runtime. See "runtime:oversire". |
 | `oversire update` | Install the latest release now. The running daemon does the update and restarts. Without a daemon, the command updates the binary itself. |
 | `oversire version` | Show the version. |
@@ -315,13 +318,54 @@ Each change of a run sends the frame `{"type":"runbookRun","run":<RunbookRun>}` 
 How a run goes:
 
 - The daemon picks the runtime of the start, else the first reachable runtime with workspaces. Each step is a keyed session start with the key `runbook:<run>.<step>.<round>`, the terminal title `<KEY> · <n> <Step name>` (plus ` · r<round>` after round 1), and the agent of the step. An agent can set its own title: `claude -n <KEY>` shows the item key. In Orca, all steps of an item use the workspace of the item key. The `oversire` runtime uses the worktree of the item key.
-- The prompt fills `{key}`, `{url}`, `{title}`, `{item}`, `{workspace}`, `{project}`, `{round}`, `{notes}` (the notes of the start, then the note of each step), `{worktree}` (`.wt/<key>`) and `{done}` (`oversire step done --run <id> --step <step>`).
+- The prompt fills `{key}`, `{url}`, `{title}`, `{item}`, `{workspace}`, `{project}`, `{round}`, `{notes}` (the notes of the start, then the note of each step), `{group}` (the worktree group `.wt/<key>`, with the key in lower case; `{worktree}` is an alias) and `{done}` (`oversire step done --run <id> --step <step>`).
 - A review with `gaps` starts its fix step, and then the review again as the next round. After `review.rounds` rounds with gaps, the run pauses. A review with `pass` skips its fix step.
 - The step follows its session: a question or a permission is `asks`. A session that ends with no verdict, or a launch that fails, pauses the run.
 - The daemon stops an `oversire` step session 10 s after the verdict, because it holds a session slot. An Orca terminal stays open.
 - After a restart, a step that is still `starting` with no session after 2 min pauses the run. A step whose session the book does not know 60 s after the start pauses the run. A step on the `oversire` runtime does not wait: the runtime reports its sessions before the runbooks start.
 
 `oversire step done` calls the loopback API. It prints `Step <n> of <m> <Step name>: <verdict>. Next: <next step, or done, or the run state>.` The note is cut to 300 characters. On a refusal it writes the error of the daemon to stderr and exits with 1.
+
+### Reviews
+
+The review gate (OVERSIRE-365) shows the work of an agent before it merges. An agent commits to the branches of its worktree group `<root>/.wt/<key>`, does not merge, and hands off with `oversire review ready`. The user reads the diffs in the app, adds comments, and submits a round. The daemon sends the round to the session of the key as one prompt. When the user approves, the daemon merges the group locally. It never pushes. The bodies are in `contract/schema/review.json`. The app finds these routes by the capability `reviews` in `GET /v1/runtimes`.
+
+A code review is a worktree group: `<root>/.wt/<name>`, and the key is the name in upper case. Each folder in the group whose `.git` is a file is a repo. A symlink is a link. The roots are the folder repos of the runtimes, plus each root that a hand-off names. The daemon keeps these roots. The base of a repo is the branch of the primary checkout `<root>/<repo>`. A group is in the list when a repo has commits that its base does not have, or changes that are not committed. A plan review is the plan of a Plan session, split at each `##` heading.
+
+| Route | Access | What it does |
+| --- | --- | --- |
+| `GET /v1/reviews?kind=code\|plan` | member | `ReviewsPage`: the reviews, newest first, and the bases that are not pushed. No `kind` gives both. |
+| `GET /v1/reviews/{key}?kind=` | member | `ReviewDetail`: the summary, the changed files (from the merge base to the work tree, with untracked files), the comments, the rounds and the plan. |
+| `GET /v1/reviews/{key}/diff?repo=<repo>&path=<path>` | member | `FileDiff` of one file. A diff stops at 3000 lines with `truncated`. |
+| `POST /v1/reviews/{key}/comments` | app | Body `CommentDraft`. Answers 201 with the pending `ReviewComment`. |
+| `PATCH /v1/reviews/{key}/comments/{id}` | app | Body `CommentEdit`. 409: the comment is not pending. |
+| `DELETE /v1/reviews/{key}/comments/{id}?kind=` | app | 204. 409: the comment is not pending. |
+| `PUT /v1/reviews/{key}/viewed` | app | Body `ViewedMark`. 204. |
+| `POST /v1/reviews/{key}/submit` | app | Body `SubmitReview`. Answers the new `ReviewRound`. |
+| `POST /v1/reviews/{key}/merge` | app | Body `MergeRequest`. Answers `MergeResult`. A conflict is 200 with `merged: false`. 409: a check failed. |
+| `POST /v1/reviews/{key}/fix?kind=code` | app | Sends the fixed prompt "rebase and fix the conflicts". Answers the `ReviewRound`. |
+| `POST /v1/reviews/{key}/comments/{id}/reply` | loopback | Body `CommentReply`: the answer of the agent. |
+| `POST /v1/reviews/{key}/ready` | loopback | Body `ReviewReady`: the hand-off. Answers `ReviewSummary`. |
+| `PUT /v1/reviews/{key}/plan` | loopback | Body `PlanDoc`. Each new plan of a key has the next version. |
+
+"app" is a member route that refuses a daemon of the group (403). "loopback" routes are not on Tailscale. The key in the path can be in lower case. A refused call answers `{"error":"<text>"}` with 400, 404 or 409.
+
+Each change sends the frame `{"type":"review","event":"review.ready|review.changed|review.merged|review.conflict","key":"<KEY>","kind":"code|plan","machine":"<machine>"}` on `GET /v1/connect`. The frame is a hint: the app gets the data with `GET`.
+
+How a round goes:
+
+- Submit makes round N from all pending comments. Approve sends nothing. Request changes builds one prompt: each comment with its id, anchor and excerpt, then the rules (do not merge, answer each comment, run the tests, hand off).
+- The session of a code review is a session in the group folder, a session with the start key `work:<KEY>`, or the last known session. The session of a plan has the start key `plan:<KEY>` or `refine:<KEY>`.
+- An idle session gets the prompt now (`sent`). A session in a turn gets it at the end of the turn (`queued`). When the session ended, a new session starts in the same folder with the agent of the submit, else the agent of the last session (`newSession`). A second round waits behind the first. A failed delivery goes into `error` of the round. The call still works.
+- Merge checks first: no session in a turn, clean worktrees, clean primary checkouts on a branch, and commits to merge. Then each repo in merge order rebases on its base when it is behind, and the base takes the branch with `merge --ff-only`. All or none: a rebase conflict aborts the rebase, puts each merged base back to its old head and sets the state `conflict`. `removeGroup` removes each worktree with git, deletes the merged branch and the links, then removes the empty group folder. A folder with other files stays.
+- The config `review.order` sets the merge order, for example `{"review":{"order":["agent-binder","oversire","cloud","cli"]}}`. Other repos come after, in alphabetic order.
+- The daemon keeps each review in `<data>/reviews/<kind>-<KEY>.json` and the roots in `<data>/reviews/roots.json`. The files are JSON in place of SQLite: one small file for each review, written atomically.
+
+The agent commands call the loopback API:
+
+- `oversire review ready [--key K] [--kind code|plan] [--note <text>] [--plan <file.md>]`. In a group folder, the group gives the key and the root. `--key` wins over the folder. For a plan, `--plan` reads the Markdown file (a path from the working folder), and the root of the plan is the working folder, or the workspace root when the folder is in a group. The `#` heading is the title, the text before the first `##` heading is the block "Summary", and each list line of a block "Sub-items" is a sub-item (`- KEY-1: Title` or `- Title`). The note is cut to 300 characters. The command prints the comments that have no answer.
+- `oversire review reply [--key K] <comment id> "<text>"`. Without a key, the group of the working folder gives it, else the daemon finds the review that has the comment.
+- `oversire review ls [--kind code|plan] [--json]` shows the reviews of this machine.
 
 ### Session stream
 

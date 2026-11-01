@@ -19,6 +19,7 @@ import (
 	"github.com/oversire/cli/orders"
 	"github.com/oversire/cli/proc"
 	"github.com/oversire/cli/questions"
+	"github.com/oversire/cli/review"
 	"github.com/oversire/cli/runbook"
 	"github.com/oversire/cli/runtime"
 	"github.com/oversire/cli/runtime/orca"
@@ -128,7 +129,8 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	leases.OnChange = func(l wire.Lease) { srv.Notify(false, map[string]any{"type": "lease", "lease": l}) }
 	srv.Handle(lease.NewRoutes(leases, store).Routes()...)
 	srv.Handle(asks.Routes()...)
-	srv.Handle(ask.NewAsker(book, screen, reg, time.Now).Routes()...)
+	asker := ask.NewAsker(book, screen, reg, time.Now)
+	srv.Handle(asker.Routes()...)
 	srv.Handle(installer.Routes()...)
 	srv.Handle(updates.Routes()...)
 	runtimeAPI := runtime.NewAPI(reg, filepath.Join(data, "files"), time.Now)
@@ -150,7 +152,16 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	}, time.Now)
 	runbooks.Log = c.log
 	srv.Handle(runbook.NewRoutes(runbooks).Routes()...)
-	runtimeAPI.AddCapabilities(runtime.CapRunbooks)
+	var order review.Order
+	if cfg.Review != nil {
+		order = cfg.Review.Order
+	}
+	reviews := review.NewEngine(review.Deps{Store: review.NewStore(filepath.Join(data, "reviews")), Git: review.NewGit(c.cmds),
+		Repos: reg, Sessions: book, Sender: asker, Launcher: runner, Picker: reg, Machine: cfg.Machine(), Order: order,
+		Notify: func(ev wire.ReviewEvent) { srv.Notify(false, ev) }})
+	reviews.Log = c.log
+	srv.Handle(review.NewRoutes(reviews).Routes()...)
+	runtimeAPI.AddCapabilities(runtime.CapRunbooks, runtime.CapReviews)
 
 	drain := func(ctx context.Context) error {
 		t := time.NewTicker(spoolInterval)
@@ -166,7 +177,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 			}
 		}
 	}
-	return []func(context.Context) error{srv.Run, book.Run, watcher.Run, syncer.Run, asks.Run, drain, c.pruneStore(oplog), runbooks.Run}, nil
+	return []func(context.Context) error{srv.Run, book.Run, watcher.Run, syncer.Run, asks.Run, drain, c.pruneStore(oplog), runbooks.Run, reviews.Run}, nil
 }
 
 // hookHealth is "live" when a harness has our hooks, else "off".
