@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	agentvisor "github.com/trebi-ai/agent-visor"
 )
@@ -34,45 +33,12 @@ func (rt *Runtime) ensureWorkdir(ctx context.Context, repo, key, branch, base st
 	return w, nil
 }
 
-// gitCLI runs git.
-type gitCLI struct{ git Runner }
-
-func (g gitCLI) run(ctx context.Context, dir string, args ...string) (string, error) {
-	out, errOut, err := g.git.Run(ctx, "git", append([]string{"-C", dir}, args...), nil)
+// ensureFolder gives the visor workdir that holds dir, with no new worktree. dir can be a folder that is not a git repo.
+// The visor can give a workdir of a parent folder, so the session sets its working dir to dir.
+func (rt *Runtime) ensureFolder(ctx context.Context, dir string) (agentvisor.Workdir, error) {
+	w, err := rt.host.EnsureWorkdir(ctx, agentvisor.WorkdirSpec{Path: dir, Kind: agentvisor.WorkdirFolder})
 	if err != nil {
-		text := strings.TrimSpace(string(errOut))
-		if text == "" {
-			text = err.Error()
-		}
-		return "", fmt.Errorf("git %s: %s", args[0], text)
+		return w, fmt.Errorf("open the folder %s: %w", dir, err)
 	}
-	return strings.TrimSpace(string(out)), nil
-}
-
-// changed gives the paths that the worktree dir changed since it left the HEAD of repo:
-// the diff from the merge base to the work tree (deletes and both names of a rename included), plus untracked files.
-func (g gitCLI) changed(ctx context.Context, repo, dir string) ([]string, error) {
-	head, err := g.run(ctx, repo, "rev-parse", "HEAD")
-	if err != nil {
-		return nil, err
-	}
-	base, err := g.run(ctx, dir, "merge-base", head, "HEAD")
-	if err != nil {
-		return nil, err
-	}
-	diff, err := g.run(ctx, dir, "diff", "--name-only", "--no-renames", base)
-	if err != nil {
-		return nil, err
-	}
-	untracked, err := g.run(ctx, dir, "ls-files", "--others", "--exclude-standard")
-	if err != nil {
-		return nil, err
-	}
-	var out []string
-	for _, l := range strings.Split(diff+"\n"+untracked, "\n") {
-		if l = strings.TrimSpace(l); l != "" {
-			out = append(out, l)
-		}
-	}
-	return out, nil
+	return w, nil
 }

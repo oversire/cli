@@ -326,7 +326,7 @@ func (rt *Runtime) all() []*session {
 	return out
 }
 
-// Start makes the worktree and gives the session at once. The agent starts when a slot is free.
+// Start makes the worktree and gives the session at once. With r.InPlace, the session works in the folder r.Repo itself. The agent starts when a slot is free.
 // A session that has no slot at o.ExpiresAt fails. agent-wire has no command line, so r.Command has no effect.
 func (rt *Runtime) Start(ctx context.Context, o runtime.Order, r wire.LaunchRequest) (wire.SessionRef, error) {
 	var none wire.SessionRef
@@ -348,7 +348,15 @@ func (rt *Runtime) Start(ctx context.Context, o runtime.Order, r wire.LaunchRequ
 	if branch == "" {
 		branch = strings.ToLower(key)
 	}
-	w, err := rt.ensureWorkdir(ctx, repo, key, branch, r.BaseBranch)
+	var w agentvisor.Workdir
+	var err error
+	dir := repo
+	if r.InPlace {
+		w, err = rt.ensureFolder(ctx, repo)
+	} else {
+		w, err = rt.ensureWorkdir(ctx, repo, key, branch, r.BaseBranch)
+		dir = w.Path
+	}
 	if err != nil {
 		return none, err
 	}
@@ -356,7 +364,7 @@ func (rt *Runtime) Start(ctx context.Context, o runtime.Order, r wire.LaunchRequ
 	ref := sessionRef(repo, key, id)
 	now := rt.now().UTC()
 	s := newSession(rt, wire.RunnerSession{ID: id, Runner: rt.opts.Runner, Session: ref, Order: o.ID, Agent: r.Agent, Repo: r.Repo, Branch: w.Branch, Item: r.Item,
-		State: wire.SessionQueued, StartedAt: now, UpdatedAt: now}, w.Path)
+		State: wire.SessionQueued, StartedAt: now, UpdatedAt: now}, dir)
 	s.req, s.workdir, s.live = r, w.ID, true
 	rt.mu.Lock()
 	rt.prune()

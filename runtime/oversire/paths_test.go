@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/oversire/cli/proc"
+	"github.com/oversire/cli/review"
 	"github.com/oversire/cli/runtime"
 	"github.com/oversire/cli/wire"
 )
@@ -50,7 +51,7 @@ func TestChangedPaths(t *testing.T) {
 	gitOut(t, repo, "add", ".")
 	gitOut(t, repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "main")
 
-	got, err := gitCLI{proc.Local{}}.changed(ctx, repo, dir)
+	got, err := review.NewGit(proc.Local{}).Changed(ctx, repo, dir)
 	if err != nil {
 		t.Fatal(err)
 	}

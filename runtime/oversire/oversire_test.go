@@ -552,3 +552,32 @@ func TestStartPassesModelAndEffort(t *testing.T) {
 		t.Fatalf("start spec %#v", sp)
 	}
 }
+
+// TestInPlaceUsesTheFolder starts a session in a folder that is not a git repo: no worktree, the folder is the working dir.
+func TestInPlaceUsesTheFolder(t *testing.T) {
+	f := setup(t, chat, Options{})
+	ctx := context.Background()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	group := filepath.Join(dir, ".wt", "app-9")
+	if err := os.MkdirAll(group, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	ref, err := f.rt.Start(ctx, runtime.Order{ID: "o1"}, wire.LaunchRequest{Repo: group, Name: "APP-9", InPlace: true, Agent: "fake", Prompt: "go"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := f.rec.wait(t, ref.ID, wire.SessionWaitingInput)
+	if s.Repo != group || s.Branch != "" {
+		t.Fatalf("session %#v", s)
+	}
+	vs, err := f.visor.Sessions(ctx, agentvisor.Filter{})
+	if err != nil || len(vs) != 1 || vs[0].WorkingDir != group {
+		t.Fatalf("visor sessions %#v %v", vs, err)
+	}
+	if out := gitOut(t, f.repo, "worktree", "list"); strings.Count(out, "\n") > 0 {
+		t.Fatalf("a worktree: %s", out)
+	}
+}

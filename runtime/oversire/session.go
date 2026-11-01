@@ -17,6 +17,7 @@ import (
 	agentvisor "github.com/trebi-ai/agent-visor"
 	agentwire "github.com/trebi-ai/agent-wire"
 
+	"github.com/oversire/cli/review"
 	"github.com/oversire/cli/wire"
 )
 
@@ -172,6 +173,9 @@ func (s *session) key() string {
 
 func (s *session) instructions() string {
 	text := fmt.Sprintf("You work in the git worktree %s on the branch %s. Commit your changes to this branch.", s.dir, s.info.Branch)
+	if s.req.InPlace {
+		text = fmt.Sprintf("You work in the folder %s.", s.dir)
+	}
 	if s.req.Item != nil {
 		text += fmt.Sprintf(" The task is %s: %s", s.req.Item.Key, s.req.Item.URL)
 	}
@@ -508,7 +512,7 @@ func (s *session) reportPaths() {
 	defer s.scan.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	paths, err := gitCLI{s.rt.git}.changed(ctx, filepath.Clean(repo), s.dir)
+	paths, err := review.NewGit(s.rt.git).Changed(ctx, filepath.Clean(repo), s.dir)
 	if err != nil {
 		return
 	}
