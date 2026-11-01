@@ -16,6 +16,8 @@ import (
 	"time"
 	"unicode"
 
+	agentvisor "github.com/trebi-ai/agent-visor"
+	vorca "github.com/trebi-ai/agent-visor/backend/orca"
 	agentwire "github.com/trebi-ai/agent-wire"
 
 	"github.com/oversire/cli/digest"
@@ -49,12 +51,36 @@ func FindCLI() (path string, ok bool) {
 	return p, err == nil
 }
 
+// visorRunner gives the Runner to the Orca CLI of agent-visor.
+type visorRunner struct{ r Runner }
+
+func (v visorRunner) Run(ctx context.Context, exe string, args []string) ([]byte, []byte, error) {
+	return v.r.Run(ctx, exe, args, nil)
+}
+
+// Host is the part of the visor that the driver uses.
+type Host interface {
+	Start(ctx context.Context, spec agentvisor.StartSpec) (agentvisor.Session, error)
+	Send(ctx context.Context, id string, in agentvisor.Input) (agentvisor.Delivery, error)
+	Stop(ctx context.Context, id string) error
+	Sessions(ctx context.Context, f agentvisor.Filter) ([]agentvisor.Session, error)
+}
+
+// Backend is the orca backend of the visor.
+type Backend interface {
+	Snapshot() vorca.Snapshot
+	Binding(session string) (pane, terminal, worktree string, ok bool)
+}
+
 // agentName keeps the agent command safe to type into a shell.
 var agentName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
 type Orca struct {
 	exe       string
 	run       Runner
+	cli       *vorca.CLI
+	host      Host    // nil: the driver starts the terminals itself
+	backend   Backend // nil with host
 	stat      func(string) (os.FileInfo, error)
 	shellWait time.Duration
 	sendWait  time.Duration // between tries of a prompt that Orca did not send
@@ -66,7 +92,14 @@ type Orca struct {
 }
 
 func New(exe string, run Runner) *Orca {
-	return &Orca{exe: exe, run: run, stat: os.Stat, shellWait: 300 * time.Millisecond, sendWait: 3 * time.Second, digests: digest.ForUser, now: time.Now}
+	return &Orca{exe: exe, run: run, cli: vorca.NewCLI(exe, visorRunner{run}), stat: os.Stat, shellWait: 300 * time.Millisecond, sendWait: 3 * time.Second, digests: digest.ForUser, now: time.Now}
+}
+
+// WithVisor runs the sessions in the orca backend of the visor. The backend follows each session,
+// and the driver reads the Orca state from its last poll.
+func (o *Orca) WithVisor(h Host, b Backend) *Orca {
+	o.host, o.backend = h, b
+	return o
 }
 
 // WithPairing turns on the live view through a paired device.
@@ -113,6 +146,9 @@ func (o *Orca) Launch(ctx context.Context, _ runtime.Order, r wire.LaunchRequest
 	if err != nil {
 		return none, err
 	}
+	if o.host != nil {
+		return o.launchInVisor(ctx, r, name, title, command)
+	}
 
 	var t terminal
 	if r.InPlace {
@@ -131,6 +167,57 @@ func (o *Orca) Launch(ctx context.Context, _ runtime.Order, r wire.LaunchRequest
 		return none, o.abandon(ctx, t.Handle, fmt.Errorf("The agent started in %s, but Orca did not send the prompt: %w", name, err))
 	}
 	return runtime.Started{Session: ref, PaneKey: t.paneKey(), TurnStarted: started}, nil
+}
+
+// launchInVisor starts the session in the orca backend of the visor. The backend writes the
+// command into a start script, waits until the agent is idle and sends the prompt.
+func (o *Orca) launchInVisor(ctx context.Context, r wire.LaunchRequest, name, title, command string) (runtime.Started, error) {
+	var none runtime.Started
+	spec := agentvisor.StartSpec{
+		Kind: vorca.Kind, Role: agentvisor.RoleAgent, Harness: r.Agent, Title: title, WorkingDir: r.Repo,
+		Prompt: r.Prompt, Command: []string{"sh", "-c", command}, Labels: map[string]string{},
+	}
+	if !r.InPlace {
+		ws, err := o.cli.EnsureWorkspace(ctx, vorca.WorkspaceSpec{Repo: r.Repo, Name: name, BaseBranch: r.BaseBranch, Comment: r.WorkspaceNote()}, o.shellWait)
+		if vorca.IsCode(err, "repo_not_found") {
+			return none, &Error{Code: "repo_not_found", Message: "Orca has no workspace at " + r.Repo}
+		}
+		if err != nil {
+			return none, err
+		}
+		spec.Labels[vorca.LabelWorktree] = ws.ID
+		if ws.Shell != "" {
+			spec.Labels[vorca.LabelShell] = ws.Shell
+		}
+		if ws.Path != "" {
+			spec.WorkingDir = ws.Path
+		}
+	}
+	s, err := o.host.Start(ctx, spec)
+	if err != nil {
+		return none, fmt.Errorf("The agent did not start in %s: %w", name, err)
+	}
+	pane, handle, worktree, _ := o.backend.Binding(s.ID)
+	ref := wire.SessionRef{Workspace: wire.WorkspaceRef{Account: wire.AccountID{Provider: ID, ID: account}, ID: worktree}, ID: handle}
+	return runtime.Started{Session: ref, PaneKey: pane, TurnStarted: r.Prompt != "" && s.State == agentvisor.StateRunning}, nil
+}
+
+// visorSession gives the visor session of an Orca terminal. ok is false for a terminal that the
+// visor does not follow.
+func (o *Orca) visorSession(ctx context.Context, terminal string) (string, bool) {
+	if o.host == nil || terminal == "" {
+		return "", false
+	}
+	ss, err := o.host.Sessions(ctx, agentvisor.Filter{Kind: vorca.Kind, Labels: map[string]string{vorca.LabelTerminal: terminal}})
+	if err != nil {
+		return "", false
+	}
+	for _, s := range ss {
+		if s.State != agentvisor.StateExited {
+			return s.ID, true
+		}
+	}
+	return "", false
 }
 
 // sendPrompt tries again two times while Orca says that it sent no input.
@@ -398,6 +485,9 @@ func hasAnyFlag(words, flags []string) bool {
 }
 
 func (o *Orca) Stop(ctx context.Context, s wire.SessionRef) error {
+	if id, ok := o.visorSession(ctx, s.ID); ok {
+		return o.host.Stop(ctx, id)
+	}
 	_, err := o.call(ctx, 20*time.Second, "terminal", "close", "--terminal", s.ID)
 	return err
 }
@@ -414,6 +504,10 @@ func (o *Orca) Submit(ctx context.Context, p wire.SendPayload) (bool, error) {
 	}
 	if p.Answer != nil {
 		return false, errors.New("The orca runtime has no runner questions. Answer the agent in Orca.")
+	}
+	if id, ok := o.visorSession(ctx, p.Session.ID); ok {
+		d, err := o.host.Send(ctx, id, agentvisor.Input{Text: p.Text})
+		return err == nil && d == agentvisor.DeliveryPrompted, err
 	}
 	return o.send(ctx, p.Session, p.Text)
 }

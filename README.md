@@ -10,7 +10,7 @@ A new install has the role `serve`. `oversire hub pair` adds the role `runner`.
 
 There are two runtimes:
 
-- `orca` starts agent sessions in Orca workspaces, reads them, sends text to them and closes them. The daemon has it when the Orca CLI is on the machine. For `sessionHistory`, the daemon finds the transcript of the agent through `orca search`. See [History](#history).
+- `orca` starts agent sessions in Orca workspaces, reads them, sends text to them and closes them. The daemon has it when the Orca CLI is on the machine. The embedded agent-visor runs the Orca sessions through its `orca` backend: it starts them, follows the Orca agent cards, adopts the agent panes that it did not start, and keeps its sessions through a daemon restart (`oversire visor ls` shows them). The visor polls Orca each 3 s, and the Orca watcher reads that poll. For `sessionHistory`, the daemon finds the transcript of the agent through `orca search`. See [History](#history).
 - `oversire` runs agent sessions without Orca. See [runtime:oversire](#runtimeoversire).
 
 The daemon drives only the runtimes on its own machine. To add a runtime, see [docs/adding-a-runtime.md](docs/adding-a-runtime.md).
@@ -435,7 +435,7 @@ The layout:
 | `agents` | The route `GET /v1/agents/{agent}/models`. |
 | `term` | The route `GET /v1/sessions/{id}/stream`: the viewers, the acks, the size lease and the `Source` and `TurnSource` interfaces of the runtimes. |
 | `orders` | The one run path of each order (`Runner`), and the direct orders from the apps of the group (`Direct`). |
-| `runtime` | The `Runtime` interface, the registry and the runtime routes (`API`). `runtime/orca` is the Orca driver for the local Orca. `runtime/oversire` is the agent-visor client. |
+| `runtime` | The `Runtime` interface, the registry and the runtime routes (`API`). `runtime/orca` is the Orca driver for the local Orca. It starts, sends to and stops sessions through the `orca` backend of the visor. `runtime/oversire` is the agent-visor client. |
 | `digest` | The transcript readers that make a `SessionDigest`. |
 | `store` | The home store: the op log in SQLite and the `/v1/store/ops` routes. |
 | `lease` | The leases of the home member: the book in `leases.json` and the `/v1/leases` routes. |

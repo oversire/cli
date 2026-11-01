@@ -29,14 +29,19 @@ import (
 // stopWait is the wait after a refused token or hello, so that the service does not retry fast.
 const stopWait = time.Hour
 
-// registry has ov when it is not nil, and orca when its CLI is on this machine.
-func (c *cli) registry(ov runtime.Runtime) *runtime.Registry {
+// registry has ov when it is not nil, and orca when its CLI is on this machine. local gives the
+// visor to the orca driver; nil keeps the driver on the Orca CLI only.
+func (c *cli) registry(ov runtime.Runtime, local *localSessions) *runtime.Registry {
 	var rts []runtime.Runtime
 	if ov != nil {
 		rts = append(rts, ov)
 	}
 	if exe, ok := orca.FindCLI(); ok {
-		rts = append(rts, orca.New(exe, c.cmds))
+		o := orca.New(exe, c.cmds)
+		if local != nil {
+			local.useOrca(o)
+		}
+		rts = append(rts, o)
 	}
 	return runtime.NewRegistry(rts...)
 }
@@ -78,7 +83,7 @@ func (c *cli) run(ctx context.Context) error {
 		local.Close(ctx)
 		agents.Close(ctx)
 	}()
-	reg := c.registry(local.Runtime())
+	reg := c.registry(local.Runtime(), local)
 	c.log.Info("daemon start", "version", version, "roles", cfg.Roles, "hub", cfg.Hub, "device", cfg.Device, "runtimes", reg.IDs(), "data", data)
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -112,7 +117,7 @@ func (c *cli) run(ctx context.Context) error {
 			}
 			return "on"
 		}
-		serve, err := c.serveTasks(ctx, cfg, reg, data, hubHealth, runner, reps, updates, agents)
+		serve, err := c.serveTasks(ctx, cfg, reg, data, hubHealth, runner, reps, updates, agents, local)
 		if err != nil {
 			return err
 		}

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -94,18 +95,18 @@ func (c *cli) hook(ctx context.Context, args []string) error {
 		_, _ = io.Copy(io.Discard, c.in)
 		return nil
 	}
-	port, spool := config.DefaultPort, ""
+	port, spool, home := config.DefaultPort, "", ""
 	if c.paths.Dir != "" {
 		cfg, _, err := c.paths.LoadConfig()
 		if err == nil {
 			port = cfg.ServeOrDefault().ListenPort()
 		}
 		if data, err := cfg.Data(); err == nil {
-			spool = hooks.SpoolPath(data)
+			spool, home = hooks.SpoolPath(data), filepath.Join(data, "visor")
 		}
 	}
 	h := hooks.NewHook("http://127.0.0.1:"+strconv.Itoa(port), spool)
-	h.Visor = visorHook(os.Getenv)
+	h.Visor = visorHook(os.Getenv, home)
 	h.Run(ctx, args[0], c.in, c.out)
 	return nil
 }

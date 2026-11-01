@@ -9,17 +9,23 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	agentvisor "github.com/trebi-ai/agent-visor"
+	vorca "github.com/trebi-ai/agent-visor/backend/orca"
 	visorcli "github.com/trebi-ai/agent-visor/cli"
 
 	"github.com/oversire/cli/config"
 	"github.com/oversire/cli/hooks"
 	"github.com/oversire/cli/runtime"
+	"github.com/oversire/cli/runtime/orca"
 	"github.com/oversire/cli/runtime/oversire"
 )
+
+// orcaPoll is the time between two reads of the Orca state by the orca backend of the visor.
+const orcaPoll = 3 * time.Second
 
 // visorHome is <data>/visor. The daemon and the command oversire visor use it.
 func visorHome() (string, error) {
@@ -52,19 +58,30 @@ func visorCLI(args []string) error {
 
 // visorForward sends the hook calls of a visor session to the visor at socket. When the visor
 // does not answer, the call goes to the spool of the visor home, the folder of the socket.
-type visorForward struct{ session, socket string }
+// A call with only labels (an Orca pane that the visor did not start) does not go to the spool.
+type visorForward struct {
+	session, socket string
+	labels          map[string]string
+}
 
-// visorHook gives the forward of the session in the env, or nil outside a visor session.
-func visorHook(getenv func(string) string) hooks.Forwarder {
+// visorHook gives the forward of the session in the env. Outside a visor session, an Orca pane
+// goes to the visor in home with its labels. Else it gives nil.
+func visorHook(getenv func(string) string, home string) hooks.Forwarder {
 	f := visorForward{session: getenv(agentvisor.EnvSession), socket: getenv(agentvisor.EnvSocket)}
-	if f.session == "" || f.socket == "" {
+	if f.session == "" {
+		f.socket = ""
+		if labels := vorca.HookLabels(getenv); len(labels) > 0 && home != "" {
+			f.socket, f.labels = filepath.Join(home, "visor.sock"), labels
+		}
+	}
+	if f.socket == "" {
 		return nil
 	}
 	return f
 }
 
 func (f visorForward) Forward(ctx context.Context, harness string, payload []byte) {
-	call := agentvisor.HookCall{Harness: harness, Session: f.session, Payload: payload, At: time.Now().UTC()}
+	call := agentvisor.HookCall{Harness: harness, Session: f.session, Labels: f.labels, Payload: payload, At: time.Now().UTC()}
 	ctx, cancel := context.WithTimeout(ctx, hooks.TotalTimeout)
 	defer cancel()
 	c, err := agentvisor.Dial(ctx, f.socket)
@@ -73,7 +90,7 @@ func (f visorForward) Forward(ctx context.Context, harness string, payload []byt
 		_ = c.Close(ctx)
 	}
 	// The visor read the call: a refused call does not go to the spool.
-	if err == nil || errors.Is(err, agentvisor.ErrInvalid) || errors.Is(err, agentvisor.ErrNotFound) || errors.Is(err, agentvisor.ErrState) {
+	if err == nil || f.session == "" || errors.Is(err, agentvisor.ErrInvalid) || errors.Is(err, agentvisor.ErrNotFound) || errors.Is(err, agentvisor.ErrState) {
 		return
 	}
 	_ = agentvisor.NewHookSpool(filepath.Dir(f.socket)).Write(call)
@@ -82,16 +99,37 @@ func (f visorForward) Forward(ctx context.Context, harness string, payload []byt
 // localSessions is the oversire runtime on the visor of the daemon, in <data>/visor.
 // The sessions run in holders, so they live through a restart of the daemon.
 type localSessions struct {
-	visor *agentvisor.Visor
-	rt    *oversire.Runtime
-	sock  string
-	log   *slog.Logger
+	visor  *agentvisor.Visor
+	rt     *oversire.Runtime
+	orca   *vorca.Backend // nil when this machine has no Orca CLI
+	polled atomic.Pointer[func()]
+	sock   string
+	log    *slog.Logger
 }
 
 func (c *cli) openSessions(ctx context.Context, cfg config.Config, data string, reps *reports) (*localSessions, error) {
 	home := filepath.Join(data, "visor")
 	sock := filepath.Join(home, "visor.sock")
+	l := &localSessions{sock: sock, log: c.log}
+	var backends []agentvisor.Backend
+	if exe, ok := orca.FindCLI(); ok {
+		// The backend follows the Orca sessions of the visor and adopts the agents that the user starts in Orca.
+		b, err := vorca.New(vorca.Options{
+			CLI: vorca.NewCLI(exe, nil), Dir: filepath.Join(home, "orca"), Poll: orcaPoll, Discover: true,
+			Logger: c.log.With("source", "visor-orca"),
+			OnPoll: func() {
+				if f := l.polled.Load(); f != nil {
+					(*f)()
+				}
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		l.orca, backends = b, append(backends, b)
+	}
 	v, err := agentvisor.New(ctx, agentvisor.Options{
+		Backends: backends,
 		Home: home, Client: "oversire", ClientVersion: version, Build: version, Socket: sock,
 		HolderCommand: []string{c.exe, "visor", "hold"},
 		HookCommand:   []string{c.exe, "visor", "--home", home, "hook"},
@@ -106,9 +144,20 @@ func (c *cli) openSessions(ctx context.Context, cfg config.Config, data string, 
 	if err != nil {
 		return nil, err
 	}
-	rt := oversire.New(oversire.Options{Runner: cfg.Device, DataDir: data, Slots: cfg.Sessions()}, v, c.cmds, reps)
-	return &localSessions{visor: v, rt: rt, sock: sock, log: c.log}, nil
+	l.visor = v
+	l.rt = oversire.New(oversire.Options{Runner: cfg.Device, DataDir: data, Slots: cfg.Sessions()}, v, c.cmds, reps)
+	return l, nil
 }
+
+// useOrca runs the sessions of the orca driver in the visor.
+func (l *localSessions) useOrca(o *orca.Orca) {
+	if l.orca != nil {
+		o.WithVisor(l.visor, l.orca)
+	}
+}
+
+// OnOrcaPoll sets the function that runs after each read of the Orca state.
+func (l *localSessions) OnOrcaPoll(f func()) { l.polled.Store(&f) }
 
 func (l *localSessions) Runtime() runtime.Runtime { return l.rt }
 

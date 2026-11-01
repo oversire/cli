@@ -11,6 +11,7 @@ import (
 	"time"
 
 	agentvisor "github.com/trebi-ai/agent-visor"
+	vorca "github.com/trebi-ai/agent-visor/backend/orca"
 )
 
 // claudeHook is a hook payload of claude in dir.
@@ -31,7 +32,7 @@ func spooled(t *testing.T, home string) int {
 }
 
 func TestVisorForward(t *testing.T) {
-	if visorHook(func(string) string { return "" }) != nil {
+	if visorHook(func(string) string { return "" }, "") != nil {
 		t.Fatal("a forward outside a visor session")
 	}
 	home, err := os.MkdirTemp("", "ovf")
@@ -59,7 +60,7 @@ func TestVisorForward(t *testing.T) {
 		t.Fatalf("observed session: %+v %v", s, err)
 	}
 	env := map[string]string{agentvisor.EnvSession: s.ID, agentvisor.EnvSocket: sock}
-	fwd := visorHook(func(k string) string { return env[k] })
+	fwd := visorHook(func(k string) string { return env[k] }, "")
 	fwd.Forward(ctx, "claude", claudeHook("UserPromptSubmit", dir))
 	got, err := v.Session(ctx, s.ID)
 	if err != nil || got.State != agentvisor.StateRunning {
@@ -72,9 +73,20 @@ func TestVisorForward(t *testing.T) {
 
 	// The visor refuses a call for an unknown session. It does not go to the spool.
 	env[agentvisor.EnvSession] = "ses-none"
-	visorHook(func(k string) string { return env[k] }).Forward(ctx, "claude", claudeHook("Stop", dir))
+	visorHook(func(k string) string { return env[k] }, "").Forward(ctx, "claude", claudeHook("Stop", dir))
 	if n := spooled(t, home); n != 0 {
 		t.Fatalf("%d spooled after a refusal", n)
+	}
+
+	// An Orca pane outside a visor session goes to the visor of home with its labels.
+	pane := map[string]string{"ORCA_PANE_KEY": "t1:l1"}
+	if visorHook(func(k string) string { return pane[k] }, "") != nil {
+		t.Fatal("an Orca pane forward with no visor home")
+	}
+	visorHook(func(k string) string { return pane[k] }, home).Forward(ctx, "claude", claudeHook("SessionStart", t.TempDir()))
+	byPane, _ := v.Sessions(ctx, agentvisor.Filter{Labels: map[string]string{vorca.LabelPane: "t1:l1"}}) //nolint:errcheck // the count check covers it
+	if len(byPane) != 1 {
+		t.Fatalf("%d sessions of the pane", len(byPane))
 	}
 
 	// A visor that does not answer gets the call in its spool.
@@ -87,8 +99,13 @@ func TestVisorForward(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	visorHook(func(k string) string { return env[k] }).Forward(context.Background(), "claude", claudeHook("Stop", dir))
+	visorHook(func(k string) string { return env[k] }, "").Forward(context.Background(), "claude", claudeHook("Stop", dir))
 	if n := spooled(t, home); n != 1 {
 		t.Fatalf("%d spooled with no visor", n)
+	}
+	// A call with only labels does not go to the spool.
+	visorHook(func(k string) string { return pane[k] }, home).Forward(context.Background(), "claude", claudeHook("Stop", dir))
+	if n := spooled(t, home); n != 1 {
+		t.Fatalf("%d spooled after an Orca pane call", n)
 	}
 }

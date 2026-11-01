@@ -75,7 +75,7 @@ func (c *cli) status(ctx context.Context, args []string) error {
 	}
 	r := statusReport{
 		Version: version, Roles: cfg.Roles, Paired: cfg.Paired(), Device: cfg.Device, Hub: cfg.Hub,
-		Service: c.service.Status(ctx), Runtimes: c.registry(idleRuntime()).IDs(), LastError: st.LastError,
+		Service: c.service.Status(ctx), Runtimes: c.registry(idleRuntime(), nil).IDs(), LastError: st.LastError,
 		Serve: readServe(ctx, cfg),
 	}
 	// A state file of a stopped service is old.

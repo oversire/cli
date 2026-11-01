@@ -48,7 +48,7 @@ type Hook struct {
 	PPID   int
 	Client *http.Client
 	Clock  func() time.Time
-	// Visor gets all calls when the agent runs in a visor session. nil outside one.
+	// Visor gets all calls of a visor session and of an Orca pane. nil else.
 	Visor Forwarder
 }
 
@@ -82,9 +82,12 @@ func (h *Hook) Run(ctx context.Context, harness string, in io.Reader, out io.Wri
 	}
 	env := h.Env()
 	// A visor session reports to its visor, not to the book. In a terminal, the hooks give its state.
+	// An Orca pane reports to the book too: the watcher and the questions read it there.
 	if h.Visor != nil {
 		h.Visor.Forward(ctx, harness, data)
-		return
+		if env.PaneKey == "" {
+			return
+		}
 	}
 	if env.OversireSession != "" {
 		return

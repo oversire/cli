@@ -302,3 +302,23 @@ func TestHookForwardsToTheVisor(t *testing.T) {
 		t.Fatal("a forwarded call was spooled")
 	}
 }
+
+func TestOrcaPaneHookGoesToTheVisorAndTheBook(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls.Add(1) }))
+	defer srv.Close()
+	h := NewHook(srv.URL, filepath.Join(t.TempDir(), "hooks.jsonl"))
+	h.Getenv = func(k string) string {
+		if k == "ORCA_PANE_KEY" {
+			return "t1:l1"
+		}
+		return ""
+	}
+	spy := &forwardSpy{}
+	h.Visor = spy
+	var out bytes.Buffer
+	h.Run(context.Background(), "claude", bytes.NewReader(read(t, "payloads/claude/Stop.json")), &out)
+	if spy.harness != "claude" || calls.Load() != 1 {
+		t.Fatalf("forward %q, %d posts", spy.harness, calls.Load())
+	}
+}
