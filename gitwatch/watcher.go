@@ -326,7 +326,7 @@ func (w *Watcher) row(ctx context.Context, r repo, ref string, e entry) bool {
 		d.At = w.clock()
 	}
 	var sess wire.DaemonSession
-	if s, ok := w.agent(wt); ok {
+	if s, ok := w.agent(wt, d.At); ok {
 		sess = s
 		d.ActorType, d.Actor, d.Via = wire.ActorAgent, "", "git"
 	}
@@ -366,13 +366,18 @@ func (w *Watcher) numstat(ctx context.Context, dir string, e entry, p map[string
 	p["files"], p["add"], p["del"] = files, add, del
 }
 
-// agent gives a working session in the worktree.
-func (w *Watcher) agent(wt string) (wire.DaemonSession, bool) {
+// agent gives the session in the worktree that was in a turn at the time at: it works now, or its state changed after at.
+// The scan runs after the debounce, so an agent that commits and then ends its turn still owns the commit.
+// A reflog time has whole seconds.
+func (w *Watcher) agent(wt string, at time.Time) (wire.DaemonSession, bool) {
 	if wt == "" || w.sessions == nil {
 		return wire.DaemonSession{}, false
 	}
 	for _, s := range w.sessions.All() {
-		if s.State == wire.PhaseWorking && (s.Cwd == wt || strings.HasPrefix(s.Cwd, wt+string(filepath.Separator))) {
+		if !(s.Cwd == wt || strings.HasPrefix(s.Cwd, wt+string(filepath.Separator))) {
+			continue
+		}
+		if s.State == wire.PhaseWorking || !s.StateSince.Before(at) {
 			return s, true
 		}
 	}

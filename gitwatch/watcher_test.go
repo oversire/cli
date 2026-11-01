@@ -3,6 +3,7 @@ package gitwatch
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -10,6 +11,7 @@ import (
 	"sort"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/oversire/cli/events"
 	"github.com/oversire/cli/proc"
@@ -65,6 +67,15 @@ func setup(t *testing.T, sessions Sessions) (string, *rows, func() *Watcher) {
 			func(context.Context) []string { return []string{root} }, cursors, nil)
 	}
 	return root, out, mk
+}
+
+func git(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	c := exec.Command("git", append([]string{"-c", "core.hooksPath=/dev/null", "-C", dir}, args...)...)
+	c.Env = append(os.Environ(), "GIT_AUTHOR_NAME=Dev", "GIT_AUTHOR_EMAIL=dev@example.com", "GIT_COMMITTER_NAME=Dev", "GIT_COMMITTER_EMAIL=dev@example.com")
+	if out, err := c.CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
 }
 
 func byKind(got []wire.EventDraft) map[string][]wire.EventDraft {
@@ -181,5 +192,34 @@ func TestAgentCommit(t *testing.T) {
 	// The worktree rows: commits, rebase and reset. The main rows stay human.
 	if agent != 4 {
 		t.Errorf("agent rows %d", agent)
+	}
+}
+
+// A turn that ends before the scan still owns its commit. A commit after the turn is human.
+func TestCommitBeforeTheTurnEnded(t *testing.T) {
+	var sessions book
+	root, out, mk := setup(t, &sessions)
+	ctx := context.Background()
+	w := mk()
+	w.Scan(ctx)
+	wt := filepath.Join(root, ".wt", "app-7", "app")
+	git(t, filepath.Join(root, "app"), "worktree", "add", "-q", wt, "-b", "app-7")
+	w.Scan(ctx)
+	git(t, wt, "commit", "--allow-empty", "-qm", "In the turn")
+	sessions = book{{ID: "s1", Harness: "claude", State: wire.PhaseWaiting, StateSince: time.Now().Add(time.Second), Cwd: wt}}
+	w.Scan(ctx)
+	sessions[0].StateSince = time.Now().Add(-time.Hour)
+	git(t, wt, "commit", "--allow-empty", "-qm", "After the turn")
+	w.Scan(ctx)
+	out.mu.Lock()
+	defer out.mu.Unlock()
+	got := map[string]wire.ActorType{}
+	for _, d := range out.got {
+		if d.Kind == wire.KindGitCommit {
+			got[d.Summary] = d.ActorType
+		}
+	}
+	if got["In the turn"] != wire.ActorAgent || got["After the turn"] != wire.ActorHuman {
+		t.Errorf("%v", got)
 	}
 }
