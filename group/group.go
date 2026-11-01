@@ -207,6 +207,26 @@ func (s *Store) Self() wire.GroupMember {
 	return s.self
 }
 
+// HomeEndpoint gives the base URL of the home daemon and the token to call it (events.Home).
+// self is true when this machine is home, has no group, or the cloud holds the group.
+func (s *Store) HomeEndpoint() (base, token string, self bool) {
+	g, ok := s.Snapshot()
+	me := s.Self().Machine
+	if !ok || g.Cloud != nil || g.Home == "" || g.Home == me {
+		return "", "", true
+	}
+	for _, m := range g.Members {
+		if m.Machine == g.Home {
+			t := s.Tokens()
+			if len(t) == 0 {
+				return "", "", true
+			}
+			return memberURL(m.Addrs, m.Host, m.Port), t[0], false
+		}
+	}
+	return "", "", true
+}
+
 // Alone tells if this machine has no group, or a group of one.
 func (s *Store) Alone() bool {
 	s.mu.Lock()

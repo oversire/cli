@@ -30,7 +30,7 @@ type Syncer struct {
 	log     *slog.Logger
 	every   time.Duration
 	pokes   chan string
-	taker   HomeTaker
+	takers  []HomeTaker
 }
 
 // NewSyncer makes a syncer. tailnet gives the peers for discovery (server.Tailnet.Peers); nil means no discovery.
@@ -175,15 +175,15 @@ func (s *Syncer) pushRekey(ctx context.Context) {
 	}
 }
 
-// HomeTaker copies the state of the old home to this machine before this machine becomes home (store.Routes).
+// HomeTaker copies the state of the old home to this machine before this machine becomes home (store.Routes, events.Routes).
 // offline is true when the old home does not answer; the move then goes on.
 type HomeTaker interface {
 	TakeHome(ctx context.Context, base, token string) (records int, offline bool, err error)
 }
 
-// WithHomeTaker sets the taker that POST /v1/group/home calls when this machine becomes home.
+// WithHomeTaker adds a taker that POST /v1/group/home calls when this machine becomes home. The takers run in order.
 func (s *Syncer) WithHomeTaker(t HomeTaker) *Syncer {
-	s.taker = t
+	s.takers = append(s.takers, t)
 	return s
 }
 
@@ -194,11 +194,11 @@ type homeMove struct {
 	Offline bool `json:"offline,omitempty"`
 }
 
-// takeHome runs the taker when machine is this machine, the group has no cloud, and the old home is another member.
+// takeHome runs the takers when machine is this machine, the group has no cloud, and the old home is another member.
 func (s *Syncer) takeHome(ctx context.Context, machine string) (homeMove, error) {
 	out := homeMove{OK: true}
 	g, found := s.store.Snapshot()
-	if s.taker == nil || !found || g.Cloud != nil || machine != s.store.Self().Machine || g.Home == machine {
+	if len(s.takers) == 0 || !found || g.Cloud != nil || machine != s.store.Self().Machine || g.Home == machine {
 		return out, nil
 	}
 	old, isMember := s.member(g.Home)
@@ -209,11 +209,14 @@ func (s *Syncer) takeHome(ctx context.Context, machine string) (homeMove, error)
 	if t := s.store.Tokens(); len(t) > 0 {
 		token = t[0]
 	}
-	n, offline, err := s.taker.TakeHome(ctx, memberURL(old.Addrs, old.Host, old.Port), token)
-	if err != nil {
-		return out, fmt.Errorf("group: copy the store of %s: %w", old.Machine, err)
+	for _, t := range s.takers {
+		n, offline, err := t.TakeHome(ctx, memberURL(old.Addrs, old.Host, old.Port), token)
+		if err != nil {
+			return out, fmt.Errorf("group: copy the state of %s: %w", old.Machine, err)
+		}
+		out.Records += n
+		out.Offline = out.Offline || offline
 	}
-	out.Records, out.Offline = n, offline
 	return out, nil
 }
 

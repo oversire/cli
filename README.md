@@ -212,7 +212,7 @@ With the role `serve`, `daemon run` serves the API `/v1` of the local hub. The p
 
 The daemon looks for the tailnet addresses again each 30 s. It never binds `0.0.0.0`. `serve.tailscale: false` stops the Tailscale listener.
 
-`GET /v1/connect` is a WebSocket with the frames of the cloud hub: `ping` gets `pong`, and `{"type":"poke"}` and `{"type":"store"}` tell the client to read again. A revoked credential closes its socket with code 4001.
+`GET /v1/connect` is a WebSocket with the frames of the cloud hub: `ping` gets `pong`, and `{"type":"poke"}` and `{"type":"store"}` tell the client to read again. `{"type":"event","event":{...}}` is one new row of the events table (see "Events"). A revoked credential closes its socket with code 4001.
 
 ### Hooks and questions
 
@@ -247,6 +247,21 @@ Each member writes its CLI version into its own roster entry (`version`). The ap
 The home member of a group without cloud keeps the synced store of the apps in `<data>/store.db` (SQLite). It has the API and the rules of the cloud hub: `POST /v1/store/ops` (at most 100 ops) and `GET /v1/store/ops?after=&limit=`. Last write wins for each collection and id, by HLC. A delete is a tombstone for 30 days, and the daemon prunes each day. The collections that only the hub writes get 400. An accepted op sends `{"type":"store","head":N}`.
 
 A member that is not home answers 409 `{"error":"<machine> is home","home":"<machine>"}`. When the group has cloud, each member answers 409 `{"error":"the cloud is home","cloud":{...}}`. `POST /v1/group/home` with this machine copies all records of the old home before it sets home. When the old home does not answer, the move goes on and the answer has `"offline":true`.
+
+### Events
+
+The daemon keeps the events table in `<data>/events.db` (SQLite, OVERSIRE-377). Each change in the work makes one row: agent sessions, turns, waits, prompts, git, CI, provider activity, automation. The schema is `contract/schema/event.json` and the kinds are in `contract/schema/event-kinds.json`. The home member holds the full table. Each other member keeps a local copy and sends its new rows to the home through an outbox, with backoff from 2 s to 5 min. Without a group, or with cloud, each daemon keeps its own rows.
+
+| Route | Access | What it does |
+|---|---|---|
+| `POST /v1/events` | member | Body `EventAppend` (at most 500 drafts). The answer is `{accepted, head}`. A repeat `id` is a no-op. A bad draft gets 400 and no row is written. |
+| `POST /v1/events/links` | member | Body `ItemLinks` (at most 2000). Sets the parent of each item and changes `parentItem` on the old rows. |
+| `GET /v1/items/{key}/events?tree=1&after=&kinds=&limit=` | member | The rows of an item in seq order. `tree=1` adds the rows of its sub-items. `kinds` is a comma list, and `git.*` takes a domain. `limit` is 1 to 1000, default 500. |
+| `GET /v1/events/rows?after=&limit=` | member | All rows in seq order, for a home move. |
+
+The daemon keeps the row and its summary. After 90 days it clears the payload and the text of a private row (`prompt.submitted`). When the daemon does not answer, a writer puts the drafts in `<data>/events.spool` (JSONL). The daemon reads the spool at the start and each 10 s. `POST /v1/group/home` also copies the rows of the old home.
+
+`GET /v1/events` (the ProviderEvent hints) keeps its last 2000 entries in the same file, so the feed lives through a restart.
 
 ### Leases
 
@@ -482,6 +497,7 @@ The layout:
 | `runtime` | The `Runtime` interface, the registry and the runtime routes (`API`). `runtime/orca` is the Orca driver for the local Orca. It starts, sends to and stops sessions through the `orca` backend of the visor. `runtime/oversire` is the agent-visor client. |
 | `digest` | The transcript readers that make a `SessionDigest`. |
 | `store` | The home store: the op log in SQLite and the `/v1/store/ops` routes. |
+| `events` | The events table: the store, the item links, the outbox to the home, the spool, the retention, the item resolver and the `/v1/events` routes. |
 | `lease` | The leases of the home member: the book in `leases.json` and the `/v1/leases` routes. |
 | `allow` | The allow list. |
 | `config` | The config folder, `config.json` and `state.json`. |

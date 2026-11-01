@@ -1,10 +1,13 @@
 // Package eventlog keeps the last ProviderEvents of the daemon in memory, for GET /v1/events.
-// The log starts again at seq 1 after a restart. A client then sees head < its cursor and reads from the start.
+// With a Keeper, the log also writes each event to disk and reads the end again at the start (OVERSIRE-379).
+// Without one, the log starts again at seq 1 after a restart. A client then sees head < its cursor and reads from the start.
 package eventlog
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"log/slog"
 	"sync"
 
 	"github.com/oversire/cli/wire"
@@ -17,6 +20,18 @@ type entry struct {
 	e   wire.ProviderEvent
 }
 
+// Hint is one kept event.
+type Hint struct {
+	Seq   int64
+	Event wire.ProviderEvent
+}
+
+// Keeper writes the hints to disk (events.Store).
+type Keeper interface {
+	SaveHint(ctx context.Context, seq int64, e wire.ProviderEvent) error
+	Hints(ctx context.Context, limit int) ([]Hint, error)
+}
+
 // Log is a ring of events with a seq that increases.
 type Log struct {
 	mu      sync.Mutex
@@ -27,6 +42,7 @@ type Log struct {
 	subs    map[int]chan struct{}
 	nextSub int
 	cap     int
+	keeper  Keeper
 }
 
 func New(capacity int) *Log {
@@ -36,6 +52,21 @@ func New(capacity int) *Log {
 	b := make([]byte, 8)
 	_, _ = rand.Read(b)
 	return &Log{cap: capacity, epoch: hex.EncodeToString(b), subs: map[int]chan struct{}{}}
+}
+
+// Keep reads the last hints of k into the log and writes each new event to k.
+func (l *Log) Keep(ctx context.Context, k Keeper) error {
+	hints, err := k.Hints(ctx, l.cap)
+	if err != nil {
+		return err
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.keeper = k
+	for _, h := range hints {
+		l.addLocked(entry{seq: h.Seq, e: h.Event})
+	}
+	return nil
 }
 
 // Epoch is a random id of this log. It changes at each start.
@@ -50,13 +81,12 @@ func (l *Log) Head() int64 {
 // Append adds the event and pokes each subscriber. A slow subscriber misses pokes, not events.
 func (l *Log) Append(e wire.ProviderEvent) {
 	l.mu.Lock()
-	l.head++
-	en := entry{seq: l.head, e: e}
-	if len(l.ring) < l.cap {
-		l.ring = append(l.ring, en)
-	} else {
-		l.ring[l.start] = en
-		l.start = (l.start + 1) % l.cap
+	en := entry{seq: l.head + 1, e: e}
+	l.addLocked(en)
+	if l.keeper != nil {
+		if err := l.keeper.SaveHint(context.Background(), en.seq, e); err != nil {
+			slog.Warn("eventlog: keep the hint", "err", err)
+		}
 	}
 	for _, c := range l.subs {
 		select {
@@ -97,6 +127,16 @@ func (l *Log) Page(after, limit int) wire.EventsPage {
 		p.Next = l.head
 	}
 	return p
+}
+
+func (l *Log) addLocked(en entry) {
+	l.head = en.seq
+	if len(l.ring) < l.cap {
+		l.ring = append(l.ring, en)
+	} else {
+		l.ring[l.start] = en
+		l.start = (l.start + 1) % l.cap
+	}
 }
 
 func (l *Log) at(i int) entry { return l.ring[(l.start+i)%len(l.ring)] }

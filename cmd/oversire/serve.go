@@ -12,6 +12,7 @@ import (
 	"github.com/oversire/cli/ask"
 	"github.com/oversire/cli/config"
 	"github.com/oversire/cli/eventlog"
+	"github.com/oversire/cli/events"
 	"github.com/oversire/cli/group"
 	"github.com/oversire/cli/hooks"
 	"github.com/oversire/cli/lease"
@@ -39,8 +40,15 @@ const spoolInterval = 10 * time.Second
 // runner runs the direct orders. reports gets the book and the direct orders as sinks of the oversire runtime.
 func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Registry, data string, hub func() string, runner *orders.Runner, reports *reports, updates *update.Loop, models agents.Lister, local *localSessions) ([]func(context.Context) error, error) {
 	serveCfg := cfg.ServeOrDefault()
-	events := eventlog.New(eventlog.DefaultCapacity)
-	book := sessions.NewBook(cfg.Machine(), filepath.Join(data, "sessions.json"), events, time.Now)
+	rows, err := events.Open(filepath.Join(data, "events.db"), time.Now)
+	if err != nil {
+		return nil, err
+	}
+	hints := eventlog.New(eventlog.DefaultCapacity)
+	if err := hints.Keep(ctx, rows); err != nil {
+		c.log.Warn("events: read the kept hints", "err", err)
+	}
+	book := sessions.NewBook(cfg.Machine(), filepath.Join(data, "sessions.json"), hints, time.Now)
 	runner.WithKeys(book)
 
 	exe, ok := orca.FindCLI()
@@ -59,7 +67,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	screen := orca.NewScreen(orcaCLI)
 	userHome, _ := os.UserHomeDir()
 	files := questions.NewFiles(filepath.Join(userHome, ".claude", "projects"), screen)
-	asks := questions.NewChannel(book, screen, files, events, time.Now)
+	asks := questions.NewChannel(book, screen, files, hints, time.Now)
 	if hasOrca {
 		go orcaCLI.RetireWorkers(ctx, filepath.Join(data, "workers.json"), c.log)
 	}
@@ -110,6 +118,15 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	}
 	storeRoutes := homestore.NewRoutes(oplog, store, func(m any) { srv.Notify(false, m) }, c.log)
 	syncer.WithHomeTaker(storeRoutes)
+	eventRoutes := events.NewRoutes(rows, func(m any) { srv.Notify(false, m) }, c.log)
+	syncer.WithHomeTaker(eventRoutes)
+	outbox := events.NewOutbox(rows, store, nil, c.log)
+	eventSpool := events.NewSpool(events.SpoolPath(data))
+	if n, err := eventSpool.Drain(ctx, rows); err != nil {
+		c.log.Warn("events: spool", "err", err)
+	} else if n > 0 {
+		c.log.Info("events: read the spool", "rows", n)
+	}
 
 	info := func() wire.DaemonInfo {
 		d := wire.DaemonInfo{Machine: cfg.Machine(), Version: version, Contract: wire.DaemonContract, Roles: cfg.Roles, Runtimes: reg.IDs(), Harnesses: installer.Status()}
@@ -117,7 +134,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 		d.Update = updates.Status()
 		return d
 	}
-	srv = server.NewServer(serveCfg, info, store, events, book, ingest)
+	srv = server.NewServer(serveCfg, info, store, hints, book, ingest)
 	srv.Log = c.log
 	srv.Health = func() server.HealthSources {
 		return server.HealthSources{Hooks: hookHealth(installer.Status()), Orca: watcher.Health(), Hub: hub()}
@@ -125,6 +142,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	srv.Handle(joins.Routes()...)
 	srv.Handle(syncer.Routes()...)
 	srv.Handle(storeRoutes.Routes()...)
+	srv.Handle(eventRoutes.Routes()...)
 	leases := lease.NewBook(filepath.Join(data, "leases.json"), time.Now)
 	leases.OnChange = func(l wire.Lease) { srv.Notify(false, map[string]any{"type": "lease", "lease": l}) }
 	srv.Handle(lease.NewRoutes(leases, store).Routes()...)
@@ -174,10 +192,14 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 				if err := ingest.DrainSpool(spool); err != nil {
 					c.log.Warn("hook spool", "err", err)
 				}
+				if _, err := eventSpool.Drain(ctx, rows); err != nil {
+					c.log.Warn("events: spool", "err", err)
+				}
 			}
 		}
 	}
-	return []func(context.Context) error{srv.Run, book.Run, watcher.Run, syncer.Run, asks.Run, drain, c.pruneStore(oplog), runbooks.Run, reviews.Run}, nil
+	return []func(context.Context) error{srv.Run, book.Run, watcher.Run, syncer.Run, asks.Run, drain, c.pruneStore(oplog), runbooks.Run, reviews.Run,
+		outbox.Run, func(ctx context.Context) error { return rows.RunRetention(ctx, c.log) }}, nil
 }
 
 // hookHealth is "live" when a harness has our hooks, else "off".
