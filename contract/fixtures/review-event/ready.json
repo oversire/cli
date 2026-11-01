@@ -1,0 +1,7 @@
+{
+  "type": "review",
+  "event": "review.ready",
+  "key": "SLING-170",
+  "kind": "code",
+  "machine": "mini"
+}

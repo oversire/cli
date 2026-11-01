@@ -1,0 +1,94 @@
+{
+  "reviews": [
+    {
+      "key": "SLING-170",
+      "kind": "code",
+      "title": "ClickHouse TLS host check through a tunnel",
+      "machine": "mini",
+      "state": "ready",
+      "round": 1,
+      "pending": 1,
+      "unanswered": 0,
+      "root": "/Users/fritz/Projects/sling-workspace",
+      "group": ".wt/sling-170",
+      "repos": [
+        {
+          "name": "sling-cli",
+          "branch": "sling-170",
+          "base": "v1.6.6",
+          "ahead": 2,
+          "behind": 0,
+          "added": 71,
+          "removed": 0,
+          "files": 3,
+          "dirty": false,
+          "merge": "fastForward"
+        }
+      ],
+      "subitems": [],
+      "session": { "id": "s-1a2b3c4d", "state": "idle", "harness": "claude", "profile": "claude-max", "canSend": true },
+      "note": "Round 1 fixed, test for the BaseConn path added",
+      "readyAt": "2026-11-01T14:10:00Z",
+      "updatedAt": "2026-11-01T14:12:00Z"
+    },
+    {
+      "key": "OVERSIRE-366",
+      "kind": "code",
+      "machine": "mini",
+      "state": "conflict",
+      "round": 0,
+      "pending": 0,
+      "unanswered": 0,
+      "root": "/Users/fritz/Projects/oversire-workspace",
+      "group": ".wt/oversire-366",
+      "repos": [
+        {
+          "name": "cli",
+          "branch": "oversire-366",
+          "base": "main",
+          "ahead": 3,
+          "behind": 2,
+          "added": 120,
+          "removed": 8,
+          "files": 4,
+          "dirty": false,
+          "merge": "conflict",
+          "conflictFiles": ["review/engine.go"]
+        },
+        {
+          "name": "oversire",
+          "branch": "oversire-366",
+          "base": "main",
+          "ahead": 1,
+          "behind": 1,
+          "added": 12,
+          "removed": 0,
+          "files": 1,
+          "dirty": true,
+          "merge": "rebase"
+        }
+      ],
+      "subitems": ["OVERSIRE-367", "OVERSIRE-368"],
+      "session": { "state": "none", "canSend": false },
+      "updatedAt": "2026-11-01T13:00:00Z"
+    },
+    {
+      "key": "OVERSIRE-371",
+      "kind": "plan",
+      "title": "Review gate: Work › Review tab",
+      "machine": "mini",
+      "state": "waiting",
+      "round": 1,
+      "pending": 0,
+      "unanswered": 1,
+      "root": "/Users/fritz/Projects/oversire-workspace",
+      "repos": [],
+      "subitems": [],
+      "session": { "id": "s-9f8e7d6c", "state": "working", "harness": "claude", "canSend": true },
+      "updatedAt": "2026-11-01T12:00:00Z"
+    }
+  ],
+  "notPushed": [
+    { "root": "/Users/fritz/Projects/oversire-workspace", "repo": "oversire", "base": "main", "ahead": 7 }
+  ]
+}

@@ -1,0 +1,386 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oversire.dev/contract/review.json",
+  "title": "OverSire reviews",
+  "description": "The review gate (OVERSIRE-365). An agent ends a task with commits in its worktree group .wt/<key>, or with a plan. The daemon of the session machine finds each review, computes the diffs, keeps the pending comments and the rounds, sends a submitted batch to the session, and merges locally. It never pushes. Routes: /v1/reviews. Dates are ISO 8601 UTC.",
+  "x-oversire-schema": 1,
+  "$defs": {
+    "Date": { "type": "string", "format": "date-time" },
+    "Key": { "description": "The item key in upper case, for example SLING-170. The group of a code review is .wt/<key in lower case>.", "type": "string", "pattern": "^[A-Z0-9][A-Z0-9_-]*$", "minLength": 1, "maxLength": 60 },
+    "Kind": { "description": "code: the commits of a worktree group. plan: the plan of a Plan session.", "enum": ["code", "plan"] },
+    "ReviewState": {
+      "description": "ready: your turn. waiting: a session of the key works. conflict: a merge or a rebase stopped on a conflict. merged: the merge is done.",
+      "enum": ["ready", "waiting", "conflict", "merged"]
+    },
+    "MergeMode": {
+      "description": "fastForward: the base did not move. rebase: the base moved and git merge-tree finds no conflict. conflict: git merge-tree finds a conflict.",
+      "enum": ["fastForward", "rebase", "conflict"]
+    },
+    "SessionState": {
+      "description": "The session of the key. idle: it waits for input, a submit goes now. working: a submit waits for the end of the turn. ended: a submit starts a new session in the same place. none: the daemon knows no session of the key.",
+      "enum": ["idle", "working", "ended", "none"]
+    },
+    "ReviewSession": {
+      "type": "object",
+      "properties": {
+        "id": { "description": "The DaemonSession id.", "type": "string", "minLength": 1 },
+        "state": { "$ref": "#/$defs/SessionState" },
+        "harness": { "type": "string" },
+        "profile": { "description": "The OverSire agent name of the session.", "type": "string" },
+        "canSend": { "description": "The daemon can type a prompt into the session.", "type": "boolean" }
+      },
+      "required": ["state", "canSend"],
+      "additionalProperties": false
+    },
+    "ReviewRepo": {
+      "description": "One repo of a group that has a worktree. A symlink in the group is not a ReviewRepo.",
+      "type": "object",
+      "properties": {
+        "name": { "description": "The folder name in the root, for example cli.", "type": "string", "minLength": 1 },
+        "branch": { "description": "The branch of the worktree, the key in lower case.", "type": "string", "minLength": 1 },
+        "base": { "description": "The branch of the primary checkout.", "type": "string", "minLength": 1 },
+        "ahead": { "description": "Commits of branch that base does not have.", "type": "integer", "minimum": 0 },
+        "behind": { "description": "Commits of base that branch does not have.", "type": "integer", "minimum": 0 },
+        "added": { "type": "integer", "minimum": 0 },
+        "removed": { "type": "integer", "minimum": 0 },
+        "files": { "type": "integer", "minimum": 0 },
+        "dirty": { "description": "The worktree has uncommitted or untracked files.", "type": "boolean" },
+        "merge": { "$ref": "#/$defs/MergeMode" },
+        "conflictFiles": { "type": "array", "items": { "type": "string" } },
+        "commits": { "description": "The commits of branch that base does not have, newest first, at most 50.", "type": "array", "items": { "$ref": "#/$defs/ReviewCommit" } }
+      },
+      "required": ["name", "branch", "base", "ahead", "behind", "added", "removed", "files", "dirty", "merge"],
+      "additionalProperties": false
+    },
+    "ReviewCommit": {
+      "type": "object",
+      "properties": {
+        "sha": { "description": "The short sha.", "type": "string", "minLength": 4 },
+        "subject": { "type": "string" },
+        "items": { "description": "The keys of the Item: lines of the message.", "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["sha", "subject"],
+      "additionalProperties": false
+    },
+    "ReviewSummary": {
+      "description": "One row of Work › Review.",
+      "type": "object",
+      "properties": {
+        "key": { "$ref": "#/$defs/Key" },
+        "kind": { "$ref": "#/$defs/Kind" },
+        "title": { "description": "The title of the plan, or the subject of the first commit. The app shows the tracker title when it has one.", "type": "string" },
+        "machine": { "description": "The machine of the daemon.", "type": "string", "minLength": 1 },
+        "state": { "$ref": "#/$defs/ReviewState" },
+        "round": { "description": "The number of submitted rounds.", "type": "integer", "minimum": 0 },
+        "pending": { "description": "The pending comments, not submitted yet.", "type": "integer", "minimum": 0 },
+        "unanswered": { "description": "Submitted comments with no reply.", "type": "integer", "minimum": 0 },
+        "root": { "description": "The absolute path of the workspace root.", "type": "string", "minLength": 1 },
+        "group": { "description": "The group folder relative to root, for example .wt/sling-170. Absent for a plan.", "type": "string" },
+        "repos": { "type": "array", "items": { "$ref": "#/$defs/ReviewRepo" } },
+        "subitems": { "description": "The keys of the sub-items, from the Item: lines of the commits.", "type": "array", "items": { "type": "string" } },
+        "session": { "$ref": "#/$defs/ReviewSession" },
+        "note": { "description": "The note of the last hand-off (oversire review ready --note).", "type": "string" },
+        "readyAt": { "$ref": "#/$defs/Date" },
+        "updatedAt": { "$ref": "#/$defs/Date" }
+      },
+      "required": ["key", "kind", "machine", "state", "round", "pending", "unanswered", "root", "repos", "subitems", "updatedAt"],
+      "additionalProperties": false
+    },
+    "NotPushed": {
+      "description": "A base branch with local commits that its upstream does not have.",
+      "type": "object",
+      "properties": {
+        "root": { "type": "string", "minLength": 1 },
+        "repo": { "type": "string", "minLength": 1 },
+        "base": { "type": "string", "minLength": 1 },
+        "ahead": { "type": "integer", "minimum": 1 }
+      },
+      "required": ["root", "repo", "base", "ahead"],
+      "additionalProperties": false
+    },
+    "ReviewsPage": {
+      "description": "The answer of GET /v1/reviews. ?kind=code|plan filters.",
+      "type": "object",
+      "properties": {
+        "reviews": { "type": "array", "items": { "$ref": "#/$defs/ReviewSummary" } },
+        "notPushed": { "type": "array", "items": { "$ref": "#/$defs/NotPushed" } }
+      },
+      "required": ["reviews", "notPushed"],
+      "additionalProperties": false
+    },
+    "FileStatus": { "description": "A added, M modified, D deleted, R renamed.", "enum": ["A", "M", "D", "R"] },
+    "ReviewFile": {
+      "type": "object",
+      "properties": {
+        "repo": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 },
+        "oldPath": { "description": "The old path of a rename.", "type": "string", "minLength": 1 },
+        "status": { "$ref": "#/$defs/FileStatus" },
+        "added": { "type": "integer", "minimum": 0 },
+        "removed": { "type": "integer", "minimum": 0 },
+        "binary": { "type": "boolean" },
+        "untracked": { "description": "The file is not committed. The merge does not take it.", "type": "boolean" },
+        "viewed": { "type": "boolean" }
+      },
+      "required": ["repo", "path", "status", "added", "removed", "binary", "viewed"],
+      "additionalProperties": false
+    },
+    "DiffLine": {
+      "type": "object",
+      "properties": {
+        "kind": { "enum": ["ctx", "add", "del"] },
+        "old": { "description": "The line number on the base side. Absent for add.", "type": "integer", "minimum": 1 },
+        "new": { "description": "The line number on the branch side. Absent for del.", "type": "integer", "minimum": 1 },
+        "text": { "description": "The line without the +, - or space mark and without the line end.", "type": "string" }
+      },
+      "required": ["kind", "text"],
+      "additionalProperties": false
+    },
+    "DiffHunk": {
+      "type": "object",
+      "properties": {
+        "oldStart": { "type": "integer", "minimum": 0 },
+        "oldLines": { "type": "integer", "minimum": 0 },
+        "newStart": { "type": "integer", "minimum": 0 },
+        "newLines": { "type": "integer", "minimum": 0 },
+        "header": { "description": "The text after the second @@, often the enclosing function.", "type": "string" },
+        "lines": { "type": "array", "items": { "$ref": "#/$defs/DiffLine" } }
+      },
+      "required": ["oldStart", "oldLines", "newStart", "newLines", "header", "lines"],
+      "additionalProperties": false
+    },
+    "FileDiff": {
+      "description": "The answer of GET /v1/reviews/{key}/diff?repo=&path=. git diff --unified=3 base...branch, or the full text of an untracked file.",
+      "type": "object",
+      "properties": {
+        "repo": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 },
+        "oldPath": { "type": "string", "minLength": 1 },
+        "status": { "$ref": "#/$defs/FileStatus" },
+        "binary": { "type": "boolean" },
+        "truncated": { "description": "The diff has more than 3000 lines. hunks holds the first 3000.", "type": "boolean" },
+        "hunks": { "type": "array", "items": { "$ref": "#/$defs/DiffHunk" } }
+      },
+      "required": ["repo", "path", "status", "binary", "truncated", "hunks"],
+      "additionalProperties": false
+    },
+    "CodeAnchor": {
+      "description": "A line, or the lines from..line, of one file. side old is a line of the base.",
+      "type": "object",
+      "properties": {
+        "repo": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 },
+        "line": { "type": "integer", "minimum": 1 },
+        "from": { "type": "integer", "minimum": 1 },
+        "side": { "enum": ["old", "new"] }
+      },
+      "required": ["repo", "path", "line"],
+      "additionalProperties": false
+    },
+    "PlanAnchor": {
+      "description": "One block of the plan.",
+      "type": "object",
+      "properties": {
+        "block": { "type": "string", "minLength": 1 }
+      },
+      "required": ["block"],
+      "additionalProperties": false
+    },
+    "Anchor": { "oneOf": [{ "$ref": "#/$defs/CodeAnchor" }, { "$ref": "#/$defs/PlanAnchor" }] },
+    "CommentState": {
+      "description": "pending: in the batch, not sent. submitted: sent in a round. answered: the agent replied.",
+      "enum": ["pending", "submitted", "answered"]
+    },
+    "ReviewComment": {
+      "type": "object",
+      "properties": {
+        "id": { "description": "c_ and 8 hex digits.", "type": "string", "pattern": "^c_[0-9a-f]{8}$" },
+        "key": { "$ref": "#/$defs/Key" },
+        "round": { "description": "The round of the comment. A pending comment has the next round.", "type": "integer", "minimum": 1 },
+        "state": { "$ref": "#/$defs/CommentState" },
+        "anchor": { "$ref": "#/$defs/Anchor" },
+        "excerpt": { "description": "The code lines or the block heading of the anchor, kept when the comment was made.", "type": "string" },
+        "text": { "type": "string", "minLength": 1, "maxLength": 8000 },
+        "reply": { "description": "The answer of the agent (oversire review reply).", "type": "string" },
+        "createdAt": { "$ref": "#/$defs/Date" },
+        "updatedAt": { "$ref": "#/$defs/Date" },
+        "answeredAt": { "$ref": "#/$defs/Date" }
+      },
+      "required": ["id", "key", "round", "state", "anchor", "text", "createdAt"],
+      "additionalProperties": false
+    },
+    "Verdict": { "enum": ["requestChanges", "approve"] },
+    "Delivery": {
+      "description": "sent: typed into the idle session. queued: the session works, the prompt goes at the end of its turn. newSession: a new session in the same place. none: no prompt (approve).",
+      "enum": ["sent", "queued", "newSession", "none"]
+    },
+    "ReviewRound": {
+      "type": "object",
+      "properties": {
+        "n": { "type": "integer", "minimum": 1 },
+        "verdict": { "$ref": "#/$defs/Verdict" },
+        "summary": { "type": "string" },
+        "count": { "description": "The comments of the round.", "type": "integer", "minimum": 0 },
+        "submittedAt": { "$ref": "#/$defs/Date" },
+        "delivery": { "$ref": "#/$defs/Delivery" },
+        "session": { "description": "The DaemonSession id that got the prompt.", "type": "string" },
+        "deliveredAt": { "$ref": "#/$defs/Date" },
+        "error": { "description": "Why the prompt did not go.", "type": "string" },
+        "answeredAt": { "description": "The agent handed off again after the round.", "$ref": "#/$defs/Date" }
+      },
+      "required": ["n", "verdict", "count", "submittedAt", "delivery"],
+      "additionalProperties": false
+    },
+    "PlanBlock": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9-]+$", "minLength": 1 },
+        "heading": { "type": "string" },
+        "markdown": { "type": "string" }
+      },
+      "required": ["id", "heading", "markdown"],
+      "additionalProperties": false
+    },
+    "PlanDoc": {
+      "description": "The plan of a Plan session, split at each ## heading. The body of PUT /v1/reviews/{key}/plan (loopback only).",
+      "type": "object",
+      "properties": {
+        "key": { "$ref": "#/$defs/Key" },
+        "version": { "description": "1 for the first plan. Each new plan of the key adds 1.", "type": "integer", "minimum": 1 },
+        "title": { "type": "string" },
+        "root": { "description": "The folder of the Plan session.", "type": "string" },
+        "blocks": { "type": "array", "items": { "$ref": "#/$defs/PlanBlock" }, "minItems": 1 },
+        "subitems": { "description": "The sub-items that the plan made, in order.", "type": "array", "items": { "$ref": "#/$defs/PlanSubitem" } }
+      },
+      "required": ["key", "version", "blocks"],
+      "additionalProperties": false
+    },
+    "PlanSubitem": {
+      "type": "object",
+      "properties": {
+        "key": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 }
+      },
+      "required": ["title"],
+      "additionalProperties": false
+    },
+    "ReviewDetail": {
+      "description": "The answer of GET /v1/reviews/{key}. ?kind=plan for the plan review of a key that also has code.",
+      "type": "object",
+      "properties": {
+        "summary": { "$ref": "#/$defs/ReviewSummary" },
+        "files": { "type": "array", "items": { "$ref": "#/$defs/ReviewFile" } },
+        "comments": { "type": "array", "items": { "$ref": "#/$defs/ReviewComment" } },
+        "rounds": { "type": "array", "items": { "$ref": "#/$defs/ReviewRound" } },
+        "plan": { "$ref": "#/$defs/PlanDoc" }
+      },
+      "required": ["summary", "files", "comments", "rounds"],
+      "additionalProperties": false
+    },
+    "CommentDraft": {
+      "description": "The body of POST /v1/reviews/{key}/comments. HTTP 201 gives the ReviewComment.",
+      "type": "object",
+      "properties": {
+        "kind": { "$ref": "#/$defs/Kind" },
+        "anchor": { "$ref": "#/$defs/Anchor" },
+        "text": { "type": "string", "minLength": 1, "maxLength": 8000 }
+      },
+      "required": ["anchor", "text"],
+      "additionalProperties": false
+    },
+    "CommentEdit": {
+      "description": "The body of PATCH /v1/reviews/{key}/comments/{id}. HTTP 409 for a comment that is not pending.",
+      "type": "object",
+      "properties": { "text": { "type": "string", "minLength": 1, "maxLength": 8000 } },
+      "required": ["text"],
+      "additionalProperties": false
+    },
+    "CommentReply": {
+      "description": "The body of POST /v1/reviews/{key}/comments/{id}/reply (loopback only): the answer of the agent.",
+      "type": "object",
+      "properties": { "text": { "type": "string", "minLength": 1, "maxLength": 4000 } },
+      "required": ["text"],
+      "additionalProperties": false
+    },
+    "ViewedMark": {
+      "description": "The body of PUT /v1/reviews/{key}/viewed.",
+      "type": "object",
+      "properties": {
+        "repo": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 },
+        "viewed": { "type": "boolean" }
+      },
+      "required": ["repo", "path", "viewed"],
+      "additionalProperties": false
+    },
+    "SubmitReview": {
+      "description": "The body of POST /v1/reviews/{key}/submit. All pending comments become one round. The answer is the ReviewRound.",
+      "type": "object",
+      "properties": {
+        "kind": { "$ref": "#/$defs/Kind" },
+        "verdict": { "$ref": "#/$defs/Verdict" },
+        "summary": { "type": "string", "maxLength": 8000 },
+        "postToTracker": { "description": "The app posts the round as one tracker comment. The daemon has no tracker token.", "type": "boolean" },
+        "launch": { "description": "The agent for a new session when the session ended. Absent: the agent of the last session.", "$ref": "runbook.json#/$defs/AgentLaunch" }
+      },
+      "required": ["verdict", "postToTracker"],
+      "additionalProperties": false
+    },
+    "ReviewReady": {
+      "description": "The body of POST /v1/reviews/{key}/ready (loopback only): the agent hands off.",
+      "type": "object",
+      "properties": {
+        "kind": { "$ref": "#/$defs/Kind" },
+        "root": { "description": "The workspace root, when the daemon cannot find the group from its repos.", "type": "string" },
+        "note": { "type": "string", "maxLength": 300 }
+      },
+      "additionalProperties": false
+    },
+    "MergeRequest": {
+      "description": "The body of POST /v1/reviews/{key}/merge. The app sets Done on the item and its sub-items. HTTP 409 when a check fails.",
+      "type": "object",
+      "properties": {
+        "removeGroup": { "description": "Remove the worktrees, the branches and the links of the group after all repos merge.", "type": "boolean" }
+      },
+      "required": ["removeGroup"],
+      "additionalProperties": false
+    },
+    "RepoMerge": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "result": { "description": "skipped: the repo has no commits to merge, or an earlier repo failed.", "enum": ["merged", "rebased", "conflict", "skipped"] },
+        "head": { "description": "The base head after the merge.", "type": "string" },
+        "conflictFiles": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["name", "result"],
+      "additionalProperties": false
+    },
+    "MergeResult": {
+      "description": "All or none: after a conflict each base is back at its head from before the merge.",
+      "type": "object",
+      "properties": {
+        "merged": { "type": "boolean" },
+        "repos": { "type": "array", "items": { "$ref": "#/$defs/RepoMerge" } },
+        "removed": { "description": "The group is gone.", "type": "boolean" },
+        "error": { "type": "string" },
+        "notPushed": { "type": "array", "items": { "$ref": "#/$defs/NotPushed" } }
+      },
+      "required": ["merged", "repos", "removed", "notPushed"],
+      "additionalProperties": false
+    },
+    "ReviewEvent": {
+      "description": "The WebSocket frame {type: review} of a change. A hint: the app gets the data with GET.",
+      "type": "object",
+      "properties": {
+        "type": { "const": "review" },
+        "event": { "enum": ["review.ready", "review.changed", "review.merged", "review.conflict"] },
+        "key": { "$ref": "#/$defs/Key" },
+        "kind": { "$ref": "#/$defs/Kind" },
+        "machine": { "type": "string" }
+      },
+      "required": ["type", "event", "key", "kind"],
+      "additionalProperties": false
+    }
+  }
+}

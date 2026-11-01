@@ -1,0 +1,13 @@
+{
+  "merged": true,
+  "repos": [
+    { "name": "oversire", "result": "merged", "head": "15b901f" },
+    { "name": "cli", "result": "rebased", "head": "a1b2c3d" },
+    { "name": "cloud", "result": "skipped" }
+  ],
+  "removed": true,
+  "notPushed": [
+    { "root": "/Users/fritz/Projects/oversire-workspace", "repo": "oversire", "base": "main", "ahead": 3 },
+    { "root": "/Users/fritz/Projects/oversire-workspace", "repo": "cli", "base": "main", "ahead": 2 }
+  ]
+}

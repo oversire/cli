@@ -1,0 +1,47 @@
+{
+  "summary": {
+    "key": "OVERSIRE-371",
+    "kind": "plan",
+    "title": "Review gate: Work › Review tab",
+    "machine": "mini",
+    "state": "ready",
+    "round": 1,
+    "pending": 1,
+    "unanswered": 0,
+    "root": "/Users/fritz/Projects/oversire-workspace",
+    "repos": [],
+    "subitems": [],
+    "session": { "id": "s-9f8e7d6c", "state": "idle", "canSend": true },
+    "updatedAt": "2026-11-01T12:00:00Z"
+  },
+  "files": [],
+  "comments": [
+    {
+      "id": "c_11223344",
+      "key": "OVERSIRE-371",
+      "round": 2,
+      "state": "pending",
+      "anchor": { "block": "tests" },
+      "excerpt": "Test plan",
+      "text": "Add a test with 2 repos where the second merge fails.",
+      "createdAt": "2026-11-01T12:30:00Z"
+    }
+  ],
+  "rounds": [
+    { "n": 1, "verdict": "requestChanges", "count": 1, "submittedAt": "2026-11-01T10:00:00Z", "delivery": "queued", "session": "s-9f8e7d6c", "deliveredAt": "2026-11-01T10:04:00Z", "answeredAt": "2026-11-01T11:00:00Z" }
+  ],
+  "plan": {
+    "key": "OVERSIRE-371",
+    "version": 2,
+    "title": "Review gate: Work › Review tab",
+    "root": "/Users/fritz/Projects/oversire-workspace",
+    "blocks": [
+      { "id": "goal", "heading": "Goal", "markdown": "An agent ends a task with commits and does not merge." },
+      { "id": "tests", "heading": "Test plan", "markdown": "- Contract fixtures.\n- Git fixtures." }
+    ],
+    "subitems": [
+      { "key": "OVERSIRE-372", "title": "Contract: review.json" },
+      { "title": "Review engine" }
+    ]
+  }
+}

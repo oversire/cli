@@ -1,0 +1,13 @@
+{
+  "key": "OVERSIRE-371",
+  "version": 1,
+  "title": "Review gate: Work › Review tab",
+  "root": "/Users/fritz/Projects/oversire-workspace",
+  "blocks": [
+    { "id": "goal", "heading": "Goal", "markdown": "An agent ends a task with commits and does not merge." },
+    { "id": "files-and-interfaces", "heading": "Files and interfaces", "markdown": "- `cli/review/engine.go`" }
+  ],
+  "subitems": [
+    { "title": "Contract" }
+  ]
+}

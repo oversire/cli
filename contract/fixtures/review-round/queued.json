@@ -1,0 +1,9 @@
+{
+  "n": 2,
+  "verdict": "requestChanges",
+  "summary": "Close the tunnel.",
+  "count": 1,
+  "submittedAt": "2026-11-01T14:30:00Z",
+  "delivery": "queued",
+  "session": "s-1a2b3c4d"
+}

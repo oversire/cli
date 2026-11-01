@@ -1,0 +1,25 @@
+{
+  "repo": "sling-cli",
+  "path": "core/dbio/database/database.go",
+  "status": "M",
+  "binary": false,
+  "truncated": false,
+  "hunks": [
+    {
+      "oldStart": 795,
+      "oldLines": 4,
+      "newStart": 795,
+      "newLines": 6,
+      "header": "func (conn *BaseConn) Connect(timeOut ...int) (err error) {",
+      "lines": [
+        { "kind": "ctx", "old": 795, "new": 795, "text": "\t\t\tif conn.Type == dbio.TypeDbPostgres {" },
+        { "kind": "ctx", "old": 796, "new": 796, "text": "\t\t\t\tdb, err = openPgx(connURL, conn.tlsHost)" },
+        { "kind": "add", "new": 797, "text": "\t\t\t} else if conn.Type == dbio.TypeDbClickhouse && conn.tlsHost != \"\" {" },
+        { "kind": "add", "new": 798, "text": "\t\t\t\tdb, err = openClickhouseTunnel(connURL, conn.tlsHost)" },
+        { "kind": "ctx", "old": 797, "new": 799, "text": "\t\t\t} else {" },
+        { "kind": "del", "old": 798, "text": "\t\t\t\tdb, err = sqlx.Open(driver, url)" },
+        { "kind": "add", "new": 800, "text": "\t\t\t\tdb, err = sqlx.Open(driver, connURL)" }
+      ]
+    }
+  ]
+}

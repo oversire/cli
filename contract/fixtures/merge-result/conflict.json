@@ -1,0 +1,10 @@
+{
+  "merged": false,
+  "repos": [
+    { "name": "oversire", "result": "merged", "head": "15b901f" },
+    { "name": "cli", "result": "conflict", "conflictFiles": ["review/engine.go"] }
+  ],
+  "removed": false,
+  "error": "cli: the rebase on main has a conflict. Nothing merged.",
+  "notPushed": []
+}

@@ -1,0 +1,5 @@
+{
+  "kind": "code",
+  "anchor": { "repo": "cli", "path": "review/merge.go", "line": 42, "from": 40 },
+  "text": "Abort the rebase here too."
+}

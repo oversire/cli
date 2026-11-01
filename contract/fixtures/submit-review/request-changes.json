@@ -1,0 +1,7 @@
+{
+  "kind": "code",
+  "verdict": "requestChanges",
+  "summary": "Two small fixes, then it is good.",
+  "postToTracker": true,
+  "launch": { "cli": "claude", "model": "opus", "profile": "claude-max" }
+}
