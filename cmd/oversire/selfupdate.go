@@ -46,7 +46,7 @@ func (c *cli) update(ctx context.Context) error {
 	case s.Installed != "":
 		fmt.Fprintf(c.out, "Updated to %s. The daemon restarts.\n", s.Installed)
 	default:
-		fmt.Fprintf(c.out, "oversire %s is the latest.\n", version)
+		fmt.Fprintf(c.out, "oversire %s is the latest.\n", cmp.Or(s.Latest, version))
 	}
 	return nil
 }
