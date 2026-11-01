@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://oversire.dev/contract/event.json",
   "title": "OverSire events",
-  "description": "One row of the events table (OVERSIRE-377). Each change in the work makes one row: agent sessions, turns, waits, your prompts and decisions, git, CI, provider activity, automation. The home daemon holds the full table. Each other daemon keeps a local copy and sends its rows to the home. The kinds are in event-kinds.json. Routes: POST /v1/events, POST /v1/events/links, GET /v1/items/{key}/events, GET /v1/events/stream. The SQL columns use snake_case (seen_at, parent_item, actor_type, on_behalf). Dates are ISO 8601 UTC.",
+  "description": "One row of the events table (OVERSIRE-377). Each change in the work makes one row: agent sessions, turns, waits, your prompts and decisions, git, CI, provider activity, automation. The home daemon holds the full table. Each other daemon keeps a local copy and sends its rows to the home. The kinds are in event-kinds.json. Routes: POST /v1/events, POST /v1/events/links, GET /v1/items/{key}/events, GET /v1/events/rows. The live tail is the frame {type: event} on the WebSocket of the daemon. The SQL columns use snake_case (seen_at, parent_item, actor_type, on_behalf). Dates are ISO 8601 UTC.",
   "x-oversire-schema": 1,
   "$defs": {
     "Date": { "type": "string", "format": "date-time" },
@@ -67,7 +67,7 @@
       "additionalProperties": false
     },
     "EventQuery": {
-      "description": "The query of GET /v1/items/{key}/events and GET /v1/events/rows, as URL parameters.",
+      "description": "The query of GET /v1/items/{key}/events, as URL parameters. GET /v1/events/rows takes only after and limit.",
       "type": "object",
       "properties": {
         "item": { "$ref": "#/$defs/Key" },
@@ -107,6 +107,16 @@
         "head": { "type": "integer", "minimum": 0 }
       },
       "required": ["accepted", "head"],
+      "additionalProperties": false
+    },
+    "EventFrame": {
+      "description": "The WebSocket frame {type: event} of the daemon: one new row. The home daemon sends each row; another daemon sends its own rows.",
+      "type": "object",
+      "properties": {
+        "type": { "const": "event" },
+        "event": { "$ref": "#/$defs/Event" }
+      },
+      "required": ["type", "event"],
       "additionalProperties": false
     },
     "ItemLink": {

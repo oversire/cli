@@ -12,6 +12,7 @@ func TestEventFixtures(t *testing.T) {
 	roundTrip[EventAppend](t, "event-append")
 	roundTrip[EventAppendResult](t, "event-append-result")
 	roundTrip[ItemLinks](t, "item-links")
+	roundTrip[EventFrame](t, "event-frame")
 }
 
 func TestEventCatalogMatchesTheFixtures(t *testing.T) {

@@ -110,6 +110,15 @@ type EventAppendResult struct {
 	Head     int64 `json:"head"`
 }
 
+// EventFrame is the WebSocket frame {type: event}: one new row.
+type EventFrame struct {
+	Type  string `json:"type"`
+	Event Event  `json:"event"`
+}
+
+// NewEventFrame makes the frame of a row.
+func NewEventFrame(e Event) EventFrame { return EventFrame{Type: "event", Event: e} }
+
 // ItemLink is the parent of an item, from the tracker. An empty parent: no parent now.
 type ItemLink struct {
 	Item   string `json:"item"`
