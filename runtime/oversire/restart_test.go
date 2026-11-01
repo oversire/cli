@@ -120,3 +120,35 @@ func TestRestartDuringTurn(t *testing.T) {
 	}
 	rec.wait(t, ref.ID, wire.SessionDone)
 }
+
+// TestBootAfterOtherSessions boots when the last events of the visor belong to a session of
+// another backend. The filtered replay never gets to the visor head.
+func TestBootAfterOtherSessions(t *testing.T) {
+	f := setup(t, chat, Options{})
+	ctx := context.Background()
+	ref := f.launch(t, "A-1", runtime.Order{ID: "o1"})
+	f.rec.wait(t, ref.ID, wire.SessionWaitingInput)
+	other, err := f.visor.Start(ctx, agentvisor.StartSpec{Harness: "fake", WorkingDir: t.TempDir(), Prompt: "hi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool {
+		s, err := f.visor.Session(ctx, other.ID)
+		return err == nil && s.State == agentvisor.StateIdle
+	})
+	f.rt.Close(ctx)
+
+	rec := &recorder{}
+	rt := New(Options{Runner: "r1", DataDir: f.data, Fake: true}, f.visor, proc.Local{}, rec)
+	t.Cleanup(func() { rt.Close(context.Background()) })
+	began := time.Now()
+	if err := rt.Boot(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if took := time.Since(began); took >= replayQuiet {
+		t.Fatalf("boot took %s", took)
+	}
+	if s, ok := rec.latest(ref.ID); !ok || s.State != wire.SessionWaitingInput {
+		t.Fatalf("after boot %#v", s)
+	}
+}

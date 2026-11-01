@@ -42,6 +42,8 @@ const (
 	keepLines = 1000
 	maxText   = 500
 	forget    = 24 * time.Hour
+	// replayQuiet ends a replay that gets no event for this time.
+	replayQuiet = 2 * time.Second
 )
 
 // The labels that OverSire puts on a visor session.
@@ -122,6 +124,7 @@ type Runtime struct {
 	mu       sync.Mutex
 	sessions map[string]*session // by OverSire id
 	byVisor  map[string]*session // by visor session id
+	others   map[string]bool     // visor session ids of other backends
 	live     bool
 	cancel   context.CancelFunc
 	done     chan struct{}
@@ -142,6 +145,7 @@ func New(opts Options, host Host, git Runner, report Reporter) *Runtime {
 		slots:    NewSlots(opts.Slots),
 		sessions: map[string]*session{},
 		byVisor:  map[string]*session{},
+		others:   map[string]bool{},
 	}
 }
 
@@ -169,7 +173,8 @@ func (rt *Runtime) Boot(ctx context.Context) error {
 	}
 	rt.mu.Unlock()
 	follow, cancel := context.WithCancel(context.WithoutCancel(ctx))
-	stream, err := rt.host.Events(follow, agentvisor.Filter{Labels: map[string]string{LabelRuntime: ID}}, 0)
+	// No filter: the head can be an event of another backend, and a filtered replay never gets to it.
+	stream, err := rt.host.Events(follow, agentvisor.Filter{}, 0)
 	if err != nil {
 		cancel()
 		return fmt.Errorf("follow the session host: %w", err)
@@ -208,7 +213,18 @@ func (rt *Runtime) follow(ctx context.Context, stream *agentvisor.EventStream, h
 		goLive()
 	}
 	for {
-		e, err := stream.Next(ctx)
+		next, stop := ctx, context.CancelFunc(func() {})
+		if !live {
+			next, stop = context.WithTimeout(ctx, replayQuiet)
+		}
+		e, err := stream.Next(next)
+		stop()
+		if !live && errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
+			// The visor forgot the session of the head event during the replay.
+			rt.log.Warn("the replay of the session host stopped before its head", "head", head)
+			goLive()
+			continue
+		}
 		if err != nil {
 			if ctx.Err() == nil {
 				rt.log.Warn("the event stream of the session host ended", "err", err)
@@ -242,17 +258,21 @@ func (rt *Runtime) forVisor(ctx context.Context, vid string) *session {
 		return nil
 	}
 	rt.mu.Lock()
-	s := rt.byVisor[vid]
+	s, other := rt.byVisor[vid], rt.others[vid]
 	rt.mu.Unlock()
-	if s != nil {
+	if s != nil || other {
 		return s
 	}
 	vs, err := rt.host.Session(ctx, vid)
-	if err != nil || vs.Labels[LabelRuntime] != ID {
+	if err != nil {
 		return nil
 	}
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
+	if vs.Labels[LabelRuntime] != ID {
+		rt.others[vid] = true
+		return nil
+	}
 	return rt.adoptLocked(vs)
 }
 
