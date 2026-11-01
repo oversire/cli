@@ -22,7 +22,7 @@ type Problem struct {
 var (
 	stepID      = regexp.MustCompile(`^[a-z0-9-]+$`)
 	placeholder = regexp.MustCompile(`\{([a-z]+)\}`)
-	known       = []string{"key", "url", "title", "item", "workspace", "project", "round", "notes", "worktree", "done"}
+	known       = []string{"key", "url", "title", "item", "workspace", "project", "round", "notes", "group", "worktree", "done"}
 )
 
 // Validate checks the rules of the app (Runbook.validate), but not the agent list.

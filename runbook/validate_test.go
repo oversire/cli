@@ -123,9 +123,9 @@ func TestRender(t *testing.T) {
 			{Step: "review", Round: 2, State: wire.StepGaps, Note: "Still no test.", Ended: &t0},
 			{Step: "fixes", Round: 2, State: wire.StepWorking, Note: "not ended"},
 		}}
-	step := wire.RunbookStep{ID: "fixes", Prompt: "{key} {url} {title} {item} {workspace} {project} {round} {worktree} {branch} {done} | {notes}"}
+	step := wire.RunbookStep{ID: "fixes", Prompt: "{key} {url} {title} {item} {workspace} {project} {round} {group} {worktree} {branch} {done} | {notes}"}
 	got := render(r, step, 2)
-	want := "OVERSIRE-341 https://app.plane.so/ocral/browse/OVERSIRE-341/ Retry a sync i1 ocral OVERSIRE 2 .wt/oversire-341 {branch} " +
+	want := "OVERSIRE-341 https://app.plane.so/ocral/browse/OVERSIRE-341/ Retry a sync i1 ocral OVERSIRE 2 .wt/oversire-341 .wt/oversire-341 {branch} " +
 		"oversire step done --run rb_0a1b2c3d --step fixes | Keep the API.; Implement: Store first.; Review Implementation: No test.; Review Implementation (round 2): Still no test."
 	if got != want {
 		t.Fatalf("\n%s\n%s", got, want)

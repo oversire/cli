@@ -36,7 +36,7 @@ func render(r *wire.RunbookRun, step wire.RunbookStep, round int) string {
 			return strconv.Itoa(round)
 		case "notes":
 			return notes(r)
-		case "worktree":
+		case "group", "worktree": // worktree is the old name of group
 			return ".wt/" + strings.ToLower(r.Item.Key)
 		case "done":
 			return DoneCommand(r.ID, step.ID)
