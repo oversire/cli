@@ -129,8 +129,8 @@ func (c *cli) openSessions(ctx context.Context, cfg config.Config, data string, 
 		l.orca, backends = b, append(backends, b)
 	}
 	v, err := agentvisor.New(ctx, agentvisor.Options{
-		Backends: backends,
 		Home: home, Client: "oversire", ClientVersion: version, Build: version, Socket: sock,
+		Backends:      backends,
 		HolderCommand: []string{c.exe, "visor", "hold"},
 		HookCommand:   []string{c.exe, "visor", "--home", home, "hook"},
 		// A handover runs the agent CLI in a terminal: claude and codex resume there.

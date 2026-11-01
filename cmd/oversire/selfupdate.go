@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -60,13 +61,23 @@ func askUpdate(ctx context.Context, cfg config.Config) (wire.UpdateStatus, error
 	if err != nil {
 		return s, err
 	}
+	// The loopback listener refuses a write that is not JSON, also with no body.
+	req.Header.Set("Content-Type", "application/json")
 	resp, err := (&http.Client{Timeout: 6 * time.Minute}).Do(req)
 	if err != nil {
 		return s, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return s, json.NewDecoder(resp.Body).Decode(&s)
+	case http.StatusNotFound:
 		return s, errNoRoute
 	}
-	return s, json.NewDecoder(resp.Body).Decode(&s)
+	var e struct {
+		Error string `json:"error"`
+	}
+	_ = json.NewDecoder(resp.Body).Decode(&e) //nolint:errcheck // the status tells enough without the body
+	s.Error = fmt.Sprintf("the daemon refused the update (%d %s)", resp.StatusCode, cmp.Or(e.Error, http.StatusText(resp.StatusCode)))
+	return s, nil
 }
