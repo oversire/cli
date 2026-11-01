@@ -27,6 +27,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check the event kinds of the Go code
+        run: scripts/event-kinds-check.sh
       - name: Check out the app contract
         uses: actions/checkout@v4
         continue-on-error: true

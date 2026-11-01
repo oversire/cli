@@ -72,7 +72,16 @@ When the runtime gives a feature that no capability names yet:
 3. Add the interface and its `Cap...` const here, and the route.
 4. Add the call to `MachineRuntime` in the app.
 
-## 7. Test
+## 7. Events
+
+Each session of the runtime gives event rows (see `oversire/docs/events.md`). The session book makes them for you: `capture.SessionRows` writes `session.*`, `turn.*` and `wait.*` from the state changes of each session. Thus a runtime that reports its sessions to the book needs no more code. Check these points:
+
+- The session states go through `working`, `waiting` (with a reason) and `done` or `failed`. A missing state gives a missing row.
+- Set `Key` (the start key, for example `work:OVERSIRE-12`), `Cwd` and `Branch` on the session. The writer finds the item from them.
+- A runtime with its own event stream (as the hooks of a harness) can write richer rows. Give the session the source `hook`, so that the book rows stop for it. Write `turn.started` and `turn.ended` with the same `corr`, and `wait.started` and `wait.ended` with the same `corr`. Fold tool calls into the counts of `turn.ended`. Do not write one row for each tool call.
+- A new kind goes into `oversire/Contract/schema/event-kinds.json` first. `scripts/event-kinds-check.sh` fails on a kind that is not in the catalog.
+
+## 8. Test
 
 - Record the output of the runtime CLI into `runtime/<name>/testdata/`, as `runtime/orca/testdata/` does. The tests replay it through a fake runner.
 - `runtime/routes_test.go` runs the routes against a small fake runtime. Add a case for each new part.

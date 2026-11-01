@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"sort"
 	"sync"
@@ -42,6 +43,9 @@ func (b book) All() []wire.DaemonSession { return b }
 
 func script(t *testing.T, root, step string) {
 	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("the fixture script needs sh")
+	}
 	if out, err := exec.Command("sh", "testdata/make-repo.sh", root, step).CombinedOutput(); err != nil {
 		t.Fatalf("%s: %v\n%s", step, err, out)
 	}
