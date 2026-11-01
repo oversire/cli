@@ -118,9 +118,17 @@ type Config struct {
 	// MaxSessions is the maximum of oversire sessions that run at the same time. Zero is DefaultMaxSessions.
 	MaxSessions int `json:"maxSessions,omitempty"`
 	// DataDir holds the worktrees and transcripts of the oversire runtime. Empty is DataDir().
-	DataDir string       `json:"dataDir,omitempty"`
-	Serve   *ServeConfig `json:"serve,omitempty"`
-	Log     *LogConfig   `json:"log,omitempty"`
+	DataDir string        `json:"dataDir,omitempty"`
+	Serve   *ServeConfig  `json:"serve,omitempty"`
+	Log     *LogConfig    `json:"log,omitempty"`
+	Review  *ReviewConfig `json:"review,omitempty"`
+}
+
+// ReviewConfig sets the review gate.
+type ReviewConfig struct {
+	// Order is the merge order of the repos of a group, for example [agent-binder, oversire, cloud, cli].
+	// Repos that it does not name come after, in alphabetic order.
+	Order []string `json:"order,omitempty"`
 }
 
 // LogConfig sets the daemon log.
