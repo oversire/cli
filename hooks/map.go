@@ -24,6 +24,12 @@ type payload struct {
 	LastAssistantMessage *string         `json:"last_assistant_message"`
 	AgentID              string          `json:"agent_id"`
 	IsInterrupt          bool            `json:"is_interrupt"`
+	// The fields below feed the event rows (events.go).
+	Model        string          `json:"model"`
+	ToolResponse json.RawMessage `json:"tool_response"`
+	Trigger      string          `json:"trigger"`
+	Reason       string          `json:"reason"`
+	AgentType    string          `json:"agent_type"`
 }
 
 func readPayload(raw []byte) payload {

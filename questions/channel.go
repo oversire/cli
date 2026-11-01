@@ -95,6 +95,18 @@ type Channel struct {
 	fitted map[string]string // the transcript that fit last, for each session
 	locks  map[string]*sync.Mutex
 	kicks  chan string
+	events EventAdder
+}
+
+// EventAdder takes the event rows (capture.Writer).
+type EventAdder interface {
+	Add(session string, d wire.EventDraft)
+}
+
+// WithEvents writes a question.answered row for each answer that the daemon types.
+func (c *Channel) WithEvents(a EventAdder) *Channel {
+	c.events = a
+	return c
 }
 
 // NewChannel needs a book. screen and tr can be nil: then no question is answerable and no transcript is read.
@@ -682,11 +694,13 @@ func (c *Channel) Answer(ctx context.Context, id string, a wire.QuestionAnswer) 
 		return wire.DaemonAnswerResult{}, err
 	}
 	if res.Result == wire.AnswerSent {
+		now := c.clock()
 		c.mu.Lock()
-		c.sent[id] = c.clock()
+		c.sent[id] = now
 		a.ID = id
 		c.given[id] = a
 		c.mu.Unlock()
+		c.answered(rec.s, q, now)
 	}
 	if res.Result == wire.AnswerSent || res.Result == wire.AnswerAlreadyAnswered {
 		if cur := c.current(rec.s.ID); cur != nil && cur.q.ID == id {
@@ -694,6 +708,20 @@ func (c *Channel) Answer(ctx context.Context, id string, a wire.QuestionAnswer) 
 		}
 	}
 	return res, nil
+}
+
+// answered writes the question.answered row of an answer from the app.
+func (c *Channel) answered(s wire.DaemonSession, q wire.DaemonQuestion, now time.Time) {
+	if c.events == nil {
+		return
+	}
+	text := string(q.Via)
+	if len(q.Items) > 0 && q.Items[0].Text != "" {
+		text = q.Items[0].Text
+	}
+	payload, _ := json.Marshal(map[string]any{"question": text, "waitedSec": int(now.Sub(q.AskedAt).Round(time.Second) / time.Second), "channel": "app"})
+	c.events.Add(s.ID, wire.EventDraft{ID: "question:" + q.ID + ":answered", At: now, Kind: wire.KindQuestionAnswered,
+		ActorType: wire.ActorHuman, Via: "app", Summary: "You answered: " + text, Payload: payload})
 }
 
 // lookup gives the open record of the question, or the result for a question that is not open.

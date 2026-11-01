@@ -219,7 +219,27 @@ type rig struct {
 	clock  *clock
 	store  string
 	events []wire.ReviewEvent
+	rows   []wire.EventDraft
 	mu     sync.Mutex
+}
+
+// Add takes the event rows of the engine.
+func (r *rig) Add(_ string, d wire.EventDraft) {
+	r.mu.Lock()
+	r.rows = append(r.rows, d)
+	r.mu.Unlock()
+}
+
+// row gives the first event row of the kind.
+func (r *rig) row(kind string) (wire.EventDraft, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, d := range r.rows {
+		if d.Kind == kind {
+			return d, true
+		}
+	}
+	return wire.EventDraft{}, false
 }
 
 func newRig(t *testing.T, roots ...string) *rig {
@@ -234,7 +254,7 @@ func newRig(t *testing.T, roots ...string) *rig {
 func (r *rig) engine(roots ...string) *Engine {
 	e := NewEngine(Deps{Store: NewStore(r.store), Git: NewGit(proc.Local{}), Repos: fakeRepos{roots}, Sessions: r.book,
 		Sender: r.sender, Launcher: r.launch, Picker: fakePicker{}, Machine: "mbp", Order: Order{"oversire", "cli"},
-		Notify: func(ev wire.ReviewEvent) { r.mu.Lock(); r.events = append(r.events, ev); r.mu.Unlock() }, Clock: r.clock.now})
+		Notify: func(ev wire.ReviewEvent) { r.mu.Lock(); r.events = append(r.events, ev); r.mu.Unlock() }, Clock: r.clock.now, Events: r})
 	e.Log = slog.New(slog.NewTextHandler(io.Discard, nil))
 	return e
 }

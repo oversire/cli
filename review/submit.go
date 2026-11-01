@@ -68,6 +68,15 @@ func (e *Engine) Submit(ctx context.Context, key string, s wire.SubmitReview) (w
 	r.Rounds = append(r.Rounds, round)
 	e.changed(r, wire.EventReviewChanged)
 	e.mu.Unlock()
+	rowKind, summary := wire.KindReviewSubmitted, fmt.Sprintf("You asked for changes: %d comments", len(batch))
+	if s.Verdict == wire.VerdictApprove {
+		rowKind, summary = wire.KindReviewApproved, "You approved the "+string(kind)
+	}
+	if round.Summary != "" {
+		summary += ". " + round.Summary
+	}
+	e.event(key, fmt.Sprintf("review:%s:%s:%d", kind, key, n), rowKind, wire.ActorHuman, summary,
+		map[string]any{"kind": kind, "round": n, "comments": len(batch)})
 	if s.Verdict == wire.VerdictRequestChanges {
 		e.deliver(ctx, kind, key, n, s.Launch)
 	}

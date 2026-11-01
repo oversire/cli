@@ -1,0 +1,152 @@
+package capture
+
+import (
+	"context"
+	"encoding/json"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/oversire/cli/events"
+	"github.com/oversire/cli/wire"
+)
+
+type book map[string]wire.DaemonSession
+
+func (b book) Get(id string) (wire.DaemonSession, bool) { s, ok := b[id]; return s, ok }
+
+func open(t *testing.T) (*events.Store, *Writer) {
+	t.Helper()
+	st, err := events.Open(filepath.Join(t.TempDir(), "events.db"), time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	runs := func(run string) string {
+		if run == "r1" {
+			return "OVERSIRE-9"
+		}
+		return ""
+	}
+	return st, NewWriter(st, events.NewResolver(st, runs), nil, "mini", "me@example.com", nil)
+}
+
+func item(t *testing.T, st *events.Store, key string) []wire.Event {
+	t.Helper()
+	p, err := st.Query(context.Background(), wire.EventQuery{Item: key, Tree: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cat, err := wire.LoadEventCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range p.Events {
+		if pr := cat.Problems(e.EventDraft); len(pr) > 0 {
+			t.Errorf("%s: %v", e.ID, pr)
+		}
+	}
+	return p.Events
+}
+
+func kinds(rows []wire.Event) []string {
+	var out []string
+	for _, e := range rows {
+		out = append(out, e.Kind)
+	}
+	return out
+}
+
+func TestWriterFillsTheRow(t *testing.T) {
+	st, w := open(t)
+	if _, err := st.SetLinks(context.Background(), []wire.ItemLink{{Item: "OVERSIRE-380", Parent: "OVERSIRE-377"}}); err != nil {
+		t.Fatal(err)
+	}
+	w.sessions = book{"s1": {ID: "s1", Key: "work:OVERSIRE-380", Harness: "claude", Model: "opus", Repo: "oversire/cli", Cwd: "/x"}}
+	w.Add("s1", wire.EventDraft{ID: "t:1", Kind: wire.KindTurnStarted, ActorType: wire.ActorAgent, Via: "hook", Summary: "Turn 1 started",
+		Payload: json.RawMessage(`{"turn":1}`)})
+	w.Add("", wire.EventDraft{ID: "t:2", Kind: wire.KindPromptSubmitted, Item: "OVERSIRE-380", ActorType: wire.ActorHuman, Via: "hook", Summary: "hi", Private: true,
+		Payload: json.RawMessage(`{"turn":1}`)})
+	w.Add("", wire.EventDraft{ID: "t:bad", Kind: "nodot", ActorType: wire.ActorHuman, Via: "hook"})
+	w.Flush(context.Background())
+
+	rows := item(t, st, "OVERSIRE-377")
+	if len(rows) != 2 {
+		t.Fatalf("rows %v", kinds(rows))
+	}
+	a := rows[0]
+	if a.Item != "OVERSIRE-380" || a.ParentItem != "OVERSIRE-377" || a.Session != "work:OVERSIRE-380" || a.Repo != "oversire/cli" ||
+		a.Machine != "mini" || a.Actor != "claude/opus" || a.OnBehalf != "me@example.com" || a.At.IsZero() {
+		t.Errorf("filled %+v", a.EventDraft)
+	}
+	if rows[1].Actor != "me@example.com" {
+		t.Errorf("human actor %q", rows[1].Actor)
+	}
+}
+
+func TestSessionRows(t *testing.T) {
+	st, w := open(t)
+	r := NewSessionRows(w)
+	t0 := time.Date(2026, 11, 1, 9, 0, 0, 0, time.UTC)
+	s := wire.DaemonSession{ID: "s2", Key: "work:OVERSIRE-12", Harness: "codex", Runtime: "orca", Sources: []string{"orca"}, StartedAt: &t0}
+	step := func(min int, phase wire.SessionPhase, reason wire.SessionReason, action string) {
+		s.State, s.Reason, s.StateSince = phase, reason, t0.Add(time.Duration(min)*time.Minute)
+		r.OnSend(s, cmpOr(action, string(phase)), s.StateSince)
+	}
+	step(0, wire.PhaseWorking, "", "")
+	step(5, wire.PhaseWaiting, wire.ReasonPermission, "")
+	step(7, wire.PhaseWorking, "", "")
+	step(9, wire.PhaseDone, "", "")
+	step(10, wire.PhaseDone, "", "removed")
+	hooked := s
+	hooked.ID, hooked.Sources = "s3", []string{string(wire.SessionSourceHook)}
+	r.OnSend(hooked, string(wire.PhaseWorking), t0)
+	w.Flush(context.Background())
+
+	got := kinds(item(t, st, "OVERSIRE-12"))
+	want := []string{wire.KindSessionStarted, wire.KindTurnStarted, wire.KindWaitStarted, wire.KindWaitEnded, wire.KindTurnEnded, wire.KindSessionEnded}
+	if len(got) != len(want) {
+		t.Fatalf("kinds %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("kinds %v, want %v", got, want)
+		}
+	}
+}
+
+func TestRunbookRows(t *testing.T) {
+	st, w := open(t)
+	r := NewRunbookRows(w)
+	t0 := time.Date(2026, 11, 1, 9, 0, 0, 0, time.UTC)
+	t1 := t0.Add(4 * time.Minute)
+	run := wire.RunbookRun{ID: "r1", Item: wire.ItemRef{Key: "OVERSIRE-9"}, Machine: "mini", Started: t0, Updated: t0,
+		Runbook: wire.Runbook{ID: "ship", Name: "Ship", Steps: []wire.RunbookStep{{ID: "plan", Name: "Plan"}, {ID: "code"}}},
+		Steps:   []wire.StepRun{{Step: "plan", Round: 1, State: wire.StepWaits}}}
+	r.OnChange(run)
+	run.Steps[0].State, run.Steps[0].Started = wire.StepWorking, &t0
+	r.OnChange(run)
+	r.OnChange(run)
+	run.Steps[0].State, run.Steps[0].Ended = wire.StepPass, &t1
+	run.Steps = append(run.Steps, wire.StepRun{Step: "code", Round: 1, State: wire.StepSkipped})
+	r.OnChange(run)
+	w.Flush(context.Background())
+
+	rows := item(t, st, "OVERSIRE-9")
+	got := kinds(rows)
+	want := []string{wire.KindPlanStarted, wire.KindRunbookStepStarted, wire.KindRunbookStepEnded, wire.KindRunbookStepEnded}
+	if len(got) != len(want) {
+		t.Fatalf("kinds %v, want %v", got, want)
+	}
+	var p struct {
+		State       string `json:"state"`
+		DurationSec int    `json:"durationSec"`
+		Index       int    `json:"index"`
+	}
+	if err := json.Unmarshal(rows[2].Payload, &p); err != nil || p.State != "pass" || p.DurationSec != 240 {
+		t.Errorf("ended payload %s", rows[2].Payload)
+	}
+	if err := json.Unmarshal(rows[3].Payload, &p); err != nil || p.Index != 1 {
+		t.Errorf("skipped payload %s", rows[3].Payload)
+	}
+}

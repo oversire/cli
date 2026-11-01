@@ -114,7 +114,6 @@
         ]
       },
       {
-        "matcher": "AskUserQuestion|ExitPlanMode",
         "hooks": [
           {
             "type": "command",
@@ -161,9 +160,29 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ": oversire-hook=1; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook claude; else cat >/dev/null; fi",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ": oversire-hook=1; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook claude; else cat >/dev/null; fi",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
       {
         "hooks": [
           {

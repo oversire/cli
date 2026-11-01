@@ -46,6 +46,13 @@ func TestMergeFastForward(t *testing.T) {
 	if !slices.Contains(r.eventNames(), wire.EventReviewMerged) {
 		t.Fatal(r.eventNames())
 	}
+	// The id is the one that the git watcher gives to the same merge.
+	if m, ok := r.row(wire.KindGitMerge); !ok || m.ID != "git:"+head+":refs/heads/main" || m.Item != "APP-1" || m.ActorType != wire.ActorHuman {
+		t.Fatalf("%+v", m)
+	}
+	if s, ok := r.row(wire.KindItemShipped); !ok || s.Summary != "Shipped app" {
+		t.Fatalf("%+v", s)
+	}
 	// The daemon never pushes.
 	if got := w.git(remote, "rev-parse", "main"); got == head {
 		t.Fatal("pushed")

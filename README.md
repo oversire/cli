@@ -263,6 +263,18 @@ The daemon keeps the row and its summary. After 90 days it clears the payload an
 
 `GET /v1/events` (the ProviderEvent hints) keeps its last 2000 entries in the same file, so the feed lives through a restart.
 
+The daemon writes these rows itself (package `capture`, OVERSIRE-380):
+
+| Source | Rows |
+|---|---|
+| Hook calls (Claude) | `session.*`, `turn.*` with the counts of the turn (tools, files edited, tests run and failed, tool errors), `wait.*`, `prompt.submitted` (private), `context.compacted`, `subagent.ended`. The Claude hooks now include `PostToolUse` for all tools, `PreCompact` and `SubagentStop`: run `oversire hooks install` again. |
+| The session book | The same session, turn and wait rows for a session with no hooks (the Orca screen, the `oversire` runtime). |
+| Questions | `question.answered` when the app answers through the daemon. |
+| Reviews | `review.ready`, `review.submitted`, `review.approved`. A merge gives `git.merge` for each repository (id `git:<sha>:refs/heads/<base>`, the same id as the git watcher) and `item.shipped`. |
+| Runbooks | `plan.started` for each run, `runbook.step_started` and `runbook.step_ended` for each step round. |
+
+A row gets its item from the session key, then the `.wt/<key>/` path, then the branch, then the `Item:` trailer of a commit. The actor of a human row is the `git config --global user.email` of the machine. The queue rows (`queue.picked`, `queue.held`) come from the app.
+
 ### Leases
 
 The home member of the group keeps named leases in `<data>/leases.json`, also when the group has a cloud. One app of the group holds the lease `automations` and runs the automatic actions (auto start, Enhance, cleanup, Plane write-back and the AI jobs). The bodies are `LeaseRequest` and `Lease` of `contract/schema/daemon.json`.
@@ -497,6 +509,7 @@ The layout:
 | `runtime` | The `Runtime` interface, the registry and the runtime routes (`API`). `runtime/orca` is the Orca driver for the local Orca. It starts, sends to and stops sessions through the `orca` backend of the visor. `runtime/oversire` is the agent-visor client. |
 | `digest` | The transcript readers that make a `SessionDigest`. |
 | `store` | The home store: the op log in SQLite and the `/v1/store/ops` routes. |
+| `capture` | Makes the event rows of the daemon: the hook calls, the session book, the questions, the reviews and the runbooks. |
 | `events` | The events table: the store, the item links, the outbox to the home, the spool, the retention, the item resolver and the `/v1/events` routes. |
 | `lease` | The leases of the home member: the book in `leases.json` and the `/v1/leases` routes. |
 | `allow` | The allow list. |

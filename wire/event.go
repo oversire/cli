@@ -146,6 +146,8 @@ const (
 	KindQuestionAnswered   = "question.answered"
 	KindReviewSubmitted    = "review.submitted"
 	KindReviewApproved     = "review.approved"
+	KindItemShipped        = "item.shipped"
+	KindPlanStarted        = "plan.started"
 	KindWorktreeAdded      = "worktree.added"
 	KindWorktreeRemoved    = "worktree.removed"
 	KindGitCommit          = "git.commit"

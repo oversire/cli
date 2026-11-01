@@ -84,6 +84,7 @@ type Book struct {
 	dirty   bool
 	saved   time.Time
 	watch   watchers
+	onSend  func(s wire.DaemonSession, action string, at time.Time)
 }
 
 // NewBook reads path when it exists. An empty path keeps the sessions in memory only.
@@ -94,6 +95,14 @@ func NewBook(machine, path string, log Appender, clock func() time.Time) *Book {
 	b := &Book{machine: machine, byID: map[string]*entry{}, log: log, clock: clock, path: path}
 	b.load()
 	return b
+}
+
+// OnSend calls fn after each change that the book sends to the log: action is the new state, "question" or "removed".
+// fn runs under the lock of the book: it must not call the book.
+func (b *Book) OnSend(fn func(s wire.DaemonSession, action string, at time.Time)) {
+	b.mu.Lock()
+	b.onSend = fn
+	b.mu.Unlock()
 }
 
 func (b *Book) Apply(p Patch) {
@@ -256,6 +265,9 @@ func (b *Book) remove(e *entry, now time.Time) {
 }
 
 func (b *Book) send(s wire.DaemonSession, action string, now time.Time) {
+	if b.onSend != nil {
+		b.onSend(copySession(s), action, now)
+	}
 	if b.log == nil {
 		return
 	}

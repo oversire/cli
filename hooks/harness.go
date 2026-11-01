@@ -38,9 +38,11 @@ var claudeTable = table{timeout: 5, events: []hookEvent{
 	{Name: "SessionStart"},
 	{Name: "UserPromptSubmit"},
 	{Name: "PreToolUse", Matcher: "AskUserQuestion|ExitPlanMode"},
-	{Name: "PostToolUse", Matcher: "AskUserQuestion|ExitPlanMode"},
+	{Name: "PostToolUse"}, // all tools: the counts of the turn (OVERSIRE-380)
 	{Name: "PermissionRequest"},
 	{Name: "Notification"},
+	{Name: "PreCompact"},
+	{Name: "SubagentStop"},
 	{Name: "Stop"},
 	{Name: "StopFailure"},
 	{Name: "SessionEnd"},

@@ -36,6 +36,11 @@ func (e *Engine) Merge(ctx context.Context, key string, m wire.MergeRequest) (wi
 		at           int
 	}
 	var merged []done
+	type mergeRow struct {
+		repo wire.ReviewRepo
+		rm   wire.RepoMerge
+	}
+	var rows []mergeRow
 	fail := func(name string, i int, rm wire.RepoMerge, text string) {
 		res.Repos = append(res.Repos, rm)
 		for _, r := range repos[i+1:] {
@@ -82,6 +87,7 @@ func (e *Engine) Merge(ctx context.Context, key string, m wire.MergeRequest) (wi
 		merged = append(merged, done{primary, old, len(res.Repos)})
 		rm.Head, _ = git.Run(ctx, primary, "rev-parse", "--short", r.Base)
 		res.Repos = append(res.Repos, rm)
+		rows = append(rows, mergeRow{r, rm})
 	}
 	if res.Error == "" {
 		res.Merged = true
@@ -91,6 +97,24 @@ func (e *Engine) Merge(ctx context.Context, key string, m wire.MergeRequest) (wi
 		rec.MergedAt, rec.Conflict, rec.Root = &now, false, g.Root
 		e.changed(rec, wire.EventReviewMerged)
 		e.mu.Unlock()
+		var names []string
+		for _, m := range rows {
+			names = append(names, m.repo.Name)
+			// The id is the one of the git watcher, so that its read of the reflog gives no second row.
+			sha, _ := git.Run(ctx, g.primary(m.repo.Name), "rev-parse", m.repo.Base)
+			mode := "fastForward"
+			if m.rm.Result == wire.MergeRebased {
+				mode = "rebase"
+			}
+			e.event(key, "git:"+strings.TrimSpace(sha)+":refs/heads/"+m.repo.Base, wire.KindGitMerge, wire.ActorHuman,
+				fmt.Sprintf("Merged %s into %s (%s)", m.repo.Branch, m.repo.Base, m.repo.Name),
+				map[string]any{"sha": strings.TrimSpace(sha), "ref": "refs/heads/" + m.repo.Base, "branch": m.repo.Branch, "mode": mode,
+					"commits": m.repo.Ahead, "worktree": g.primary(m.repo.Name)})
+		}
+		if len(names) > 0 {
+			e.event(key, fmt.Sprintf("review:code:%s:shipped:%d", key, now.UnixMilli()), wire.KindItemShipped, wire.ActorHuman,
+				"Shipped "+strings.Join(names, ", "), map[string]any{"repos": names, "group": g.Rel()})
+		}
 		if m.RemoveGroup {
 			if err := e.removeGroup(ctx, g); err != nil {
 				res.Error = "The merge is done, but the group stays: " + err.Error()

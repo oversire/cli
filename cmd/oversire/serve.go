@@ -6,10 +6,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	goruntime "runtime"
+	"strings"
 	"time"
 
 	"github.com/oversire/cli/agents"
 	"github.com/oversire/cli/ask"
+	"github.com/oversire/cli/capture"
 	"github.com/oversire/cli/config"
 	"github.com/oversire/cli/eventlog"
 	"github.com/oversire/cli/events"
@@ -50,6 +52,17 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	}
 	book := sessions.NewBook(cfg.Machine(), filepath.Join(data, "sessions.json"), hints, time.Now)
 	runner.WithKeys(book)
+	var runbooks *runbook.Engine
+	places := events.NewResolver(rows, func(run string) string {
+		if runbooks == nil {
+			return ""
+		}
+		r, _ := runbooks.Get(run)
+		return r.Item.Key
+	})
+	email, _, _ := c.cmds.Run(ctx, "git", []string{"config", "--global", "user.email"}, nil)
+	capt := capture.NewWriter(rows, places, book, cfg.Machine(), strings.TrimSpace(string(email)), c.log)
+	book.OnSend(capture.NewSessionRows(capt).OnSend)
 
 	exe, ok := orca.FindCLI()
 	if !ok {
@@ -67,11 +80,11 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	screen := orca.NewScreen(orcaCLI)
 	userHome, _ := os.UserHomeDir()
 	files := questions.NewFiles(filepath.Join(userHome, ".claude", "projects"), screen)
-	asks := questions.NewChannel(book, screen, files, hints, time.Now)
+	asks := questions.NewChannel(book, screen, files, hints, time.Now).WithEvents(capt)
 	if hasOrca {
 		go orcaCLI.RetireWorkers(ctx, filepath.Join(data, "workers.json"), c.log)
 	}
-	ingest := hooks.NewIngest(book, asks).WithHinter(watcher)
+	ingest := hooks.NewIngest(book, asks).WithHinter(watcher).WithEvents(capt)
 	installer := c.installer()
 	spool := hooks.SpoolPath(data)
 	if err := ingest.DrainSpool(spool); err != nil {
@@ -165,7 +178,9 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	srv.Handle(direct.Routes()...)
 	reports.add(book)
 	reports.add(direct)
-	runbooks := runbook.NewEngine(runbook.NewStore(filepath.Join(data, "runbooks")), runner, reg, book, cfg.Machine(), func(r wire.RunbookRun) {
+	runbookRows := capture.NewRunbookRows(capt)
+	runbooks = runbook.NewEngine(runbook.NewStore(filepath.Join(data, "runbooks")), runner, reg, book, cfg.Machine(), func(r wire.RunbookRun) {
+		runbookRows.OnChange(r)
 		srv.Notify(false, map[string]any{"type": "runbookRun", "run": r})
 	}, time.Now)
 	runbooks.Log = c.log
@@ -176,7 +191,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	}
 	reviews := review.NewEngine(review.Deps{Store: review.NewStore(filepath.Join(data, "reviews")), Git: review.NewGit(c.cmds),
 		Repos: reg, Sessions: book, Sender: asker, Launcher: runner, Picker: reg, Machine: cfg.Machine(), Order: order,
-		Notify: func(ev wire.ReviewEvent) { srv.Notify(false, ev) }})
+		Notify: func(ev wire.ReviewEvent) { srv.Notify(false, ev) }, Events: capt})
 	reviews.Log = c.log
 	srv.Handle(review.NewRoutes(reviews).Routes()...)
 	runtimeAPI.AddCapabilities(runtime.CapRunbooks, runtime.CapReviews)
@@ -199,7 +214,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 		}
 	}
 	return []func(context.Context) error{srv.Run, book.Run, watcher.Run, syncer.Run, asks.Run, drain, c.pruneStore(oplog), runbooks.Run, reviews.Run,
-		outbox.Run, func(ctx context.Context) error { return rows.RunRetention(ctx, c.log) }}, nil
+		outbox.Run, capt.Run, func(ctx context.Context) error { return rows.RunRetention(ctx, c.log) }}, nil
 }
 
 // hookHealth is "live" when a harness has our hooks, else "off".

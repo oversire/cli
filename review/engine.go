@@ -72,6 +72,13 @@ type Deps struct {
 	Order  Order
 	Notify func(wire.ReviewEvent)
 	Clock  func() time.Time
+	// Events takes the rows review.ready, review.submitted, review.approved, git.merge and item.shipped. It can be nil.
+	Events EventAdder
+}
+
+// EventAdder takes the event rows (capture.Writer).
+type EventAdder interface {
+	Add(session string, d wire.EventDraft)
 }
 
 // Kind is the kind of an Error. The routes give it as the HTTP status.
@@ -559,6 +566,19 @@ func (e *Engine) save(r *record) {
 	if err := e.d.Store.Save(r); err != nil {
 		e.Log.Error("review save", "key", r.Key, "kind", r.Kind, "err", err)
 	}
+}
+
+// event writes one row about the item key.
+func (e *Engine) event(key, id, kind string, actor wire.ActorType, summary string, payload map[string]any) {
+	if e.d.Events == nil {
+		return
+	}
+	d := wire.EventDraft{ID: id, At: e.d.Clock().UTC(), Kind: kind, Item: key, ActorType: actor, Via: "oversire", Summary: summary}
+	if actor == wire.ActorAgent {
+		d.Via = "cli"
+	}
+	d.Payload, _ = json.Marshal(payload)
+	e.d.Events.Add("", d)
 }
 
 func (e *Engine) now() time.Time { return e.d.Clock().UTC().Truncate(time.Second) }

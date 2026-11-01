@@ -146,6 +146,9 @@ func TestPlan(t *testing.T) {
 	if err != nil || s.Kind != wire.ReviewPlan || s.Title != "Plan" || s.Root != root || !slices.Equal(s.Subitems, []string{"APP-2"}) {
 		t.Fatalf("%v %+v", err, s)
 	}
+	if row, ok := r.row(wire.KindReviewReady); !ok || row.Summary != "Plan ready for review: Two blocks." || row.ActorType != wire.ActorAgent || row.Item != "APP-1" {
+		t.Fatalf("%+v", row)
+	}
 	// A key with only a plan is a plan review without the kind.
 	c, err := r.AddComment(ctx, "APP-1", wire.CommentDraft{Anchor: wire.Anchor{Block: "steps"}, Text: "Add tests."})
 	if err != nil || c.Excerpt != "Steps" {

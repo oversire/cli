@@ -26,6 +26,7 @@ type Ingest struct {
 	byName    map[string]Harness
 	clock     func() time.Time
 	hinter    Hinter
+	rec       *recorder
 	// lastMessage reads the last reply from a transcript when the Stop payload has none.
 	lastMessage func(harness, transcript string) (string, bool)
 
@@ -50,6 +51,15 @@ func NewIngest(book *sessions.Book, questions QuestionSink, hs ...Harness) *Inge
 // WithHinter sets the hinter. nil turns it off.
 func (g *Ingest) WithHinter(h Hinter) *Ingest {
 	g.hinter = h
+	return g
+}
+
+// WithEvents sends the event rows of each hook call to a. nil turns it off.
+func (g *Ingest) WithEvents(a EventAdder) *Ingest {
+	g.rec = nil
+	if a != nil {
+		g.rec = newRecorder(a)
+	}
 	return g
 }
 
@@ -86,6 +96,10 @@ func (g *Ingest) apply(harness string, env wire.HookEnv, payload []byte, at time
 	ev := Event{Harness: harness, Name: p.HookEventName, Payload: json.RawMessage(payload), Env: env, At: at}
 	patch, ok := h.Map(ev)
 	if !ok {
+		// PreCompact, SubagentStop and the tools of a subagent change no session, but they make rows.
+		if g.rec != nil && patch.ID != "" {
+			g.rec.record(ev, p, patch.ID, "")
+		}
 		return nil
 	}
 	g.track(&patch, ev.Name, p)
@@ -102,6 +116,13 @@ func (g *Ingest) apply(harness string, env wire.HookEnv, payload []byte, at time
 	}
 	g.book.Apply(patch)
 	ev.Session = patch.ID
+	if g.rec != nil {
+		var reason wire.SessionReason
+		if patch.Reason != nil {
+			reason = *patch.Reason
+		}
+		g.rec.record(ev, p, patch.ID, reason)
+	}
 	if g.questions != nil {
 		g.questions.OnHook(ev)
 	}

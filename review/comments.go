@@ -2,6 +2,7 @@ package review
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -246,7 +247,17 @@ func (e *Engine) Ready(ctx context.Context, key string, rd wire.ReviewReady) (wi
 	// The hand-off ends the turn: a queued round goes when the book shows it.
 	delete(e.sent, id(kind, key))
 	e.changed(r, wire.EventReviewReady)
+	round := len(r.Rounds)
 	e.mu.Unlock()
+	summary := "Ready for review"
+	if kind == wire.ReviewPlan {
+		summary = "Plan ready for review"
+	}
+	if note := strings.TrimSpace(rd.Note); note != "" {
+		summary += ": " + note
+	}
+	e.event(key, fmt.Sprintf("review:%s:%s:ready:%d", kind, key, now.UnixMilli()), wire.KindReviewReady, wire.ActorAgent, summary,
+		map[string]any{"kind": kind, "round": round})
 	if kind == wire.ReviewPlan {
 		return e.planSummary(key), nil
 	}

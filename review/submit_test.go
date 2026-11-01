@@ -57,6 +57,9 @@ func TestSubmitIdle(t *testing.T) {
 		t.Fatal(sent)
 	}
 	golden(t, "code_round1.txt", strings.TrimPrefix(sent[0], "s1: "), w.root, "<root>", c1.ID, "c_1", c2.ID, "c_2")
+	if row, ok := r.row(wire.KindReviewSubmitted); !ok || row.ID != "review:code:APP-1:1" || string(row.Payload) != `{"comments":2,"kind":"code","round":1}` {
+		t.Fatalf("%+v", row)
+	}
 
 	d, _ := r.Get(ctx, "APP-1", "")
 	if d.Comments[0].State != wire.CommentSubmitted || d.Comments[0].Round != 1 || len(d.Rounds) != 1 {
