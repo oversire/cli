@@ -1,0 +1,7 @@
+The merge of APP-1 stops on a conflict.
+
+Work in the group folder <root>/.wt/app-1. Do not merge.
+Rebase the branch of each repo on its base, fix the conflicts, and run the tests:
+  app: rebase app-1 on main (conflicts: lib.go)
+At the end, hand off for review:
+  oversire review ready --key APP-1 --note "<one line>"

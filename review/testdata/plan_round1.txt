@@ -1,0 +1,12 @@
+Review of the plan of APP-1, round 1: changes requested.
+
+Close.
+
+[c_1] Block "Steps"
+Split step 2.
+
+Do not write code. Change the plan in <root> for each comment.
+Then answer each comment with its id:
+  oversire review reply --key APP-1 <id> "<what you did>"
+At the end, hand off for review:
+  oversire review ready --key APP-1 --kind plan --plan <file.md> --note "<one line>"

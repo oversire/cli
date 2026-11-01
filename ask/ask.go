@@ -90,7 +90,7 @@ func (k *Asker) Ask(ctx context.Context, id string, a wire.SessionAsk) (code int
 	if !ok {
 		return http.StatusNotFound, wire.SessionAskReply{Error: wire.AskNoSession, Message: "The daemon has no session " + id + "."}
 	}
-	if !k.canSend(before) {
+	if !k.CanSend(before) {
 		return http.StatusConflict, wire.SessionAskReply{Error: wire.AskUnsupported,
 			Message: fmt.Sprintf("OverSire cannot type into the %s session %s.", before.Runtime, id)}
 	}
@@ -102,7 +102,7 @@ func (k *Asker) Ask(ctx context.Context, id string, a wire.SessionAsk) (code int
 	changes, stop := k.book.Watch()
 	defer stop()
 	sentAt := k.clock()
-	if err := k.send(ctx, before, a.Prompt()); err != nil {
+	if err := k.Deliver(ctx, before, a.Prompt()); err != nil {
 		return http.StatusBadGateway, wire.SessionAskReply{Error: wire.AskSendFailed, Message: err.Error()}
 	}
 
@@ -179,7 +179,8 @@ func (k *Asker) settle(ctx context.Context, s wire.DaemonSession, deadline time.
 // steers is true when the runtime takes a message during a turn. The oversire runtime adds it to the turn.
 func steers(s wire.DaemonSession) bool { return s.Runtime == wire.RuntimeOversire }
 
-func (k *Asker) canSend(s wire.DaemonSession) bool {
+// CanSend tells if OverSire can type into the session s.
+func (k *Asker) CanSend(s wire.DaemonSession) bool {
 	switch s.Runtime {
 	case wire.RuntimeOversire:
 		return k.runtimes != nil
@@ -189,8 +190,8 @@ func (k *Asker) canSend(s wire.DaemonSession) bool {
 	return false
 }
 
-// send types the text into the Orca terminal, or gives it to the oversire runtime as a sessionSend order.
-func (k *Asker) send(ctx context.Context, s wire.DaemonSession, text string) error {
+// Deliver types the text into the Orca terminal, or gives it to the oversire runtime as a sessionSend order.
+func (k *Asker) Deliver(ctx context.Context, s wire.DaemonSession, text string) error {
 	if s.Runtime == wire.RuntimeOrca {
 		return k.screen.Send(ctx, s.Terminal, text, true)
 	}

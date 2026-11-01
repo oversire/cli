@@ -1,0 +1,19 @@
+Review of APP-1, round 1: changes requested.
+
+Two small things.
+
+[c_1] app/n.go:3
+    > func N() {}
+Rename N to New.
+
+[c_2] app/lib.go:3 (old)
+    > func A() {}
+Why does A go?
+
+Work in the group folder <root>/.wt/app-1. Do not merge.
+Make the change for each comment and commit it to the branch of the repo.
+Then answer each comment with its id:
+  oversire review reply --key APP-1 <id> "<what you did>"
+Run the tests.
+At the end, hand off for review:
+  oversire review ready --key APP-1 --note "<one line>"

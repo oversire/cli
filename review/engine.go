@@ -446,7 +446,7 @@ func (e *Engine) reviewSession(s wire.DaemonSession, sentAt time.Time) wire.Revi
 	default:
 		rs.State = wire.ReviewSessionEnded
 	}
-	if rs.State == wire.ReviewSessionIdle && !sentAt.IsZero() && s.StateSince.Before(sentAt) && e.d.Clock().Sub(sentAt) < sendWait {
+	if rs.State == wire.ReviewSessionIdle && !sentAt.IsZero() && !s.StateSince.After(sentAt) && e.d.Clock().Sub(sentAt) < sendWait {
 		rs.State = wire.ReviewSessionWorking
 	}
 	if rs.State == wire.ReviewSessionEnded {
