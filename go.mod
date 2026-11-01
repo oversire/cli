@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/coder/websocket v1.8.14
-	github.com/trebi-ai/agent-visor v0.3.2
+	github.com/trebi-ai/agent-visor v0.3.3
 	github.com/trebi-ai/agent-wire v0.9.0
 	golang.org/x/crypto v0.47.0
 	modernc.org/sqlite v1.59.0
