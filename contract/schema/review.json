@@ -349,7 +349,7 @@
       "type": "object",
       "properties": {
         "name": { "type": "string", "minLength": 1 },
-        "result": { "description": "skipped: the repo has no commits to merge, or an earlier repo failed.", "enum": ["merged", "rebased", "conflict", "skipped"] },
+        "result": { "description": "skipped: the repo has no commits to merge, or another repo failed. A repo that merged before the failure goes back to its old base and is skipped.", "enum": ["merged", "rebased", "conflict", "skipped"] },
         "head": { "description": "The base head after the merge.", "type": "string" },
         "conflictFiles": { "type": "array", "items": { "type": "string" } }
       },

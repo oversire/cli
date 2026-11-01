@@ -111,7 +111,7 @@ func TestMergeAllOrNone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Merged || res.Removed || len(res.Repos) != 2 || res.Repos[0].Name != "oversire" || res.Repos[0].Result != wire.MergeMerged ||
+	if res.Merged || res.Removed || len(res.Repos) != 2 || res.Repos[0].Name != "oversire" || res.Repos[0].Result != wire.MergeSkipped || res.Repos[0].Head != "" ||
 		res.Repos[1].Name != "cli" || res.Repos[1].Result != wire.MergeStopped || !strings.HasPrefix(res.Error, "cli: ") {
 		t.Fatalf("%+v", res)
 	}

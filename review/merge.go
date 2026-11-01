@@ -31,7 +31,10 @@ func (e *Engine) Merge(ctx context.Context, key string, m wire.MergeRequest) (wi
 	}
 
 	git := e.d.Git
-	type done struct{ primary, old string }
+	type done struct {
+		primary, old string
+		at           int
+	}
 	var merged []done
 	fail := func(name string, i int, rm wire.RepoMerge, text string) {
 		res.Repos = append(res.Repos, rm)
@@ -41,7 +44,9 @@ func (e *Engine) Merge(ctx context.Context, key string, m wire.MergeRequest) (wi
 		for _, d := range merged {
 			if _, err := git.Run(ctx, d.primary, "reset", "--keep", d.old); err != nil {
 				text += " The base of " + filepath.Base(d.primary) + " did not go back: " + err.Error()
+				continue
 			}
+			res.Repos[d.at] = wire.RepoMerge{Name: res.Repos[d.at].Name, Result: wire.MergeSkipped}
 		}
 		res.Error = name + ": " + text
 	}
@@ -74,7 +79,7 @@ func (e *Engine) Merge(ctx context.Context, key string, m wire.MergeRequest) (wi
 			e.conflict(key, false)
 			break
 		}
-		merged = append(merged, done{primary, old})
+		merged = append(merged, done{primary, old, len(res.Repos)})
 		rm.Head, _ = git.Run(ctx, primary, "rev-parse", "--short", r.Base)
 		res.Repos = append(res.Repos, rm)
 	}
