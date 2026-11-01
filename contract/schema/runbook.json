@@ -24,7 +24,7 @@
         "id": { "$ref": "#/$defs/StepID" },
         "name": { "type": "string", "minLength": 1 },
         "agent": { "description": "An OverSire agent name of Settings › Agents, for example claude-max.", "type": "string", "minLength": 1 },
-        "prompt": { "description": "The first prompt of the session. Placeholders: {key} {url} {title} {item} {workspace} {project} {round} {notes} {worktree} {done}.", "type": "string", "minLength": 1 },
+        "prompt": { "description": "The first prompt of the session. Placeholders: {key} {url} {title} {item} {workspace} {project} {round} {notes} {group} {worktree} {done}. {group} is the worktree group of the item, .wt/<key>; {worktree} is the same.", "type": "string", "minLength": 1 },
         "pauseBefore": { "description": "The run waits at a gate for your approval before the step starts.", "type": "boolean" },
         "review": { "$ref": "#/$defs/Review" }
       },
