@@ -119,6 +119,10 @@ func TestSubmitWorkingQueuesTwoBatches(t *testing.T) {
 	if len(sent) != 2 || !strings.Contains(sent[1], "round 2:") || !strings.Contains(sent[1], "Two.") {
 		t.Fatal(sent)
 	}
+	// Round 1 waited in the queue when round 2 was made: round 2 does not repeat it.
+	if strings.Contains(sent[1], "Still open") {
+		t.Fatal(sent[1])
+	}
 }
 
 func TestSubmitEndedStartsSession(t *testing.T) {
@@ -148,6 +152,10 @@ func TestSubmitEndedStartsSession(t *testing.T) {
 	round, _ = r.Submit(ctx, "APP-1", wire.SubmitReview{Verdict: wire.VerdictRequestChanges, Launch: &wire.AgentLaunch{CLI: "codex", Profile: "p"}})
 	if round.Session != "new2" || r.launch.reqs[1].Agent != "codex" {
 		t.Fatalf("%+v %+v", round, r.launch.reqs[1])
+	}
+	// The session of round 1 ended with no answer: round 2 repeats its comment.
+	if p := r.launch.reqs[1].Prompt; !strings.Contains(p, "Still open from earlier rounds") || !strings.Contains(p, "One.") {
+		t.Fatal(p)
 	}
 }
 

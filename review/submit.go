@@ -33,10 +33,16 @@ func (e *Engine) Submit(ctx context.Context, key string, s wire.SubmitReview) (w
 	defer e.send.Unlock()
 	e.mu.Lock()
 	r := e.rec(kind, key)
-	var batch []wire.ReviewComment
+	var batch, open []wire.ReviewComment
 	for _, c := range r.Comments {
-		if c.State == wire.CommentPending {
+		switch c.State {
+		case wire.CommentPending:
 			batch = append(batch, c)
+		case wire.CommentSubmitted:
+			// A round that waits in the queue still goes. Repeat only a round that went, or that failed.
+			if rd := e.roundOf(r, c.Round); rd != nil && (rd.DeliveredAt != nil || rd.Error != "") {
+				open = append(open, c)
+			}
 		}
 	}
 	if s.Verdict == wire.VerdictRequestChanges && len(batch) == 0 && strings.TrimSpace(s.Summary) == "" {
@@ -57,7 +63,7 @@ func (e *Engine) Submit(ctx context.Context, key string, s wire.SubmitReview) (w
 		for i := range batch {
 			batch[i].Round = n
 		}
-		e.setPrompt(r, n, prompt(kind, key, dir, round, batch))
+		e.setPrompt(r, n, prompt(kind, key, dir, round, batch, open))
 	}
 	r.Rounds = append(r.Rounds, round)
 	e.changed(r, wire.EventReviewChanged)

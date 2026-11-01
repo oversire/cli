@@ -19,9 +19,9 @@ func ReadyCommand(kind wire.ReviewKind, key string) string {
 // ReplyCommand is the command that answers a comment, without the id and the text.
 func ReplyCommand(key string) string { return "oversire review reply --key " + key }
 
-// prompt is the text of a round that requests changes: the header, the summary, each comment, then the rules.
-// dir is the group folder of a code review, or the folder of the plan.
-func prompt(kind wire.ReviewKind, key, dir string, round wire.ReviewRound, cs []wire.ReviewComment) string {
+// prompt is the text of a round that requests changes: the header, the summary, each comment, the open comments
+// of earlier rounds, then the rules. dir is the group folder of a code review, or the folder of the plan.
+func prompt(kind wire.ReviewKind, key, dir string, round wire.ReviewRound, cs, open []wire.ReviewComment) string {
 	var b strings.Builder
 	what := key
 	if kind == wire.ReviewPlan {
@@ -31,14 +31,10 @@ func prompt(kind wire.ReviewKind, key, dir string, round wire.ReviewRound, cs []
 	if s := strings.TrimSpace(round.Summary); s != "" {
 		fmt.Fprintf(&b, "\n%s\n", s)
 	}
-	for _, c := range cs {
-		fmt.Fprintf(&b, "\n[%s] %s\n", c.ID, anchorText(c))
-		if kind == wire.ReviewCode && c.Excerpt != "" {
-			for _, l := range strings.Split(c.Excerpt, "\n") {
-				fmt.Fprintf(&b, "    > %s\n", l)
-			}
-		}
-		fmt.Fprintf(&b, "%s\n", strings.TrimSpace(c.Text))
+	writeComments(&b, kind, cs)
+	if len(open) > 0 {
+		b.WriteString("\nStill open from earlier rounds, with no answer:\n")
+		writeComments(&b, kind, open)
 	}
 	b.WriteString("\n")
 	if kind == wire.ReviewPlan {
@@ -47,7 +43,7 @@ func prompt(kind wire.ReviewKind, key, dir string, round wire.ReviewRound, cs []
 		fmt.Fprintf(&b, "Work in the group folder %s. Do not merge.\n", dir)
 		b.WriteString("Make the change for each comment and commit it to the branch of the repo.\n")
 	}
-	if len(cs) > 0 {
+	if len(cs)+len(open) > 0 {
 		fmt.Fprintf(&b, "Then answer each comment with its id:\n  %s <id> \"<what you did>\"\n", ReplyCommand(key))
 	}
 	if kind == wire.ReviewCode {
@@ -55,6 +51,18 @@ func prompt(kind wire.ReviewKind, key, dir string, round wire.ReviewRound, cs []
 	}
 	fmt.Fprintf(&b, "At the end, hand off for review:\n  %s --note \"<one line>\"\n", ReadyCommand(kind, key))
 	return b.String()
+}
+
+func writeComments(b *strings.Builder, kind wire.ReviewKind, cs []wire.ReviewComment) {
+	for _, c := range cs {
+		fmt.Fprintf(b, "\n[%s] %s\n", c.ID, anchorText(c))
+		if kind == wire.ReviewCode && c.Excerpt != "" {
+			for _, l := range strings.Split(c.Excerpt, "\n") {
+				fmt.Fprintf(b, "    > %s\n", l)
+			}
+		}
+		fmt.Fprintf(b, "%s\n", strings.TrimSpace(c.Text))
+	}
 }
 
 // anchorText is repo/path:from-line for code, with "(old)" for a line of the base, or the block heading of a plan.
