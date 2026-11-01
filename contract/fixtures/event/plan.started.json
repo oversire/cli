@@ -1,0 +1,18 @@
+{
+  "seq": 115,
+  "id": "app:plan:OVERSIRE-371:1793300000",
+  "at": "2026-10-29T15:15:12Z",
+  "seenAt": "2026-10-29T15:15:13Z",
+  "kind": "plan.started",
+  "item": "OVERSIRE-371",
+  "project": "oversire",
+  "machine": "mba",
+  "actorType": "human",
+  "actor": "flarco@gmail.com",
+  "via": "app@mba",
+  "summary": "Plan started with runbook plan-and-ship",
+  "payload": {
+    "runbook": "plan-and-ship",
+    "run": "r-41"
+  }
+}

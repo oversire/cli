@@ -1,0 +1,25 @@
+{
+  "seq": 133,
+  "id": "github:release:oversire/oversire:v0.14.0",
+  "at": "2026-10-29T15:33:12Z",
+  "seenAt": "2026-10-29T15:33:13Z",
+  "kind": "release.published",
+  "item": "OVERSIRE-372",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "repo": "oversire/oversire",
+  "machine": "mba",
+  "provider": "github",
+  "actorType": "provider",
+  "actor": "github-actions",
+  "via": "poll",
+  "summary": "v0.14.0 released",
+  "payload": {
+    "tag": "v0.14.0",
+    "sha": "a1b2c3d4",
+    "items": [
+      "OVERSIRE-372",
+      "OVERSIRE-375"
+    ]
+  }
+}

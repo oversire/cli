@@ -1,0 +1,18 @@
+{
+  "seq": 113,
+  "id": "review:OVERSIRE-371:plan:2:approve",
+  "at": "2026-10-29T15:13:12Z",
+  "seenAt": "2026-10-29T15:13:13Z",
+  "kind": "review.approved",
+  "item": "OVERSIRE-371",
+  "project": "oversire",
+  "machine": "mba",
+  "actorType": "human",
+  "actor": "flarco@gmail.com",
+  "via": "app@mba",
+  "summary": "Plan approved, round 2",
+  "payload": {
+    "kind": "plan",
+    "round": 2
+  }
+}

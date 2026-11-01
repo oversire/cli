@@ -1,0 +1,22 @@
+{
+  "seq": 131,
+  "id": "github:pr:oversire/cli:88:merged",
+  "at": "2026-10-29T15:31:12Z",
+  "seenAt": "2026-10-29T15:31:13Z",
+  "kind": "pr.merged",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "repo": "oversire/cli",
+  "machine": "mba",
+  "provider": "github",
+  "actorType": "human",
+  "actor": "flarco@gmail.com",
+  "via": "poll",
+  "summary": "#88 merged into main",
+  "payload": {
+    "number": 88,
+    "base": "main",
+    "mergeSha": "7c3d55b1"
+  }
+}

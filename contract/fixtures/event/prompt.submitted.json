@@ -1,0 +1,23 @@
+{
+  "seq": 110,
+  "id": "hook:5f1c2a:turn-9:prompt",
+  "at": "2026-10-29T15:10:12Z",
+  "seenAt": "2026-10-29T15:10:13Z",
+  "kind": "prompt.submitted",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "machine": "mini",
+  "session": "work:OVERSIRE-374",
+  "corr": "turn-9",
+  "actorType": "human",
+  "actor": "flarco@gmail.com",
+  "via": "hook",
+  "summary": "Stop. Do not keep a fallback for old git. Require git 2.38 or later and say so in the error.",
+  "payload": {
+    "turn": 9,
+    "steer": true,
+    "text": "Stop. Do not keep a fallback for old git. Require git 2.38 or later and say so in the error."
+  },
+  "private": true
+}

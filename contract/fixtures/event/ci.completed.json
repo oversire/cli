@@ -1,0 +1,32 @@
+{
+  "seq": 127,
+  "id": "gha:2243:1:completed",
+  "at": "2026-10-29T15:27:12Z",
+  "seenAt": "2026-10-29T15:27:13Z",
+  "kind": "ci.completed",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "repo": "oversire/cli",
+  "machine": "mba",
+  "provider": "github",
+  "actorType": "provider",
+  "actor": "github-actions",
+  "via": "poll",
+  "summary": "cli test #2243 failed: TestMergePartialFail",
+  "payload": {
+    "workflow": "test",
+    "run": 2243,
+    "attempt": 1,
+    "branch": "oversire-374",
+    "headSha": "9d1e07a2",
+    "conclusion": "failure",
+    "durationSec": 312,
+    "failed": [
+      {
+        "job": "go test",
+        "step": "TestMergePartialFail"
+      }
+    ]
+  }
+}

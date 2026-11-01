@@ -1,0 +1,24 @@
+{
+  "seq": 128,
+  "id": "gha:2243:2:rerun",
+  "at": "2026-10-29T15:28:12Z",
+  "seenAt": "2026-10-29T15:28:13Z",
+  "kind": "ci.rerun",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "repo": "oversire/cli",
+  "machine": "mba",
+  "provider": "github",
+  "actorType": "provider",
+  "actor": "github-actions",
+  "via": "poll",
+  "summary": "cli test #2243 attempt 2",
+  "payload": {
+    "workflow": "test",
+    "run": 2243,
+    "attempt": 2,
+    "branch": "oversire-374",
+    "headSha": "9d1e07a2"
+  }
+}

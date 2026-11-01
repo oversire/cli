@@ -1,0 +1,23 @@
+{
+  "seq": 201,
+  "id": "hook:5f1c2a:turn-1:prompt",
+  "at": "2026-10-29T10:00:00Z",
+  "seenAt": "2026-10-29T10:00:01Z",
+  "kind": "prompt.submitted",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "machine": "mini",
+  "session": "work:OVERSIRE-374",
+  "corr": "turn-1",
+  "actorType": "human",
+  "actor": "flarco@gmail.com",
+  "via": "hook",
+  "summary": "Work on OVERSIRE-374: submit and merge. Read the plan first.",
+  "payload": {
+    "turn": 1,
+    "steer": false,
+    "text": "Work on OVERSIRE-374: submit and merge. Read the plan first."
+  },
+  "private": true
+}

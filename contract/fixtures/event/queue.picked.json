@@ -1,0 +1,19 @@
+{
+  "seq": 139,
+  "id": "queue:oversire:OVERSIRE-374:1793390000",
+  "at": "2026-10-29T15:39:12Z",
+  "seenAt": "2026-10-29T15:39:13Z",
+  "kind": "queue.picked",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "machine": "mbp",
+  "actorType": "system",
+  "actor": "queue",
+  "onBehalf": "flarco@gmail.com",
+  "via": "daemon",
+  "summary": "Queue started OVERSIRE-374 in lane oversire",
+  "payload": {
+    "lane": "oversire"
+  }
+}

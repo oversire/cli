@@ -1,0 +1,20 @@
+{
+  "seq": 202,
+  "id": "plane:comment-91a0",
+  "at": "2026-10-30T11:00:00Z",
+  "seenAt": "2026-10-30T11:00:01Z",
+  "kind": "comment.created",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "machine": "mba",
+  "provider": "plane",
+  "actorType": "human",
+  "actor": "ana@example.com",
+  "via": "poll",
+  "summary": "Can the merge sheet show the base branch?",
+  "payload": {
+    "comment": "91a0",
+    "url": "https://app.plane.so/ocral/browse/OVERSIRE-374/#comment-91a0"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "seq": 143,
+  "id": "job:item-summary:OVERSIRE-374:1793400000",
+  "at": "2026-10-29T15:43:12Z",
+  "seenAt": "2026-10-29T15:43:13Z",
+  "kind": "job.ran",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "machine": "mba",
+  "actorType": "system",
+  "actor": "job:item-summary",
+  "onBehalf": "flarco@gmail.com",
+  "via": "app@mba",
+  "summary": "Item summary written",
+  "payload": {
+    "job": "item-summary",
+    "task": "summary",
+    "result": "ok"
+  }
+}

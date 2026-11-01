@@ -1,0 +1,23 @@
+{
+  "seq": 122,
+  "id": "git:11ac9e30:refs/heads/oversire-374:reset",
+  "at": "2026-10-29T15:22:12Z",
+  "seenAt": "2026-10-29T15:22:13Z",
+  "kind": "git.reset",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "repo": "oversire/cli",
+  "machine": "mini",
+  "session": "work:OVERSIRE-374",
+  "actorType": "agent",
+  "actor": "claude/opus-5-5",
+  "onBehalf": "flarco@gmail.com",
+  "via": "git",
+  "summary": "Reset oversire-374 to HEAD~1",
+  "payload": {
+    "sha": "11ac9e30",
+    "ref": "refs/heads/oversire-374",
+    "to": "HEAD~1"
+  }
+}

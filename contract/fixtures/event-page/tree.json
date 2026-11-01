@@ -1,0 +1,103 @@
+{
+  "events": [
+    {
+      "seq": 112,
+      "id": "review:OVERSIRE-374:code:1:submit",
+      "at": "2026-10-29T15:12:12Z",
+      "seenAt": "2026-10-29T15:12:13Z",
+      "kind": "review.submitted",
+      "item": "OVERSIRE-374",
+      "parentItem": "OVERSIRE-371",
+      "project": "oversire",
+      "machine": "mba",
+      "actorType": "human",
+      "actor": "flarco@gmail.com",
+      "via": "app@mba",
+      "summary": "Round 1: 3 comments. Merge must be all or none.",
+      "payload": {
+        "kind": "code",
+        "round": 1,
+        "comments": 3
+      }
+    },
+    {
+      "seq": 113,
+      "id": "review:OVERSIRE-371:plan:2:approve",
+      "at": "2026-10-29T15:13:12Z",
+      "seenAt": "2026-10-29T15:13:13Z",
+      "kind": "review.approved",
+      "item": "OVERSIRE-371",
+      "project": "oversire",
+      "machine": "mba",
+      "actorType": "human",
+      "actor": "flarco@gmail.com",
+      "via": "app@mba",
+      "summary": "Plan approved, round 2",
+      "payload": {
+        "kind": "plan",
+        "round": 2
+      }
+    },
+    {
+      "seq": 120,
+      "id": "git:9d1e07a2:refs/heads/oversire-374",
+      "at": "2026-10-29T15:20:12Z",
+      "seenAt": "2026-10-29T15:20:13Z",
+      "kind": "git.commit",
+      "item": "OVERSIRE-374",
+      "parentItem": "OVERSIRE-371",
+      "project": "oversire",
+      "repo": "oversire/cli",
+      "machine": "mini",
+      "session": "work:OVERSIRE-374",
+      "actorType": "agent",
+      "actor": "claude/opus-5-5",
+      "onBehalf": "flarco@gmail.com",
+      "via": "git",
+      "summary": "test: rollback when the second repo fails",
+      "payload": {
+        "sha": "9d1e07a2",
+        "ref": "refs/heads/oversire-374",
+        "files": 3,
+        "add": 88,
+        "del": 21,
+        "subject": "test: rollback when the second repo fails"
+      }
+    },
+    {
+      "seq": 127,
+      "id": "gha:2243:1:completed",
+      "at": "2026-10-29T15:27:12Z",
+      "seenAt": "2026-10-29T15:27:13Z",
+      "kind": "ci.completed",
+      "item": "OVERSIRE-374",
+      "parentItem": "OVERSIRE-371",
+      "project": "oversire",
+      "repo": "oversire/cli",
+      "machine": "mba",
+      "provider": "github",
+      "actorType": "provider",
+      "actor": "github-actions",
+      "via": "poll",
+      "summary": "cli test #2243 failed: TestMergePartialFail",
+      "payload": {
+        "workflow": "test",
+        "run": 2243,
+        "attempt": 1,
+        "branch": "oversire-374",
+        "headSha": "9d1e07a2",
+        "conclusion": "failure",
+        "durationSec": 312,
+        "failed": [
+          {
+            "job": "go test",
+            "step": "TestMergePartialFail"
+          }
+        ]
+      }
+    }
+  ],
+  "next": 127,
+  "head": 4120,
+  "more": false
+}

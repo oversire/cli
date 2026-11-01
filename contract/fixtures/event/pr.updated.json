@@ -1,0 +1,21 @@
+{
+  "seq": 130,
+  "id": "github:pr:oversire/cli:88:9d1e07a2",
+  "at": "2026-10-29T15:30:12Z",
+  "seenAt": "2026-10-29T15:30:13Z",
+  "kind": "pr.updated",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "repo": "oversire/cli",
+  "machine": "mba",
+  "provider": "github",
+  "actorType": "human",
+  "actor": "flarco@gmail.com",
+  "via": "poll",
+  "summary": "#88 new commits",
+  "payload": {
+    "number": 88,
+    "headSha": "9d1e07a2"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "seq": 114,
+  "id": "app:ship:OVERSIRE-372:1793460000",
+  "at": "2026-10-29T15:14:12Z",
+  "seenAt": "2026-10-29T15:14:13Z",
+  "kind": "item.shipped",
+  "item": "OVERSIRE-372",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "machine": "mba",
+  "actorType": "human",
+  "actor": "flarco@gmail.com",
+  "via": "app@mba",
+  "summary": "Shipped: merged oversire",
+  "payload": {
+    "repos": [
+      "oversire"
+    ],
+    "group": ".wt/oversire-372"
+  }
+}

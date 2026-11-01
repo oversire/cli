@@ -1,0 +1,21 @@
+{
+  "seq": 106,
+  "id": "hook:5f1c2a:wait:toolu_01Xy:end",
+  "at": "2026-10-29T15:06:12Z",
+  "seenAt": "2026-10-29T15:06:13Z",
+  "kind": "wait.ended",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "machine": "mini",
+  "session": "work:OVERSIRE-374",
+  "corr": "wait-toolu_01Xy",
+  "actorType": "human",
+  "actor": "flarco@gmail.com",
+  "via": "hook",
+  "summary": "Waited 25 min for you",
+  "payload": {
+    "reason": "question",
+    "waitedSec": 1500
+  }
+}

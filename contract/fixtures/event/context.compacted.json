@@ -1,0 +1,20 @@
+{
+  "seq": 107,
+  "id": "hook:5f1c2a:compact:3",
+  "at": "2026-10-29T15:07:12Z",
+  "seenAt": "2026-10-29T15:07:13Z",
+  "kind": "context.compacted",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "machine": "mini",
+  "session": "work:OVERSIRE-374",
+  "actorType": "agent",
+  "actor": "claude/opus-5-5",
+  "onBehalf": "flarco@gmail.com",
+  "via": "hook",
+  "summary": "Context compacted (auto)",
+  "payload": {
+    "trigger": "auto"
+  }
+}

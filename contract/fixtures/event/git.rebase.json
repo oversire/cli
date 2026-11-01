@@ -1,0 +1,23 @@
+{
+  "seq": 121,
+  "id": "git:4be01c7f:refs/heads/oversire-374:rebase",
+  "at": "2026-10-29T15:21:12Z",
+  "seenAt": "2026-10-29T15:21:13Z",
+  "kind": "git.rebase",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "repo": "oversire/cli",
+  "machine": "mini",
+  "session": "work:OVERSIRE-374",
+  "actorType": "agent",
+  "actor": "claude/opus-5-5",
+  "onBehalf": "flarco@gmail.com",
+  "via": "git",
+  "summary": "Rebased oversire-374 onto main",
+  "payload": {
+    "sha": "4be01c7f",
+    "ref": "refs/heads/oversire-374",
+    "onto": "main"
+  }
+}

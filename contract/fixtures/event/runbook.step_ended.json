@@ -1,0 +1,24 @@
+{
+  "seq": 142,
+  "id": "runbook:r-41:2:ended",
+  "at": "2026-10-29T15:42:12Z",
+  "seenAt": "2026-10-29T15:42:13Z",
+  "kind": "runbook.step_ended",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "machine": "mbp",
+  "actorType": "system",
+  "actor": "runbook:plan-and-ship",
+  "onBehalf": "flarco@gmail.com",
+  "via": "daemon",
+  "summary": "Step 2 Work done after 3h 20m",
+  "payload": {
+    "run": "r-41",
+    "runbook": "plan-and-ship",
+    "step": "work",
+    "index": 2,
+    "state": "done",
+    "durationSec": 12000
+  }
+}

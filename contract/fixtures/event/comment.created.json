@@ -1,0 +1,19 @@
+{
+  "seq": 136,
+  "id": "plane:comment-77e1",
+  "at": "2026-10-29T15:36:12Z",
+  "seenAt": "2026-10-29T15:36:13Z",
+  "kind": "comment.created",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "machine": "mba",
+  "provider": "plane",
+  "actorType": "human",
+  "actor": "flarco@gmail.com",
+  "via": "poll",
+  "summary": "Merge sheet: tell when the group stays.",
+  "payload": {
+    "comment": "77e1"
+  }
+}

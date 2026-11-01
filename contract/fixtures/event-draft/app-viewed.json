@@ -1,0 +1,16 @@
+{
+  "id": "app:view:OVERSIRE-374:2026-10-29T15:00",
+  "at": "2026-10-29T15:17:12Z",
+  "kind": "item.viewed",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "machine": "mba",
+  "actorType": "human",
+  "actor": "flarco@gmail.com",
+  "via": "app@mba",
+  "summary": "Viewed",
+  "payload": {
+    "page": "overview"
+  }
+}

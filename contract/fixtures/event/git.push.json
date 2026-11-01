@@ -1,0 +1,22 @@
+{
+  "seq": 124,
+  "id": "git:7c3d55b1:refs/remotes/origin/main:push",
+  "at": "2026-10-29T15:24:12Z",
+  "seenAt": "2026-10-29T15:24:13Z",
+  "kind": "git.push",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "repo": "oversire/cli",
+  "machine": "mbp",
+  "actorType": "human",
+  "actor": "flarco@gmail.com",
+  "via": "git",
+  "summary": "Pushed main to origin (5 commits)",
+  "payload": {
+    "sha": "7c3d55b1",
+    "ref": "refs/remotes/origin/main",
+    "remote": "origin",
+    "commits": 5
+  }
+}

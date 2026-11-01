@@ -1,0 +1,23 @@
+{
+  "seq": 123,
+  "id": "git:7c3d55b1:refs/heads/main:merge",
+  "at": "2026-10-29T15:23:12Z",
+  "seenAt": "2026-10-29T15:23:13Z",
+  "kind": "git.merge",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "repo": "oversire/cli",
+  "machine": "mbp",
+  "actorType": "human",
+  "actor": "flarco@gmail.com",
+  "via": "git",
+  "summary": "Merged oversire-374 into main (fast-forward, 5 commits)",
+  "payload": {
+    "sha": "7c3d55b1",
+    "ref": "refs/heads/main",
+    "branch": "oversire-374",
+    "mode": "fastForward",
+    "commits": 5
+  }
+}

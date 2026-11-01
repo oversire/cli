@@ -1,0 +1,22 @@
+{
+  "seq": 141,
+  "id": "runbook:r-41:2:started",
+  "at": "2026-10-29T15:41:12Z",
+  "seenAt": "2026-10-29T15:41:13Z",
+  "kind": "runbook.step_started",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "machine": "mbp",
+  "actorType": "system",
+  "actor": "runbook:plan-and-ship",
+  "onBehalf": "flarco@gmail.com",
+  "via": "daemon",
+  "summary": "Step 2 Work started",
+  "payload": {
+    "run": "r-41",
+    "runbook": "plan-and-ship",
+    "step": "work",
+    "index": 2
+  }
+}

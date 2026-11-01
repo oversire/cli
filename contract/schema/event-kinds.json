@@ -1,0 +1,1528 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oversire.dev/contract/event-kinds.json",
+  "title": "OverSire event kinds",
+  "description": "The catalog of the kinds of event.json. Each entry: kind, domain, the actor types that may write it, private (the summary holds prompt text), the summary rule, and the payload as a small JSON Schema. Each kind has the fixture fixtures/event/<kind>.json. A new kind goes here first, with its fixture. A reader keeps a row of a kind that it does not know.",
+  "x-oversire-schema": 1,
+  "domains": [
+    "agent",
+    "human",
+    "git",
+    "ci",
+    "codehost",
+    "tracker",
+    "system"
+  ],
+  "kinds": [
+    {
+      "kind": "session.started",
+      "domain": "agent",
+      "actorTypes": [
+        "agent"
+      ],
+      "private": false,
+      "summary": "harness and model, and the place",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "harness": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "runtime": {
+            "type": "string"
+          },
+          "cwd": {
+            "type": "string"
+          },
+          "profile": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "harness"
+        ]
+      }
+    },
+    {
+      "kind": "session.ended",
+      "domain": "agent",
+      "actorTypes": [
+        "agent",
+        "human",
+        "system"
+      ],
+      "private": false,
+      "summary": "the reason and the length",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "turns": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "durationSec": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "kind": "turn.started",
+      "domain": "agent",
+      "actorTypes": [
+        "agent"
+      ],
+      "private": false,
+      "summary": "turn N, task or steer",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "turn": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "steer": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "turn"
+        ]
+      }
+    },
+    {
+      "kind": "turn.ended",
+      "domain": "agent",
+      "actorTypes": [
+        "agent"
+      ],
+      "private": false,
+      "summary": "the counts of the turn",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "turn": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "tools": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "toolErrors": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "filesEdited": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "testsRun": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "testsFailed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "interrupted": {
+            "type": "boolean"
+          },
+          "durationSec": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "turn",
+          "tools"
+        ]
+      }
+    },
+    {
+      "kind": "turn.interrupted",
+      "domain": "agent",
+      "actorTypes": [
+        "human"
+      ],
+      "private": false,
+      "summary": "you stopped the agent",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "turn": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "turn"
+        ]
+      }
+    },
+    {
+      "kind": "wait.started",
+      "domain": "agent",
+      "actorTypes": [
+        "agent",
+        "system"
+      ],
+      "private": false,
+      "summary": "what the agent waits for",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "enum": [
+              "question",
+              "permission",
+              "plan",
+              "review",
+              "input"
+            ]
+          },
+          "tool": {
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "reason"
+        ]
+      }
+    },
+    {
+      "kind": "wait.ended",
+      "domain": "agent",
+      "actorTypes": [
+        "human",
+        "agent",
+        "system"
+      ],
+      "private": false,
+      "summary": "the wait time",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "enum": [
+              "question",
+              "permission",
+              "plan",
+              "review",
+              "input"
+            ]
+          },
+          "waitedSec": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "reason"
+        ]
+      }
+    },
+    {
+      "kind": "context.compacted",
+      "domain": "agent",
+      "actorTypes": [
+        "agent",
+        "human"
+      ],
+      "private": false,
+      "summary": "auto or manual",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "trigger": {
+            "enum": [
+              "auto",
+              "manual"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "trigger"
+        ]
+      }
+    },
+    {
+      "kind": "subagent.ended",
+      "domain": "agent",
+      "actorTypes": [
+        "agent"
+      ],
+      "private": false,
+      "summary": "the subagent type",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "agentType": {
+            "type": "string"
+          },
+          "durationSec": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "kind": "review.ready",
+      "domain": "agent",
+      "actorTypes": [
+        "agent"
+      ],
+      "private": false,
+      "summary": "the kind and the round",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "enum": [
+              "code",
+              "plan"
+            ]
+          },
+          "round": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "comments": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "repos": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "kind"
+        ]
+      }
+    },
+    {
+      "kind": "prompt.submitted",
+      "domain": "human",
+      "actorTypes": [
+        "human"
+      ],
+      "private": true,
+      "summary": "the first 200 characters of the prompt",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "turn": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "steer": {
+            "type": "boolean"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 4000
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "turn"
+        ]
+      }
+    },
+    {
+      "kind": "question.answered",
+      "domain": "human",
+      "actorTypes": [
+        "human"
+      ],
+      "private": false,
+      "summary": "the answer, short",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "question": {
+            "type": "string"
+          },
+          "waitedSec": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "channel": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "kind": "review.submitted",
+      "domain": "human",
+      "actorTypes": [
+        "human"
+      ],
+      "private": false,
+      "summary": "the round and the comment count",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "enum": [
+              "code",
+              "plan"
+            ]
+          },
+          "round": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "comments": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "repos": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "round"
+        ]
+      }
+    },
+    {
+      "kind": "review.approved",
+      "domain": "human",
+      "actorTypes": [
+        "human"
+      ],
+      "private": false,
+      "summary": "the kind and the round",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "enum": [
+              "code",
+              "plan"
+            ]
+          },
+          "round": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "comments": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "repos": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "kind"
+        ]
+      }
+    },
+    {
+      "kind": "item.shipped",
+      "domain": "human",
+      "actorTypes": [
+        "human",
+        "system"
+      ],
+      "private": false,
+      "summary": "what was merged",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "repos": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20
+          },
+          "group": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "kind": "plan.started",
+      "domain": "human",
+      "actorTypes": [
+        "human",
+        "system"
+      ],
+      "private": false,
+      "summary": "the runbook or the plan session",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "runbook": {
+            "type": "string"
+          },
+          "run": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "kind": "item.state_changed",
+      "domain": "human",
+      "actorTypes": [
+        "human",
+        "provider",
+        "system"
+      ],
+      "private": false,
+      "summary": "from and to",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "group": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "to"
+        ]
+      }
+    },
+    {
+      "kind": "item.viewed",
+      "domain": "human",
+      "actorTypes": [
+        "human"
+      ],
+      "private": false,
+      "summary": "the page",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "kind": "worktree.added",
+      "domain": "git",
+      "actorTypes": [
+        "agent",
+        "human"
+      ],
+      "private": false,
+      "summary": "the worktree path and branch",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "worktree": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "worktree"
+        ]
+      }
+    },
+    {
+      "kind": "worktree.removed",
+      "domain": "git",
+      "actorTypes": [
+        "agent",
+        "human"
+      ],
+      "private": false,
+      "summary": "the worktree path",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "worktree": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "worktree"
+        ]
+      }
+    },
+    {
+      "kind": "git.commit",
+      "domain": "git",
+      "actorTypes": [
+        "agent",
+        "human"
+      ],
+      "private": false,
+      "summary": "the commit subject",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "sha": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "worktree": {
+            "type": "string"
+          },
+          "files": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "add": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "del": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "subject": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "sha",
+          "ref"
+        ]
+      }
+    },
+    {
+      "kind": "git.rebase",
+      "domain": "git",
+      "actorTypes": [
+        "agent",
+        "human"
+      ],
+      "private": false,
+      "summary": "onto what",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "sha": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "worktree": {
+            "type": "string"
+          },
+          "files": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "add": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "del": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "subject": {
+            "type": "string"
+          },
+          "onto": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "sha",
+          "ref"
+        ]
+      }
+    },
+    {
+      "kind": "git.reset",
+      "domain": "git",
+      "actorTypes": [
+        "agent",
+        "human"
+      ],
+      "private": false,
+      "summary": "to where",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "sha": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "worktree": {
+            "type": "string"
+          },
+          "files": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "add": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "del": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "subject": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "sha",
+          "ref"
+        ]
+      }
+    },
+    {
+      "kind": "git.merge",
+      "domain": "git",
+      "actorTypes": [
+        "human",
+        "agent",
+        "system"
+      ],
+      "private": false,
+      "summary": "what went into what",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "sha": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "worktree": {
+            "type": "string"
+          },
+          "files": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "add": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "del": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "subject": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "fastForward",
+              "merge",
+              "rebase"
+            ]
+          },
+          "commits": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "sha",
+          "ref"
+        ]
+      }
+    },
+    {
+      "kind": "git.push",
+      "domain": "git",
+      "actorTypes": [
+        "human",
+        "agent"
+      ],
+      "private": false,
+      "summary": "the remote ref",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "sha": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "worktree": {
+            "type": "string"
+          },
+          "files": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "add": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "del": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "subject": {
+            "type": "string"
+          },
+          "remote": {
+            "type": "string"
+          },
+          "commits": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "sha",
+          "ref"
+        ]
+      }
+    },
+    {
+      "kind": "ci.queued",
+      "domain": "ci",
+      "actorTypes": [
+        "provider"
+      ],
+      "private": false,
+      "summary": "workflow and run",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "workflow": {
+            "type": "string"
+          },
+          "run": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "attempt": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "branch": {
+            "type": "string"
+          },
+          "headSha": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "workflow",
+          "run"
+        ]
+      }
+    },
+    {
+      "kind": "ci.started",
+      "domain": "ci",
+      "actorTypes": [
+        "provider"
+      ],
+      "private": false,
+      "summary": "workflow and run",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "workflow": {
+            "type": "string"
+          },
+          "run": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "attempt": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "branch": {
+            "type": "string"
+          },
+          "headSha": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "workflow",
+          "run"
+        ]
+      }
+    },
+    {
+      "kind": "ci.completed",
+      "domain": "ci",
+      "actorTypes": [
+        "provider"
+      ],
+      "private": false,
+      "summary": "the conclusion and the first failed step",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "workflow": {
+            "type": "string"
+          },
+          "run": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "attempt": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "branch": {
+            "type": "string"
+          },
+          "headSha": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "conclusion": {
+            "enum": [
+              "success",
+              "failure",
+              "cancelled",
+              "skipped",
+              "timed_out"
+            ]
+          },
+          "durationSec": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "failed": {
+            "type": "array",
+            "maxItems": 3,
+            "items": {
+              "type": "object",
+              "properties": {
+                "job": {
+                  "type": "string"
+                },
+                "step": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "job"
+              ]
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "workflow",
+          "run",
+          "attempt",
+          "conclusion"
+        ]
+      }
+    },
+    {
+      "kind": "ci.rerun",
+      "domain": "ci",
+      "actorTypes": [
+        "provider",
+        "human"
+      ],
+      "private": false,
+      "summary": "the attempt",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "workflow": {
+            "type": "string"
+          },
+          "run": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "attempt": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "branch": {
+            "type": "string"
+          },
+          "headSha": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "workflow",
+          "run",
+          "attempt"
+        ]
+      }
+    },
+    {
+      "kind": "pr.opened",
+      "domain": "codehost",
+      "actorTypes": [
+        "human",
+        "agent"
+      ],
+      "private": false,
+      "summary": "number and title",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "title": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "base": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "headSha": {
+            "type": "string"
+          },
+          "mergeSha": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "number"
+        ]
+      }
+    },
+    {
+      "kind": "pr.updated",
+      "domain": "codehost",
+      "actorTypes": [
+        "human",
+        "agent"
+      ],
+      "private": false,
+      "summary": "number and the new head",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "title": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "base": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "headSha": {
+            "type": "string"
+          },
+          "mergeSha": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "number"
+        ]
+      }
+    },
+    {
+      "kind": "pr.merged",
+      "domain": "codehost",
+      "actorTypes": [
+        "human",
+        "agent",
+        "provider"
+      ],
+      "private": false,
+      "summary": "number and the merge commit",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "title": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "base": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "headSha": {
+            "type": "string"
+          },
+          "mergeSha": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "number"
+        ]
+      }
+    },
+    {
+      "kind": "pr.closed",
+      "domain": "codehost",
+      "actorTypes": [
+        "human",
+        "agent"
+      ],
+      "private": false,
+      "summary": "number",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "title": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "base": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "headSha": {
+            "type": "string"
+          },
+          "mergeSha": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "number"
+        ]
+      }
+    },
+    {
+      "kind": "release.published",
+      "domain": "codehost",
+      "actorTypes": [
+        "provider",
+        "human"
+      ],
+      "private": false,
+      "summary": "the tag",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "tag": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "sha": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "tag"
+        ]
+      }
+    },
+    {
+      "kind": "item.created",
+      "domain": "tracker",
+      "actorTypes": [
+        "human",
+        "provider",
+        "agent"
+      ],
+      "private": false,
+      "summary": "the title",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "kind": "item.updated",
+      "domain": "tracker",
+      "actorTypes": [
+        "human",
+        "provider",
+        "agent"
+      ],
+      "private": false,
+      "summary": "the changed fields",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "fields"
+        ]
+      }
+    },
+    {
+      "kind": "comment.created",
+      "domain": "tracker",
+      "actorTypes": [
+        "human",
+        "agent",
+        "provider"
+      ],
+      "private": false,
+      "summary": "the first line of the comment",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "comment": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "kind": "intake.created",
+      "domain": "tracker",
+      "actorTypes": [
+        "human",
+        "provider"
+      ],
+      "private": false,
+      "summary": "the title",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "intake": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "kind": "intake.accepted",
+      "domain": "tracker",
+      "actorTypes": [
+        "human"
+      ],
+      "private": false,
+      "summary": "the new item",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "intake": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "kind": "queue.picked",
+      "domain": "system",
+      "actorTypes": [
+        "system"
+      ],
+      "private": false,
+      "summary": "the lane",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "lane": {
+            "type": "string"
+          },
+          "runbook": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "kind": "queue.held",
+      "domain": "system",
+      "actorTypes": [
+        "system"
+      ],
+      "private": false,
+      "summary": "why",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "lane": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "reason"
+        ]
+      }
+    },
+    {
+      "kind": "runbook.step_started",
+      "domain": "system",
+      "actorTypes": [
+        "system"
+      ],
+      "private": false,
+      "summary": "the step",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "run": {
+            "type": "string"
+          },
+          "runbook": {
+            "type": "string"
+          },
+          "step": {
+            "type": "string"
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "run",
+          "step"
+        ]
+      }
+    },
+    {
+      "kind": "runbook.step_ended",
+      "domain": "system",
+      "actorTypes": [
+        "system"
+      ],
+      "private": false,
+      "summary": "the step and the result",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "run": {
+            "type": "string"
+          },
+          "runbook": {
+            "type": "string"
+          },
+          "step": {
+            "type": "string"
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "state": {
+            "type": "string"
+          },
+          "durationSec": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "run",
+          "step",
+          "state"
+        ]
+      }
+    },
+    {
+      "kind": "job.ran",
+      "domain": "system",
+      "actorTypes": [
+        "system"
+      ],
+      "private": false,
+      "summary": "the job and the result",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "job": {
+            "type": "string"
+          },
+          "task": {
+            "type": "string"
+          },
+          "result": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "kind": "automation.ran",
+      "domain": "system",
+      "actorTypes": [
+        "system"
+      ],
+      "private": false,
+      "summary": "the rule and the action",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "automation": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "result": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  ]
+}

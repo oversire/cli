@@ -1,0 +1,24 @@
+{
+  "seq": 109,
+  "id": "review:OVERSIRE-374:code:2:ready",
+  "at": "2026-10-29T15:09:12Z",
+  "seenAt": "2026-10-29T15:09:13Z",
+  "kind": "review.ready",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "machine": "mini",
+  "session": "work:OVERSIRE-374",
+  "actorType": "agent",
+  "actor": "claude/opus-5-5",
+  "onBehalf": "flarco@gmail.com",
+  "via": "cli",
+  "summary": "Ready for code review, round 2",
+  "payload": {
+    "kind": "code",
+    "round": 2,
+    "repos": [
+      "cli"
+    ]
+  }
+}

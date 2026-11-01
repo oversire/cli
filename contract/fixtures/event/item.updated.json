@@ -1,0 +1,22 @@
+{
+  "seq": 135,
+  "id": "plane:act-5d17b3",
+  "at": "2026-10-29T15:35:12Z",
+  "seenAt": "2026-10-29T15:35:13Z",
+  "kind": "item.updated",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "machine": "mba",
+  "provider": "plane",
+  "actorType": "human",
+  "actor": "flarco@gmail.com",
+  "via": "poll",
+  "summary": "Changed priority, labels",
+  "payload": {
+    "fields": [
+      "priority",
+      "labels"
+    ]
+  }
+}

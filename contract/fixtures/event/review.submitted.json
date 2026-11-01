@@ -1,0 +1,20 @@
+{
+  "seq": 112,
+  "id": "review:OVERSIRE-374:code:1:submit",
+  "at": "2026-10-29T15:12:12Z",
+  "seenAt": "2026-10-29T15:12:13Z",
+  "kind": "review.submitted",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "machine": "mba",
+  "actorType": "human",
+  "actor": "flarco@gmail.com",
+  "via": "app@mba",
+  "summary": "Round 1: 3 comments. Merge must be all or none.",
+  "payload": {
+    "kind": "code",
+    "round": 1,
+    "comments": 3
+  }
+}

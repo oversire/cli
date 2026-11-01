@@ -1,0 +1,20 @@
+{
+  "seq": 140,
+  "id": "queue:oversire:OVERSIRE-374:held:area",
+  "at": "2026-10-29T15:40:12Z",
+  "seenAt": "2026-10-29T15:40:13Z",
+  "kind": "queue.held",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "machine": "mbp",
+  "actorType": "system",
+  "actor": "queue",
+  "onBehalf": "flarco@gmail.com",
+  "via": "daemon",
+  "summary": "Held: area cli/review is claimed by OVERSIRE-373",
+  "payload": {
+    "lane": "oversire",
+    "reason": "area"
+  }
+}

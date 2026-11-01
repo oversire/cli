@@ -1,0 +1,20 @@
+{
+  "seq": 119,
+  "id": "git:wt:oversire/cli:oversire-374:removed",
+  "at": "2026-10-29T15:19:12Z",
+  "seenAt": "2026-10-29T15:19:13Z",
+  "kind": "worktree.removed",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "repo": "oversire/cli",
+  "machine": "mini",
+  "actorType": "human",
+  "actor": "flarco@gmail.com",
+  "via": "git",
+  "summary": "Worktree .wt/oversire-374/cli removed",
+  "payload": {
+    "worktree": ".wt/oversire-374/cli",
+    "branch": "oversire-374"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "seq": 138,
+  "id": "plane:intake-3a9:accepted",
+  "at": "2026-10-29T15:38:12Z",
+  "seenAt": "2026-10-29T15:38:13Z",
+  "kind": "intake.accepted",
+  "item": "OVERSIRE-371",
+  "project": "oversire",
+  "machine": "mba",
+  "provider": "plane",
+  "actorType": "human",
+  "actor": "flarco@gmail.com",
+  "via": "poll",
+  "summary": "Intake accepted as OVERSIRE-371",
+  "payload": {
+    "intake": "3a9"
+  }
+}

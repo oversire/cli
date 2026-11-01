@@ -1,0 +1,26 @@
+{
+  "seq": 120,
+  "id": "git:9d1e07a2:refs/heads/oversire-374",
+  "at": "2026-10-29T15:20:12Z",
+  "seenAt": "2026-10-29T15:20:13Z",
+  "kind": "git.commit",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "repo": "oversire/cli",
+  "machine": "mini",
+  "session": "work:OVERSIRE-374",
+  "actorType": "agent",
+  "actor": "claude/opus-5-5",
+  "onBehalf": "flarco@gmail.com",
+  "via": "git",
+  "summary": "test: rollback when the second repo fails",
+  "payload": {
+    "sha": "9d1e07a2",
+    "ref": "refs/heads/oversire-374",
+    "files": 3,
+    "add": 88,
+    "del": 21,
+    "subject": "test: rollback when the second repo fails"
+  }
+}

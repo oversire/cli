@@ -1,0 +1,22 @@
+{
+  "seq": 102,
+  "id": "hook:5f1c2a:turn-14:start",
+  "at": "2026-10-29T15:02:12Z",
+  "seenAt": "2026-10-29T15:02:13Z",
+  "kind": "turn.started",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "machine": "mini",
+  "session": "work:OVERSIRE-374",
+  "corr": "turn-14",
+  "actorType": "agent",
+  "actor": "claude/opus-5-5",
+  "onBehalf": "flarco@gmail.com",
+  "via": "hook",
+  "summary": "Turn 14 started: steer",
+  "payload": {
+    "turn": 14,
+    "steer": true
+  }
+}

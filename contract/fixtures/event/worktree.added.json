@@ -1,0 +1,22 @@
+{
+  "seq": 118,
+  "id": "git:wt:oversire/cli:oversire-374:added",
+  "at": "2026-10-29T15:18:12Z",
+  "seenAt": "2026-10-29T15:18:13Z",
+  "kind": "worktree.added",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "repo": "oversire/cli",
+  "machine": "mini",
+  "session": "work:OVERSIRE-374",
+  "actorType": "agent",
+  "actor": "claude/opus-5-5",
+  "onBehalf": "flarco@gmail.com",
+  "via": "git",
+  "summary": "Worktree .wt/oversire-374/cli on oversire-374",
+  "payload": {
+    "worktree": ".wt/oversire-374/cli",
+    "branch": "oversire-374"
+  }
+}

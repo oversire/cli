@@ -1,0 +1,20 @@
+{
+  "seq": 134,
+  "id": "plane:act-5d00a1",
+  "at": "2026-10-29T15:34:12Z",
+  "seenAt": "2026-10-29T15:34:13Z",
+  "kind": "item.created",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "machine": "mba",
+  "provider": "plane",
+  "actorType": "human",
+  "actor": "flarco@gmail.com",
+  "via": "poll",
+  "summary": "Created: Submit and merge",
+  "payload": {
+    "title": "Submit and merge",
+    "state": "Backlog"
+  }
+}

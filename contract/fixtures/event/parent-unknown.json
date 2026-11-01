@@ -1,0 +1,21 @@
+{
+  "seq": 200,
+  "id": "git:0f9e8d7c:refs/heads/fix-typo",
+  "at": "2026-10-30T09:00:00Z",
+  "seenAt": "2026-10-30T09:00:01Z",
+  "kind": "git.commit",
+  "project": "oversire",
+  "repo": "oversire/cli",
+  "machine": "mini",
+  "actorType": "human",
+  "actor": "flarco@gmail.com",
+  "via": "git",
+  "summary": "Fix a typo in the README",
+  "payload": {
+    "sha": "0f9e8d7c",
+    "ref": "refs/heads/fix-typo",
+    "files": 1,
+    "add": 1,
+    "del": 1
+  }
+}

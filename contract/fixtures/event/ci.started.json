@@ -1,0 +1,24 @@
+{
+  "seq": 126,
+  "id": "gha:2243:1:started",
+  "at": "2026-10-29T15:26:12Z",
+  "seenAt": "2026-10-29T15:26:13Z",
+  "kind": "ci.started",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "repo": "oversire/cli",
+  "machine": "mba",
+  "provider": "github",
+  "actorType": "provider",
+  "actor": "github-actions",
+  "via": "poll",
+  "summary": "cli test #2243 started on oversire-374",
+  "payload": {
+    "workflow": "test",
+    "run": 2243,
+    "attempt": 1,
+    "branch": "oversire-374",
+    "headSha": "9d1e07a2"
+  }
+}

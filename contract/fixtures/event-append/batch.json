@@ -1,0 +1,74 @@
+{
+  "events": [
+    {
+      "id": "hook:5f1c2a:turn-14:start",
+      "at": "2026-10-29T15:02:12Z",
+      "kind": "turn.started",
+      "item": "OVERSIRE-374",
+      "parentItem": "OVERSIRE-371",
+      "project": "oversire",
+      "machine": "mini",
+      "session": "work:OVERSIRE-374",
+      "corr": "turn-14",
+      "actorType": "agent",
+      "actor": "claude/opus-5-5",
+      "onBehalf": "flarco@gmail.com",
+      "via": "hook",
+      "summary": "Turn 14 started: steer",
+      "payload": {
+        "turn": 14,
+        "steer": true
+      }
+    },
+    {
+      "id": "hook:5f1c2a:turn-14:stop",
+      "at": "2026-10-29T15:03:12Z",
+      "kind": "turn.ended",
+      "item": "OVERSIRE-374",
+      "parentItem": "OVERSIRE-371",
+      "project": "oversire",
+      "machine": "mini",
+      "session": "work:OVERSIRE-374",
+      "corr": "turn-14",
+      "actorType": "agent",
+      "actor": "claude/opus-5-5",
+      "onBehalf": "flarco@gmail.com",
+      "via": "hook",
+      "summary": "Turn 14: 23 tools, 4 files, tests 2 run, 1 failed",
+      "payload": {
+        "turn": 14,
+        "tools": 23,
+        "toolErrors": 1,
+        "filesEdited": 4,
+        "testsRun": 2,
+        "testsFailed": 1,
+        "interrupted": false,
+        "durationSec": 410
+      }
+    },
+    {
+      "id": "git:9d1e07a2:refs/heads/oversire-374",
+      "at": "2026-10-29T15:20:12Z",
+      "kind": "git.commit",
+      "item": "OVERSIRE-374",
+      "parentItem": "OVERSIRE-371",
+      "project": "oversire",
+      "repo": "oversire/cli",
+      "machine": "mini",
+      "session": "work:OVERSIRE-374",
+      "actorType": "agent",
+      "actor": "claude/opus-5-5",
+      "onBehalf": "flarco@gmail.com",
+      "via": "git",
+      "summary": "test: rollback when the second repo fails",
+      "payload": {
+        "sha": "9d1e07a2",
+        "ref": "refs/heads/oversire-374",
+        "files": 3,
+        "add": 88,
+        "del": 21,
+        "subject": "test: rollback when the second repo fails"
+      }
+    }
+  ]
+}

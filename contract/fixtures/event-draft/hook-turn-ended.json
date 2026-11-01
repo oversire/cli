@@ -1,0 +1,26 @@
+{
+  "id": "hook:5f1c2a:turn-14:stop",
+  "at": "2026-10-29T15:03:12Z",
+  "kind": "turn.ended",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "machine": "mini",
+  "session": "work:OVERSIRE-374",
+  "corr": "turn-14",
+  "actorType": "agent",
+  "actor": "claude/opus-5-5",
+  "onBehalf": "flarco@gmail.com",
+  "via": "hook",
+  "summary": "Turn 14: 23 tools, 4 files, tests 2 run, 1 failed",
+  "payload": {
+    "turn": 14,
+    "tools": 23,
+    "toolErrors": 1,
+    "filesEdited": 4,
+    "testsRun": 2,
+    "testsFailed": 1,
+    "interrupted": false,
+    "durationSec": 410
+  }
+}

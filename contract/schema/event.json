@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oversire.dev/contract/event.json",
+  "title": "OverSire events",
+  "description": "One row of the events table (OVERSIRE-377). Each change in the work makes one row: agent sessions, turns, waits, your prompts and decisions, git, CI, provider activity, automation. The home daemon holds the full table. Each other daemon keeps a local copy and sends its rows to the home. The kinds are in event-kinds.json. Routes: POST /v1/events, POST /v1/events/links, GET /v1/items/{key}/events, GET /v1/events/stream. The SQL columns use snake_case (seen_at, parent_item, actor_type, on_behalf). Dates are ISO 8601 UTC.",
+  "x-oversire-schema": 1,
+  "$defs": {
+    "Date": { "type": "string", "format": "date-time" },
+    "Key": { "description": "An item key in upper case, for example OVERSIRE-374.", "type": "string", "pattern": "^[A-Z0-9][A-Z0-9_-]*$", "minLength": 1, "maxLength": 60 },
+    "Kind": { "description": "domain.verb. An open set: the catalog is event-kinds.json. A reader keeps a row of a kind that it does not know.", "type": "string", "pattern": "^[a-z]+(\\.[a-z_]+)+$", "maxLength": 60 },
+    "ActorType": {
+      "description": "human: a person (the user, or a tracker member). agent: a coding agent. system: the daemon or the app on its own (queue, runbook, automation). provider: a vendor system (github-actions).",
+      "enum": ["human", "agent", "system", "provider"]
+    },
+    "EventDraft": {
+      "description": "An Event before the home daemon gets it: no seq, no seenAt. The body of POST /v1/events.",
+      "type": "object",
+      "properties": {
+        "id": { "description": "<source>:<native id>, for example git:9d1e07a2:refs/heads/oversire-374 or gha:812:1:completed. A poll and a webhook of the same change give the same id. A repeat is a no-op.", "type": "string", "pattern": "^[a-z][a-z0-9-]*:.+$", "maxLength": 300 },
+        "at": { "description": "When it happened. An outbox keeps this time.", "$ref": "#/$defs/Date" },
+        "kind": { "$ref": "#/$defs/Kind" },
+        "item": { "description": "Absent when no rule finds one.", "$ref": "#/$defs/Key" },
+        "parentItem": { "description": "Set at write time when known. The item_links table corrects it later.", "$ref": "#/$defs/Key" },
+        "project": { "description": "The tracker project, for example oversire.", "type": "string" },
+        "repo": { "description": "owner/name, for example oversire/cli.", "type": "string" },
+        "machine": { "description": "The machine where it happened, for example mini.", "type": "string" },
+        "provider": { "description": "The adapter of a provider row (plane, github). Absent for local sources.", "type": "string" },
+        "session": { "description": "The session key or id, for example work:OVERSIRE-374.", "type": "string" },
+        "corr": { "description": "Pairs rows: wait.started with wait.ended, turn.started with turn.ended.", "type": "string" },
+        "actorType": { "$ref": "#/$defs/ActorType" },
+        "actor": { "description": "An email, harness/model (claude/opus-5-5), queue, runbook:<name>, github-actions.", "type": "string", "minLength": 1 },
+        "onBehalf": { "description": "The human who started it, for agent and system rows.", "type": "string" },
+        "via": { "description": "hook, git, app@<machine>, cli, poll, webhook, daemon.", "type": "string", "minLength": 1 },
+        "summary": { "description": "At most 200 code points. The only text that leaves the home daemon, and only when private is false.", "type": "string", "maxLength": 200 },
+        "payload": { "description": "The fields of the kind (event-kinds.json). At most 4 KB. Kept 90 days on the home, never mirrored.", "type": "object" },
+        "private": { "description": "True for prompt text: the summary does not leave the user's Macs either. Absent means false.", "const": true }
+      },
+      "required": ["id", "at", "kind", "actorType", "actor", "via", "summary"],
+      "additionalProperties": false
+    },
+    "Event": {
+      "description": "One row of the events table. An EventDraft plus seq and seenAt.",
+      "type": "object",
+      "properties": {
+        "seq": { "description": "The row number on the daemon that answers. Only a cursor: each daemon has its own.", "type": "integer", "minimum": 1 },
+        "seenAt": { "description": "When the daemon that answers got it.", "$ref": "#/$defs/Date" },
+        "id": { "$ref": "#/$defs/EventDraft/properties/id" },
+        "at": { "$ref": "#/$defs/Date" },
+        "kind": { "$ref": "#/$defs/Kind" },
+        "item": { "$ref": "#/$defs/Key" },
+        "parentItem": { "$ref": "#/$defs/Key" },
+        "project": { "type": "string" },
+        "repo": { "type": "string" },
+        "machine": { "type": "string" },
+        "provider": { "type": "string" },
+        "session": { "type": "string" },
+        "corr": { "type": "string" },
+        "actorType": { "$ref": "#/$defs/ActorType" },
+        "actor": { "type": "string", "minLength": 1 },
+        "onBehalf": { "type": "string" },
+        "via": { "type": "string", "minLength": 1 },
+        "summary": { "type": "string", "maxLength": 200 },
+        "payload": { "type": "object" },
+        "private": { "const": true }
+      },
+      "required": ["seq", "seenAt", "id", "at", "kind", "actorType", "actor", "via", "summary"],
+      "additionalProperties": false
+    },
+    "EventQuery": {
+      "description": "The query of GET /v1/items/{key}/events and GET /v1/events/rows, as URL parameters.",
+      "type": "object",
+      "properties": {
+        "item": { "$ref": "#/$defs/Key" },
+        "tree": { "description": "Also the rows where parentItem is the item.", "type": "boolean" },
+        "after": { "description": "A seq: only rows after it.", "type": "integer", "minimum": 0 },
+        "kinds": { "description": "Only these kinds. A kind that ends with .* takes the whole domain (git.*).", "type": "array", "items": { "type": "string" } },
+        "limit": { "description": "At most 1000. Default 500.", "type": "integer", "minimum": 1, "maximum": 1000 }
+      },
+      "additionalProperties": false
+    },
+    "EventPage": {
+      "description": "The answer of GET /v1/items/{key}/events. Rows in seq order.",
+      "type": "object",
+      "properties": {
+        "events": { "type": "array", "items": { "$ref": "#/$defs/Event" } },
+        "next": { "description": "The after value of the next page.", "type": "integer", "minimum": 0 },
+        "head": { "description": "The last seq of the daemon.", "type": "integer", "minimum": 0 },
+        "more": { "type": "boolean" }
+      },
+      "required": ["events", "next", "head", "more"],
+      "additionalProperties": false
+    },
+    "EventAppend": {
+      "description": "The body of POST /v1/events.",
+      "type": "object",
+      "properties": {
+        "events": { "type": "array", "items": { "$ref": "#/$defs/EventDraft" }, "maxItems": 500 }
+      },
+      "required": ["events"],
+      "additionalProperties": false
+    },
+    "EventAppendResult": {
+      "description": "The answer of POST /v1/events. accepted counts the new rows; a repeat id is not new.",
+      "type": "object",
+      "properties": {
+        "accepted": { "type": "integer", "minimum": 0 },
+        "head": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["accepted", "head"],
+      "additionalProperties": false
+    },
+    "ItemLink": {
+      "type": "object",
+      "properties": {
+        "item": { "$ref": "#/$defs/Key" },
+        "parent": { "description": "Absent: the item has no parent now.", "$ref": "#/$defs/Key" }
+      },
+      "required": ["item"],
+      "additionalProperties": false
+    },
+    "ItemLinks": {
+      "description": "The body of POST /v1/events/links. The app sends the parent of each item after a tracker poll. The daemon sets parentItem on the old rows again.",
+      "type": "object",
+      "properties": {
+        "links": { "type": "array", "items": { "$ref": "#/$defs/ItemLink" }, "maxItems": 2000 }
+      },
+      "required": ["links"],
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "seq": 116,
+  "id": "plane:act-9c41e0",
+  "at": "2026-10-29T15:16:12Z",
+  "seenAt": "2026-10-29T15:16:13Z",
+  "kind": "item.state_changed",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "machine": "mba",
+  "provider": "plane",
+  "actorType": "human",
+  "actor": "flarco@gmail.com",
+  "via": "poll",
+  "summary": "In Progress → Needs Review",
+  "payload": {
+    "from": "In Progress",
+    "to": "Needs Review",
+    "group": "started"
+  }
+}

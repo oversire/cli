@@ -1,0 +1,21 @@
+{
+  "seq": 111,
+  "id": "question:q-7f2:answer",
+  "at": "2026-10-29T15:11:12Z",
+  "seenAt": "2026-10-29T15:11:13Z",
+  "kind": "question.answered",
+  "item": "OVERSIRE-371",
+  "project": "oversire",
+  "machine": "mba",
+  "session": "plan:OVERSIRE-371",
+  "corr": "wait-toolu_01Xy",
+  "actorType": "human",
+  "actor": "flarco@gmail.com",
+  "via": "app@mba",
+  "summary": "Two gates. A plan can go wrong before code exists.",
+  "payload": {
+    "question": "q-7f2",
+    "waitedSec": 1500,
+    "channel": "app"
+  }
+}

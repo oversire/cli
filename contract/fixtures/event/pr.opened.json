@@ -1,0 +1,23 @@
+{
+  "seq": 129,
+  "id": "github:pr:oversire/cli:88:opened",
+  "at": "2026-10-29T15:29:12Z",
+  "seenAt": "2026-10-29T15:29:13Z",
+  "kind": "pr.opened",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "repo": "oversire/cli",
+  "machine": "mba",
+  "provider": "github",
+  "actorType": "human",
+  "actor": "flarco@gmail.com",
+  "via": "poll",
+  "summary": "#88 Review: merge all or none",
+  "payload": {
+    "number": 88,
+    "title": "Review: merge all or none",
+    "branch": "oversire-374",
+    "base": "main"
+  }
+}

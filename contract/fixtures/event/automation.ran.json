@@ -1,0 +1,21 @@
+{
+  "seq": 144,
+  "id": "automation:ci-retry:gha:2243:1",
+  "at": "2026-10-29T15:44:12Z",
+  "seenAt": "2026-10-29T15:44:13Z",
+  "kind": "automation.ran",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "machine": "mbp",
+  "actorType": "system",
+  "actor": "automation:ci-retry",
+  "onBehalf": "flarco@gmail.com",
+  "via": "daemon",
+  "summary": "Retried flaky CI run #2243",
+  "payload": {
+    "automation": "ci-retry",
+    "action": "rerun",
+    "result": "ok"
+  }
+}
