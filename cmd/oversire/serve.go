@@ -15,6 +15,7 @@ import (
 	"github.com/oversire/cli/config"
 	"github.com/oversire/cli/eventlog"
 	"github.com/oversire/cli/events"
+	"github.com/oversire/cli/gitwatch"
 	"github.com/oversire/cli/group"
 	"github.com/oversire/cli/hooks"
 	"github.com/oversire/cli/lease"
@@ -189,12 +190,21 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	if cfg.Review != nil {
 		order = cfg.Review.Order
 	}
-	reviews := review.NewEngine(review.Deps{Store: review.NewStore(filepath.Join(data, "reviews")), Git: review.NewGit(c.cmds),
+	reviewStore := review.NewStore(filepath.Join(data, "reviews"))
+	reviews := review.NewEngine(review.Deps{Store: reviewStore, Git: review.NewGit(c.cmds),
 		Repos: reg, Sessions: book, Sender: asker, Launcher: runner, Picker: reg, Machine: cfg.Machine(), Order: order,
 		Notify: func(ev wire.ReviewEvent) { srv.Notify(false, ev) }, Events: capt})
 	reviews.Log = c.log
 	srv.Handle(review.NewRoutes(reviews).Routes()...)
 	runtimeAPI.AddCapabilities(runtime.CapRunbooks, runtime.CapReviews)
+	// The git watcher reads the repos of the runtimes and the folder roots of the reviews.
+	gitRows := gitwatch.NewWatcher(review.NewGit(c.cmds), book, capt, places, func(ctx context.Context) []string {
+		roots, _ := reviewStore.Roots()
+		for _, r := range reg.Repos(ctx).Repos {
+			roots = append(roots, r.Path)
+		}
+		return roots
+	}, filepath.Join(data, "gitwatch.json"), c.log)
 
 	drain := func(ctx context.Context) error {
 		t := time.NewTicker(spoolInterval)
@@ -214,7 +224,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 		}
 	}
 	return []func(context.Context) error{srv.Run, book.Run, watcher.Run, syncer.Run, asks.Run, drain, c.pruneStore(oplog), runbooks.Run, reviews.Run,
-		outbox.Run, capt.Run, func(ctx context.Context) error { return rows.RunRetention(ctx, c.log) }}, nil
+		outbox.Run, capt.Run, gitRows.Run, func(ctx context.Context) error { return rows.RunRetention(ctx, c.log) }}, nil
 }
 
 // hookHealth is "live" when a harness has our hooks, else "off".

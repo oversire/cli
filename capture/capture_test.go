@@ -67,12 +67,17 @@ func TestWriterFillsTheRow(t *testing.T) {
 		Payload: json.RawMessage(`{"turn":1}`)})
 	w.Add("", wire.EventDraft{ID: "t:2", Kind: wire.KindPromptSubmitted, Item: "OVERSIRE-380", ActorType: wire.ActorHuman, Via: "hook", Summary: "hi", Private: true,
 		Payload: json.RawMessage(`{"turn":1}`)})
+	delete(w.sessions.(book), "s1")
+	w.Add("s1", wire.EventDraft{ID: "t:3", Kind: wire.KindSessionEnded, ActorType: wire.ActorSystem, Via: "hook", Summary: "Session ended"})
 	w.Add("", wire.EventDraft{ID: "t:bad", Kind: "nodot", ActorType: wire.ActorHuman, Via: "hook"})
 	w.Flush(context.Background())
 
 	rows := item(t, st, "OVERSIRE-377")
-	if len(rows) != 2 {
+	if len(rows) != 3 {
 		t.Fatalf("rows %v", kinds(rows))
+	}
+	if e := rows[2]; e.Item != "OVERSIRE-380" || e.Session != "work:OVERSIRE-380" || e.Actor != "oversire" {
+		t.Errorf("end row of a dropped session %+v", e.EventDraft)
 	}
 	a := rows[0]
 	if a.Item != "OVERSIRE-380" || a.ParentItem != "OVERSIRE-377" || a.Session != "work:OVERSIRE-380" || a.Repo != "oversire/cli" ||

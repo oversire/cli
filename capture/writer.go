@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/oversire/cli/events"
@@ -16,6 +17,7 @@ import (
 const (
 	queueSize = 4096
 	batchMax  = 200
+	lastMax   = 1000
 )
 
 // Store takes the rows (events.Store).
@@ -42,6 +44,9 @@ type Writer struct {
 	human    string
 	log      *slog.Logger
 	queue    chan queued
+
+	mu   sync.Mutex
+	last map[string]wire.DaemonSession // the last copy of each session: the book drops a session before its end row
 }
 
 // queued is a draft and the place hint of its session. The writer goroutine fills the item, off the locks of the callers.
@@ -59,7 +64,7 @@ func NewWriter(store Store, places Places, sessions Sessions, machine, human str
 		human = os.Getenv("USER")
 	}
 	return &Writer{store: store, places: places, sessions: sessions, machine: machine, human: human, log: log,
-		queue: make(chan queued, queueSize)}
+		queue: make(chan queued, queueSize), last: map[string]wire.DaemonSession{}}
 }
 
 // Human is the actor of the human rows.
@@ -73,7 +78,17 @@ func (w *Writer) Add(session string, d wire.EventDraft) {
 	}
 	var s wire.DaemonSession
 	if session != "" && w.sessions != nil {
-		s, _ = w.sessions.Get(session)
+		var ok bool
+		w.mu.Lock()
+		if s, ok = w.sessions.Get(session); ok {
+			if len(w.last) >= lastMax {
+				clear(w.last)
+			}
+			w.last[session] = s
+		} else {
+			s = w.last[session]
+		}
+		w.mu.Unlock()
 	}
 	w.AddFor(s, d)
 }

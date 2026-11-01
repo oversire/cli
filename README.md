@@ -272,6 +272,9 @@ The daemon writes these rows itself (package `capture`, OVERSIRE-380):
 | Questions | `question.answered` when the app answers through the daemon. |
 | Reviews | `review.ready`, `review.submitted`, `review.approved`. A merge gives `git.merge` for each repository (id `git:<sha>:refs/heads/<base>`, the same id as the git watcher) and `item.shipped`. |
 | Runbooks | `plan.started` for each run, `runbook.step_started` and `runbook.step_ended` for each step round. |
+| Git (package `gitwatch`) | `worktree.added`, `worktree.removed`, `git.commit`, `git.rebase`, `git.reset`, `git.merge` and `git.push`, from the reflogs of the branches. No git hooks. |
+
+The git watcher reads the repos of the runtimes and the checkouts in the folder roots of the reviews. On macOS, kqueue tells when a ref folder changes; the watcher reads 2 s later, and each minute. On other systems it reads each 2 s. A read only stats the reflog files and reads their new lines. The cursors are in `<data>/gitwatch.json`. The first read of a repository writes no rows. The id of a row is `git:<sha>:<ref>`, so a merge of the review engine and the same merge in the reflog give one row. A working session in the worktree makes an agent row. Else the row is human, with the email of the reflog line.
 
 A row gets its item from the session key, then the `.wt/<key>/` path, then the branch, then the `Item:` trailer of a commit. The actor of a human row is the `git config --global user.email` of the machine. The queue rows (`queue.picked`, `queue.held`) come from the app.
 
@@ -509,6 +512,7 @@ The layout:
 | `runtime` | The `Runtime` interface, the registry and the runtime routes (`API`). `runtime/orca` is the Orca driver for the local Orca. It starts, sends to and stops sessions through the `orca` backend of the visor. `runtime/oversire` is the agent-visor client. |
 | `digest` | The transcript readers that make a `SessionDigest`. |
 | `store` | The home store: the op log in SQLite and the `/v1/store/ops` routes. |
+| `gitwatch` | Makes the git event rows from the reflogs, with kqueue on macOS. |
 | `capture` | Makes the event rows of the daemon: the hook calls, the session book, the questions, the reviews and the runbooks. |
 | `events` | The events table: the store, the item links, the outbox to the home, the spool, the retention, the item resolver and the `/v1/events` routes. |
 | `lease` | The leases of the home member: the book in `leases.json` and the `/v1/leases` routes. |
