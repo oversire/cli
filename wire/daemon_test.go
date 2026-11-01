@@ -37,6 +37,7 @@ func TestDaemonFixtures(t *testing.T) {
 	roundTrip[JoinResult](t, "join-result")
 	roundTrip[ProviderEvent](t, "provider-event")
 	roundTrip[SessionAsk](t, "session-ask")
+	roundTrip[SessionHandover](t, "session-handover")
 	roundTrip[SessionAskReply](t, "session-ask-reply")
 	roundTrip[DaemonRuntimesPage](t, "daemon-runtimes-page")
 	roundTrip[DaemonReposPage](t, "daemon-repos-page")

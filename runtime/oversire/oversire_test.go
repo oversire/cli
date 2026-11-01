@@ -155,13 +155,17 @@ func shortHome(t *testing.T) string {
 	return home
 }
 
-// newVisor runs the fake harness with driver in the visor process.
-func newVisor(t *testing.T, home string, driver agentwire.Driver) *agentvisor.Visor {
+// newVisor runs the fake harness with driver in the visor process. term is the TerminalCommand, or nil.
+func newVisor(t *testing.T, home string, driver agentwire.Driver, term ...agentvisor.TerminalCommand) *agentvisor.Visor {
 	t.Helper()
-	v, err := agentvisor.New(context.Background(), agentvisor.Options{
+	o := agentvisor.Options{
 		Home: home, Client: "oversire-test",
 		Drivers: map[string]agentwire.Driver{string(agentwire.Fake): driver},
-	})
+	}
+	if len(term) > 0 {
+		o.TerminalCommand = term[0]
+	}
+	v, err := agentvisor.New(context.Background(), o)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,13 +184,13 @@ func setupWith(t *testing.T, script string, opts Options, wrap func(*agentvisor.
 }
 
 // setupDriver lets a test give the driver of the fake harness.
-func setupDriver(t *testing.T, driver agentwire.Driver, opts Options, wrap func(*agentvisor.Visor) Host) fixture {
+func setupDriver(t *testing.T, driver agentwire.Driver, opts Options, wrap func(*agentvisor.Visor) Host, term ...agentvisor.TerminalCommand) fixture {
 	t.Helper()
 	if goruntime.GOOS == "windows" {
 		t.Skip("the fake harness needs a POSIX sh")
 	}
 	f := fixture{rec: &recorder{}, repo: gitRepo(t)}
-	f.visor = newVisor(t, shortHome(t), driver)
+	f.visor = newVisor(t, shortHome(t), driver, term...)
 	opts.Runner, opts.Fake = "r1", true
 	if opts.DataDir == "" {
 		opts.DataDir = t.TempDir()

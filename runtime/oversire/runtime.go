@@ -90,6 +90,8 @@ type Host interface {
 	Workdirs(ctx context.Context, f agentvisor.Filter) ([]agentvisor.Workdir, error)
 	EnsureWorkdir(ctx context.Context, w agentvisor.WorkdirSpec) (agentvisor.Workdir, error)
 	RemoveWorkdir(ctx context.Context, id string, force bool) error
+	Attach(ctx context.Context, id string, o agentvisor.AttachOptions) (*agentvisor.AttachStream, error)
+	Handover(ctx context.Context, id string, to agentvisor.Kind) error
 }
 
 type Options struct {
@@ -217,6 +219,14 @@ func (rt *Runtime) follow(ctx context.Context, stream *agentvisor.EventStream, h
 			return
 		}
 		if s := rt.forVisor(ctx, e.Session); s != nil {
+			// The events have no kind: a handover changes the kind, then the state.
+			if e.Type == agentvisor.EventSessionState {
+				if vs, err := rt.host.Session(ctx, e.Session); err == nil {
+					s.mu.Lock()
+					s.setKind(vs.Kind)
+					s.mu.Unlock()
+				}
+			}
 			s.apply(e)
 		}
 		if !live && e.Seq >= head {
@@ -277,6 +287,7 @@ func (rt *Runtime) bindLocked(s *session, vs agentvisor.Session) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.vid = vs.ID
+	s.info.View = viewOf(vs.Kind)
 	if s.vstate == "" {
 		s.vstate = vs.State
 	}

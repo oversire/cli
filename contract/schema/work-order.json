@@ -170,6 +170,7 @@
         "permission": { "$ref": "#/$defs/PermissionPrompt" },
         "question": { "$ref": "#/$defs/RunnerQuestion" },
         "error": { "type": "string" },
+        "view": { "description": "Absent: chat.", "$ref": "daemon.json#/$defs/SessionView" },
         "startedAt": { "$ref": "#/$defs/Date" },
         "updatedAt": { "$ref": "#/$defs/Date" }
       },

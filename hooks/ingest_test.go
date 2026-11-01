@@ -270,3 +270,35 @@ func TestHookPosts(t *testing.T) {
 		t.Fatalf("calls %d stdout %q", calls.Load(), out.String())
 	}
 }
+
+type forwardSpy struct {
+	harness string
+	payload []byte
+}
+
+func (f *forwardSpy) Forward(_ context.Context, harness string, payload []byte) {
+	f.harness, f.payload = harness, payload
+}
+
+func TestHookForwardsToTheVisor(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls.Add(1) }))
+	defer srv.Close()
+	spool := filepath.Join(t.TempDir(), "hooks.jsonl")
+	h := NewHook(srv.URL, spool)
+	h.Getenv = func(string) string { return "" }
+	spy := &forwardSpy{}
+	h.Visor = spy
+	var out bytes.Buffer
+	h.Run(context.Background(), "claude", bytes.NewReader(read(t, "payloads/claude/Stop.json")), &out)
+	if spy.harness != "claude" || readPayload(spy.payload).HookEventName != "Stop" || out.String() != "{}\n" {
+		t.Fatalf("forward %q %s stdout %q", spy.harness, spy.payload, out.String())
+	}
+	// The book gets no copy of a visor session.
+	if calls.Load() != 0 {
+		t.Fatalf("%d posts", calls.Load())
+	}
+	if _, err := os.Stat(spool); !os.IsNotExist(err) {
+		t.Fatal("a forwarded call was spooled")
+	}
+}

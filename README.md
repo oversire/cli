@@ -213,7 +213,7 @@ The daemon looks for the tailnet addresses again each 30 s. It never binds `0.0.
 
 ### Hooks and questions
 
-The agent hooks call `oversire hook <harness>` with the event on stdin. The command posts it to `POST /v1/hooks/{harness}` and ends at once. When the daemon does not answer, it writes the event to a spool file, and the daemon reads the spool each 10 s. The app reads, installs and removes the hooks with `GET`, `POST` and `DELETE /v1/hooks/install`, body `{"harnesses":[...]}` (loopback only).
+The agent hooks call `oversire hook <harness>` with the event on stdin. The command posts it to `POST /v1/hooks/{harness}` and ends at once. In a visor session (the env has `AGENT_VISOR_SESSION` and `AGENT_VISOR_SOCKET`), the command gives the event to the visor of the session and not to the daemon, so the session book gets no second session. When that visor does not answer, the event goes to the spool of the visor. When the daemon does not answer, it writes the event to a spool file, and the daemon reads the spool each 10 s. The app reads, installs and removes the hooks with `GET`, `POST` and `DELETE /v1/hooks/install`, body `{"harnesses":[...]}` (loopback only).
 
 The daemon finds the open questions of the agent sessions: forms and permission prompts on the Orca screen, and a turn that ends with a question. `GET /v1/questions` lists them. `POST /v1/questions/{id}/answer` types the answer into the terminal. `GET /v1/questions/{id}/given` tells the answer that the user gave in the terminal.
 
@@ -286,6 +286,7 @@ The daemon owns the agent runtimes of this machine: `oversire`, and `orca` when 
 | `POST /v1/files` | Body `WorkspaceFiles` (1 to 20 files, 25 MB together, base64 data). Plain file names only: no `/`, no leading dot, no two files with the same name. The daemon writes the files into a new folder `<data>/files/<id>/` and answers `WorkspaceFilesResult` `{paths}`. It removes the folders older than 7 days. |
 | `GET /v1/agents/{agent}/models` | An `AgentModels` `{agent, models, source, reason?}`: the models of one agent CLI on this machine, through agent-wire (`source` `wire`). The list stays in a cache for 10 minutes. A CLI that cannot list, or a probe that fails, gives an empty list, `source` `none` and the `reason`. 404: the daemon does not know the agent. The Agents card of the app reads it from the "Run sessions on" machine. |
 | `POST /v1/reveal` | Loopback only. Body: a `SessionRef`. Shows the terminal in the runtime UI, and answers 204. 404: no such runtime or session. 501: the runtime cannot show it. |
+| `POST /v1/sessions/{id}/handover` | Member access. Body `SessionHandover` `{view}`, with `chat` or `terminal`. Moves an `oversire` session between its chat (agent-wire) and the agent CLI in a terminal, and answers 202. A move to the terminal starts at the end of the turn. A move to chat waits until the user quits the agent CLI. The `view` of the session in `/v1/sessions` and in the `session` frames tells where it is. 400: a bad view. 404: no such session. 409: the session ended, starts, or moves now. 501: the agent CLI has no resume command (only claude and codex have one). The runtimes that can move a session have the capability `sessionHandover`. |
 
 ### Runbooks
 
@@ -334,6 +335,7 @@ The client sends `attach` first, with `view` `terminal` or `chat`. The daemon an
 | `stream` | Orca, paired | The live terminal over the Orca runtime socket. See "Orca pairing". |
 | `poll` | Orca, not paired | The screen as text, read each 1 s with `orca terminal read --screen`. No color, not resizable. Keys go through `orca terminal send`. Five failed reads in a row end the view. |
 | `wire` | `oversire` | The turns of the chat view. |
+| `stream` | `oversire`, after a handover to the terminal | The live terminal of the agent CLI, through the visor. |
 
 The terminal view:
 

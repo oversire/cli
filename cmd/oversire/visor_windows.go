@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/oversire/cli/config"
+	"github.com/oversire/cli/hooks"
 	"github.com/oversire/cli/runtime"
 )
 
@@ -25,3 +26,6 @@ func (*localSessions) Serve(ctx context.Context) error      { <-ctx.Done(); retu
 func (*localSessions) Close(context.Context)                {}
 
 func idleRuntime() runtime.Runtime { return nil }
+
+// visorHook: Windows has no visor.
+func visorHook(func(string) string) hooks.Forwarder { return nil }

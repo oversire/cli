@@ -62,6 +62,7 @@ func (a *API) Routes() []server.Route {
 		{Pattern: "GET /v1/workspaces", Access: server.Member, Handle: a.workspaces},
 		{Pattern: "DELETE /v1/workspaces/{id}", Access: server.Member, Handle: a.removeWorkspace},
 		{Pattern: "POST /v1/files", Access: server.Member, Handle: a.writeFiles},
+		{Pattern: "POST /v1/sessions/{id}/handover", Access: server.Member, Handle: a.handover},
 		// Only the user at this machine sees the runtime UI.
 		{Pattern: "POST /v1/reveal", Access: server.LoopbackOnly, Handle: a.reveal},
 	}
@@ -160,6 +161,19 @@ func (a *API) removeWorkspace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, res)
+}
+
+func (a *API) handover(w http.ResponseWriter, r *http.Request) {
+	var h wire.SessionHandover
+	if err := decode(r, 1<<10, &h); err != nil || (h.View != wire.SessionViewChat && h.View != wire.SessionViewTerminal) {
+		writeError(w, http.StatusBadRequest, "The body needs the view chat or terminal.")
+		return
+	}
+	if err := a.reg.Handover(r.Context(), r.PathValue("id"), h.View); err != nil {
+		writeError(w, status(err), err.Error())
+		return
+	}
+	writeJSON(w, http.StatusAccepted, struct{}{})
 }
 
 func (a *API) reveal(w http.ResponseWriter, r *http.Request) {
@@ -262,6 +276,8 @@ func status(err error) int {
 		return http.StatusNotFound
 	case errors.Is(err, ErrUnsupported):
 		return http.StatusNotImplemented
+	case errors.Is(err, ErrConflict):
+		return http.StatusConflict
 	}
 	return http.StatusBadGateway
 }

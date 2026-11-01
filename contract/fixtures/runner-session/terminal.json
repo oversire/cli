@@ -1,0 +1,16 @@
+{
+  "id": "s-9b1d",
+  "runner": "runner-mbp",
+  "session": {
+    "workspace": { "account": { "provider": "oversire", "id": "local" }, "id": "oversire-workspace/OVERSIRE-361" },
+    "id": "s-9b1d"
+  },
+  "order": "o2",
+  "agent": "claude",
+  "repo": "/Users/dev/src/oversire-workspace",
+  "branch": "oversire-361",
+  "state": "working",
+  "view": "terminal",
+  "startedAt": "2026-10-31T09:12:00Z",
+  "updatedAt": "2026-10-31T10:02:00Z"
+}

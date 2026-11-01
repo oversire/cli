@@ -30,6 +30,14 @@ const (
 	ReasonMonitoring  SessionReason = "monitoring"
 )
 
+// SessionView tells how a client shows a session. Open set.
+type SessionView string
+
+const (
+	SessionViewChat     SessionView = "chat"     // the turns from agent-wire
+	SessionViewTerminal SessionView = "terminal" // the agent CLI in a terminal
+)
+
 // Values of DaemonSession.Sources.
 const (
 	SessionSourceHook = "hook"
@@ -69,6 +77,7 @@ type DaemonSession struct {
 	Model          string        `json:"model,omitempty"`   // LaunchRequest.Model of the start
 	Effort         string        `json:"effort,omitempty"`  // LaunchRequest.Effort of the start
 	Profile        string        `json:"profile,omitempty"` // LaunchRequest.Profile: the OverSire agent name
+	View           SessionView   `json:"view,omitempty"`    // empty: chat for the oversire runtime, terminal for the others
 }
 
 // AgentModel is one model of an agent CLI, as agent-wire ModelInfo gives it.
@@ -345,6 +354,11 @@ const (
 
 // AskReadOnlyLine is the line that a read-only ask adds to the text.
 const AskReadOnlyLine = "Answer only. Do not change files."
+
+// SessionHandover is the body of POST /v1/sessions/{id}/handover.
+type SessionHandover struct {
+	View SessionView `json:"view"`
+}
 
 // SessionAsk is the body of POST /v1/sessions/{id}/ask.
 type SessionAsk struct {

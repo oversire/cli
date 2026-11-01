@@ -85,11 +85,19 @@ type Revealer interface {
 	Reveal(ctx context.Context, s wire.SessionRef) error
 }
 
+// Handoverer moves a session between the chat and the terminal. It gives ErrNotFound for a session of another runtime.
+type Handoverer interface {
+	Handover(ctx context.Context, id string, view wire.SessionView) error
+}
+
 // ErrNoRuntime is the error of a call for a runtime that the registry does not have.
 var ErrNoRuntime = errors.New("no such runtime")
 
 // ErrNotFound is the error of a call for a workspace or session that the runtime does not have.
 var ErrNotFound = errors.New("not found")
+
+// ErrConflict is the error of a call that the state of the session does not permit now.
+var ErrConflict = errors.New("the session cannot do this now")
 
 // ErrUnsupported is the error of a call that the runtime cannot do.
 var ErrUnsupported = errors.New("the runtime cannot do this")

@@ -3,6 +3,7 @@ package questions
 import (
 	"cmp"
 	"encoding/json"
+	"github.com/trebi-ai/agent-wire/tui"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -223,7 +224,7 @@ func TestTranscript(t *testing.T) {
 	if !open.Matches(f) {
 		t.Error("the form does not match the call")
 	}
-	if open.Matches(Form{Headers: []string{"Other"}, Items: []wire.DaemonQuestionItem{{Text: "Else?"}}}) {
+	if open.Matches(Form{Form: tui.Form{Headers: []string{"Other"}}, Items: []wire.DaemonQuestionItem{{Text: "Else?"}}}) {
 		t.Error("another form matches the call")
 	}
 	data, _ = os.ReadFile(filepath.Join(screensDir, "ask-answered.jsonl"))

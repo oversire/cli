@@ -244,11 +244,6 @@ func (f *feed) run(ctx context.Context, leave func()) {
 	}
 }
 
-// Terminal: a session of the oversire runtime has no terminal.
-func (rt *Runtime) Terminal(context.Context, wire.DaemonSession) (term.Source, error) {
-	return nil, term.ErrNoView
-}
-
 // Chat opens the chat view of a session. A session from before agent-visor gives its history only.
 func (rt *Runtime) Chat(_ context.Context, s wire.DaemonSession) (term.TurnSource, error) {
 	if !sessionID.MatchString(s.ID) {

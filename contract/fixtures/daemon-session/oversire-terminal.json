@@ -1,0 +1,16 @@
+{
+  "id": "s-9b1d3e5f",
+  "machine": "mbp",
+  "runtime": "oversire",
+  "harness": "claude",
+  "workspace": "oversire-wt-oversire-361",
+  "harnessSession": "5c6d7e8f-9a0b-41c2-d3e4-f5a6b7c8d9e0",
+  "cwd": "/Users/dev/.local/share/oversire/worktrees/oversire-361",
+  "repo": "oversire/oversire",
+  "branch": "oversire-361",
+  "state": "working",
+  "stateSince": "2026-10-31T10:02:00Z",
+  "updatedAt": "2026-10-31T10:02:00Z",
+  "sources": ["wire"],
+  "view": "terminal"
+}

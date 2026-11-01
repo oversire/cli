@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -720,4 +721,18 @@ func TestFormFromTheFileOfTheHarnessSession(t *testing.T) {
 	if q.Source != wire.SourceTranscript || len(q.Items) != 2 {
 		t.Fatalf("%s %d items", q.Source, len(q.Items))
 	}
+}
+
+// option gives the number and text of a numbered option row: "❯ 1. SQLite" gives 1 and "SQLite".
+func option(row string) (int, string, bool) {
+	t := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(row), "❯"))
+	dot := strings.IndexByte(t, '.')
+	if dot <= 0 || !strings.HasPrefix(t[dot+1:], " ") {
+		return 0, "", false
+	}
+	n, err := strconv.Atoi(t[:dot])
+	if err != nil || n < 0 || strings.ContainsAny(t[:dot], "+-") {
+		return 0, "", false
+	}
+	return n, strings.TrimSpace(t[dot+1:]), true
 }

@@ -22,6 +22,15 @@ func TestBookReport(t *testing.T) {
 	if tool, input := b.Tool("s-1"); tool != "Bash" || input != "ls" {
 		t.Fatal(tool, input)
 	}
+	if s.View != wire.SessionViewChat {
+		t.Fatalf("view %q", s.View)
+	}
+	rs.View, rs.UpdatedAt = wire.SessionViewTerminal, at(5e8)
+	b.Report(rs)
+	if s, _ := b.Get("s-1"); s.View != wire.SessionViewTerminal {
+		t.Fatalf("view %q", s.View)
+	}
+	rs.View = ""
 
 	rs.State, rs.Permission, rs.UpdatedAt = wire.SessionWaitingInput, nil, at(1e9)
 	rs.Question = &wire.RunnerQuestion{ID: "q-1", Round: 1, AskedAt: at(1e9)}

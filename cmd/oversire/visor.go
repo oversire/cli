@@ -10,11 +10,13 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	agentvisor "github.com/trebi-ai/agent-visor"
 	visorcli "github.com/trebi-ai/agent-visor/cli"
 
 	"github.com/oversire/cli/config"
+	"github.com/oversire/cli/hooks"
 	"github.com/oversire/cli/runtime"
 	"github.com/oversire/cli/runtime/oversire"
 )
@@ -48,6 +50,35 @@ func visorCLI(args []string) error {
 	return cmd.Run(ctx, append([]string{"oversire visor"}, args...))
 }
 
+// visorForward sends the hook calls of a visor session to the visor at socket. When the visor
+// does not answer, the call goes to the spool of the visor home, the folder of the socket.
+type visorForward struct{ session, socket string }
+
+// visorHook gives the forward of the session in the env, or nil outside a visor session.
+func visorHook(getenv func(string) string) hooks.Forwarder {
+	f := visorForward{session: getenv(agentvisor.EnvSession), socket: getenv(agentvisor.EnvSocket)}
+	if f.session == "" || f.socket == "" {
+		return nil
+	}
+	return f
+}
+
+func (f visorForward) Forward(ctx context.Context, harness string, payload []byte) {
+	call := agentvisor.HookCall{Harness: harness, Session: f.session, Payload: payload, At: time.Now().UTC()}
+	ctx, cancel := context.WithTimeout(ctx, hooks.TotalTimeout)
+	defer cancel()
+	c, err := agentvisor.Dial(ctx, f.socket)
+	if err == nil {
+		_, err = c.Hook(ctx, call)
+		_ = c.Close(ctx)
+	}
+	// The visor read the call: a refused call does not go to the spool.
+	if err == nil || errors.Is(err, agentvisor.ErrInvalid) || errors.Is(err, agentvisor.ErrNotFound) || errors.Is(err, agentvisor.ErrState) {
+		return
+	}
+	_ = agentvisor.NewHookSpool(filepath.Dir(f.socket)).Write(call)
+}
+
 // localSessions is the oversire runtime on the visor of the daemon, in <data>/visor.
 // The sessions run in holders, so they live through a restart of the daemon.
 type localSessions struct {
@@ -64,7 +95,9 @@ func (c *cli) openSessions(ctx context.Context, cfg config.Config, data string, 
 		Home: home, Client: "oversire", ClientVersion: version, Build: version, Socket: sock,
 		HolderCommand: []string{c.exe, "visor", "hold"},
 		HookCommand:   []string{c.exe, "visor", "--home", home, "hook"},
-		Logger:        c.log.With("source", "visor"),
+		// A handover runs the agent CLI in a terminal: claude and codex resume there.
+		TerminalCommand: oversire.TerminalCommand,
+		Logger:          c.log.With("source", "visor"),
 		// The daemon updates itself. A visor upgrade must not replace it.
 		Exec: func(string, []string, []string) error {
 			return errors.New("The oversire daemon updates itself. Use oversire update.")

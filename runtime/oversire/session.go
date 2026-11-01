@@ -41,6 +41,8 @@ type session struct {
 	vendorID string
 	// slot is true while the session holds a slot.
 	slot bool
+	// moving is true while a handover runs.
+	moving bool
 	// live is false during the replay of the events at Boot: no reports and no expiry timers.
 	live    bool
 	log     *transcript

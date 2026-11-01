@@ -35,6 +35,11 @@ type Replying interface{ Reply() []byte }
 
 func (Claude) Reply() []byte { return []byte("{}\n") }
 
+// Forwarder sends the hook call of a session of the daemon to the visor of the session.
+type Forwarder interface {
+	Forward(ctx context.Context, harness string, payload []byte)
+}
+
 // Hook is `oversire hook <harness>`. It never fails and never blocks the agent for more than TotalTimeout.
 type Hook struct {
 	URL    string // the daemon base URL, for example http://127.0.0.1:7690
@@ -43,6 +48,8 @@ type Hook struct {
 	PPID   int
 	Client *http.Client
 	Clock  func() time.Time
+	// Visor gets all calls when the agent runs in a visor session. nil outside one.
+	Visor Forwarder
 }
 
 // NewHook uses the env of this process and the timeouts of the hook.
@@ -74,7 +81,11 @@ func (h *Hook) Run(ctx context.Context, harness string, in io.Reader, out io.Wri
 		return
 	}
 	env := h.Env()
-	// A session of the oversire runtime reports through agent-wire.
+	// A visor session reports to its visor, not to the book. In a terminal, the hooks give its state.
+	if h.Visor != nil {
+		h.Visor.Forward(ctx, harness, data)
+		return
+	}
 	if env.OversireSession != "" {
 		return
 	}

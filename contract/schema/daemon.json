@@ -16,6 +16,10 @@
       "description": "The same values as AgentSession.Phase.",
       "enum": ["starting", "working", "waiting", "done", "failed"]
     },
+    "SessionView": {
+      "description": "How a client shows a session. chat: the turns from agent-wire. terminal: the agent CLI in a terminal. Open set.",
+      "enum": ["chat", "terminal"]
+    },
     "SessionReason": {
       "description": "Why the session waits or stopped. monitoring: the session works, but only a background shell runs.",
       "enum": ["question", "permission", "turnEnd", "interrupted", "error", "monitoring"]
@@ -46,7 +50,8 @@
         "key": { "description": "The start key of the sessionStart order that made the session (LaunchRequest.key).", "type": "string", "minLength": 1, "maxLength": 200, "pattern": "^[a-z]+:[A-Za-z0-9._-]+$" },
         "model": { "description": "LaunchRequest.model of the start. Absent for a session that OverSire did not start.", "type": "string", "minLength": 1, "maxLength": 200 },
         "effort": { "description": "LaunchRequest.effort of the start.", "type": "string", "minLength": 1, "maxLength": 40 },
-        "profile": { "description": "LaunchRequest.profile of the start: the OverSire agent name.", "type": "string", "minLength": 1, "maxLength": 200 }
+        "profile": { "description": "LaunchRequest.profile of the start: the OverSire agent name.", "type": "string", "minLength": 1, "maxLength": 200 },
+        "view": { "description": "The view of the session now. Absent: chat for the oversire runtime, terminal for the other runtimes. POST /v1/sessions/{id}/handover changes it.", "$ref": "#/$defs/SessionView" }
       },
       "required": ["id", "machine", "runtime", "harness", "cwd", "state", "stateSince", "updatedAt", "sources"],
       "additionalProperties": false
@@ -354,6 +359,13 @@
       "required": ["text"],
       "additionalProperties": false
     },
+    "SessionHandover": {
+      "description": "The body of POST /v1/sessions/{id}/handover (Member), for a runtime with the capability sessionHandover. The daemon moves the session to the view at the end of the current turn. A move to chat waits until the user quits the agent CLI in the terminal. HTTP 202: the move started, and the session gets the new view. HTTP 409: the session has ended, has no harness session yet, or moves now. HTTP 501: the runtime cannot move the session.",
+      "type": "object",
+      "properties": { "view": { "$ref": "#/$defs/SessionView" } },
+      "required": ["view"],
+      "additionalProperties": false
+    },
     "SessionAskReply": {
       "description": "The answer of POST /v1/sessions/{id}/ask. HTTP 200 has reply. HTTP 409 (a turn is active and the session takes no steering) and 504 (timeout) have error and screenTail.",
       "type": "object",
@@ -376,7 +388,7 @@
         "reachable": { "description": "The runtime answered its last status call.", "type": "boolean" },
         "version": { "type": "string" },
         "error": { "description": "Why the runtime is not reachable. Text for the user.", "type": "string" },
-        "capabilities": { "description": "The same raw values as Capability of the app, for example sessionInput, reveal, hostFiles. sessionStream: GET /v1/sessions/{id}/stream works for the sessions of this runtime. sessionKey: a start with a key gives the live session of the key. Open set.", "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "capabilities": { "description": "The same raw values as Capability of the app, for example sessionInput, reveal, hostFiles. sessionStream: GET /v1/sessions/{id}/stream works for the sessions of this runtime. sessionKey: a start with a key gives the live session of the key. sessionHandover: POST /v1/sessions/{id}/handover works. Open set.", "type": "array", "items": { "type": "string", "minLength": 1 } },
         "stream": { "$ref": "#/$defs/RuntimeStream" }
       },
       "required": ["id", "name", "installed", "reachable", "capabilities"],

@@ -104,6 +104,8 @@ func (c *cli) hook(ctx context.Context, args []string) error {
 			spool = hooks.SpoolPath(data)
 		}
 	}
-	hooks.NewHook("http://127.0.0.1:"+strconv.Itoa(port), spool).Run(ctx, args[0], c.in, c.out)
+	h := hooks.NewHook("http://127.0.0.1:"+strconv.Itoa(port), spool)
+	h.Visor = visorHook(os.Getenv)
+	h.Run(ctx, args[0], c.in, c.out)
 	return nil
 }

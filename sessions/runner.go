@@ -32,6 +32,11 @@ func RunnerPatch(s wire.RunnerSession) Patch {
 		State: &state, Reason: &reason, Question: &question,
 		End: s.State.Ended(),
 	}
+	view := s.View
+	if view == "" {
+		view = wire.SessionViewChat
+	}
+	p.View = &view
 	if s.Summary != "" {
 		p.LastMessage = str(s.Summary)
 	}

@@ -73,6 +73,7 @@ type RunnerSession struct {
 	Permission *PermissionPrompt  `json:"permission,omitempty"`
 	Question   *RunnerQuestion    `json:"question,omitempty"`
 	Error      string             `json:"error,omitempty"`
+	View       SessionView        `json:"view,omitempty"` // empty: chat
 	StartedAt  time.Time          `json:"startedAt"`
 	UpdatedAt  time.Time          `json:"updatedAt"`
 }

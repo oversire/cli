@@ -21,6 +21,7 @@ const (
 	CapWorkspaces      = "workspaces"
 	CapSessionStream   = "sessionStream"
 	CapSessionKey      = "sessionKey"
+	CapSessionHandover = "sessionHandover"
 	// CapRunbooks is not a part of the runtime: the daemon runs runbook steps on it (API.AddCapabilities).
 	CapRunbooks = "runbooks"
 )
@@ -39,6 +40,9 @@ func Capabilities(rt Runtime) []string {
 	}
 	if _, ok := rt.(Streamer); ok {
 		caps = append(caps, CapSessionStream)
+	}
+	if _, ok := rt.(Handoverer); ok {
+		caps = append(caps, CapSessionHandover)
 	}
 	return caps
 }
@@ -76,6 +80,20 @@ func (r *Registry) Pick(ctx context.Context, id string) (string, error) {
 		return "", errors.New("No agent runtime runs on this machine.")
 	}
 	return first, nil
+}
+
+// Handover moves session id in the runtime that has it.
+func (r *Registry) Handover(ctx context.Context, id string, view wire.SessionView) error {
+	for _, rid := range r.IDs() {
+		h, ok := r.byID[rid].(Handoverer)
+		if !ok {
+			continue
+		}
+		if err := h.Handover(ctx, id, view); !errors.Is(err, ErrNotFound) {
+			return err
+		}
+	}
+	return fmt.Errorf("%w: no runtime that can move a session has %s", ErrNotFound, id)
 }
 
 // Retry connects the live view of runtime id again, when it can, and gives its new state.

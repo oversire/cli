@@ -57,6 +57,7 @@ type Patch struct {
 	Key *string
 	// Model, Effort and Profile come from the LaunchRequest of the start.
 	Model, Effort, Profile *string
+	View                   *wire.SessionView
 }
 
 type Appender interface{ Append(e wire.ProviderEvent) }
@@ -164,6 +165,9 @@ func (e *entry) merge(p Patch) {
 	set(&e.s.Model, p.Model)
 	set(&e.s.Effort, p.Effort)
 	set(&e.s.Profile, p.Profile)
+	if p.View != nil {
+		e.s.View = *p.View
+	}
 	set(&e.tool, p.Tool)
 	set(&e.toolInput, p.ToolInput)
 	if p.Prompt != nil {

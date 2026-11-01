@@ -358,3 +358,51 @@ func TestAPILogsAWorkspacesErrorWhenItChanges(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+// mover moves session s1. err is its answer.
+type mover struct {
+	fake
+	err  error
+	view wire.SessionView
+}
+
+func (m *mover) ID() string { return "mover" }
+func (m *mover) Handover(_ context.Context, id string, v wire.SessionView) error {
+	if id != "s1" {
+		return ErrNotFound
+	}
+	m.view = v
+	return m.err
+}
+
+func TestAPIHandover(t *testing.T) {
+	m := &mover{}
+	srv, _ := newAPI(t, &fake{}, m)
+	var page wire.DaemonRuntimesPage
+	_ = call(t, srv, "GET", "/v1/runtimes", nil, &page)
+	for _, r := range page.Runtimes {
+		if slices.Contains(r.Capabilities, CapSessionHandover) != (r.ID == "mover") {
+			t.Fatalf("%s: %v", r.ID, r.Capabilities)
+		}
+	}
+	if code := call(t, srv, "POST", "/v1/sessions/s1/handover", wire.SessionHandover{View: wire.SessionViewTerminal}, nil); code != 202 || m.view != wire.SessionViewTerminal {
+		t.Fatal(code, m.view)
+	}
+	for _, c := range []struct {
+		id   string
+		body any
+		err  error
+		code int
+	}{
+		{"s1", map[string]string{"view": "web"}, nil, 400},
+		{"s1", nil, nil, 400},
+		{"s2", wire.SessionHandover{View: wire.SessionViewChat}, nil, 404},
+		{"s1", wire.SessionHandover{View: wire.SessionViewChat}, ErrConflict, 409},
+		{"s1", wire.SessionHandover{View: wire.SessionViewTerminal}, ErrUnsupported, 501},
+	} {
+		m.err = c.err
+		if code := call(t, srv, "POST", "/v1/sessions/"+c.id+"/handover", c.body, nil); code != c.code {
+			t.Errorf("%s %v %v: %d, want %d", c.id, c.body, c.err, code, c.code)
+		}
+	}
+}
