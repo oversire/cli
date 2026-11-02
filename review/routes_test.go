@@ -154,12 +154,12 @@ func TestRoutes(t *testing.T) {
 		t.Fatal(code, body)
 	}
 
-	// A dirty primary checkout fails the check: 409.
-	w.write(filepath.Join(w.root, "app", "README.md"), "changed\n")
+	// A change in the primary checkout in a file of the branch fails the check: 409.
+	w.write(filepath.Join(w.root, "app", "lib.go"), "changed\n")
 	if code, body = send(t, "POST", tailnet+"/v1/reviews/APP-1/merge", `{"removeGroup":false}`, app...); code != 409 {
 		t.Fatal(code, body)
 	}
-	w.git(filepath.Join(w.root, "app"), "checkout", "-q", "README.md")
+	w.git(filepath.Join(w.root, "app"), "checkout", "-q", "lib.go")
 	r.clock.add(sendWait)
 	code, body = send(t, "POST", tailnet+"/v1/reviews/APP-1/merge", `{"removeGroup":true}`, app...)
 	if res := decodeAs[wire.MergeResult](t, body); code != 200 || !res.Merged || !res.Removed {

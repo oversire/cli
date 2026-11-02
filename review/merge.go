@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/oversire/cli/wire"
@@ -148,12 +149,28 @@ func (e *Engine) checkMerge(ctx context.Context, g group) ([]wire.ReviewRepo, er
 			if r.Base == "HEAD" {
 				return nil, refuse(Conflict, "%s: the primary checkout %s is not on a branch.", name, g.primary(name))
 			}
-			st, err := e.d.Git.Run(ctx, g.primary(name), "status", "--porcelain", "--untracked-files=no")
+			// Changes in the primary checkout stop the merge only in files of the branch.
+			// The fast-forward and the rollback (reset --keep) keep the other changes.
+			dirty, err := e.d.Git.Run(ctx, g.primary(name), "diff", "--name-only", "--no-renames", "HEAD")
 			if err != nil {
 				return nil, refuse(Conflict, "%s: %v", name, err)
 			}
-			if st != "" {
-				return nil, refuse(Conflict, "%s: the primary checkout %s has changes that are not committed.", name, g.primary(name))
+			if dirty != "" {
+				incoming, err := e.d.Git.Run(ctx, g.primary(name), "diff", "--name-only", "--no-renames", r.Base+"..."+r.Branch)
+				if err != nil {
+					return nil, refuse(Conflict, "%s: %v", name, err)
+				}
+				var shared []string
+				branch := lines(incoming)
+				for _, f := range lines(dirty) {
+					if slices.Contains(branch, f) {
+						shared = append(shared, f)
+					}
+				}
+				if len(shared) > 0 {
+					return nil, refuse(Conflict, "%s: the primary checkout %s has changes that are not committed in files of %s: %s. Commit or stash them first.",
+						name, g.primary(name), r.Branch, strings.Join(shared, ", "))
+				}
 			}
 		}
 		repos = append(repos, r)

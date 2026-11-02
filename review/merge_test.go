@@ -143,7 +143,7 @@ func TestMergeChecks(t *testing.T) {
 	if _, err := r.Merge(ctx, "APP-1", wire.MergeRequest{}); !kindIs(err, Conflict) {
 		t.Fatal("no commits:", err)
 	}
-	w.commit(wt, "Work", map[string]string{"n.go": "package lib\n"})
+	w.commit(wt, "Work", map[string]string{"n.go": "package lib\n", "README.md": "branch\n"})
 	w.write(filepath.Join(wt, "wip.go"), "package lib\n")
 	if _, err := r.Merge(ctx, "APP-1", wire.MergeRequest{}); !kindIs(err, Conflict) {
 		t.Fatal("dirty worktree:", err)
@@ -151,7 +151,7 @@ func TestMergeChecks(t *testing.T) {
 	os.Remove(filepath.Join(wt, "wip.go"))
 	w.write(filepath.Join(app, "README.md"), "changed\n")
 	_, err := r.Merge(ctx, "APP-1", wire.MergeRequest{})
-	if !kindIs(err, Conflict) || !strings.Contains(err.Error(), "primary checkout") {
+	if !kindIs(err, Conflict) || !strings.Contains(err.Error(), "primary checkout") || !strings.Contains(err.Error(), "README.md") {
 		t.Fatal("dirty primary:", err)
 	}
 	w.git(app, "checkout", "-q", "README.md")
@@ -210,6 +210,26 @@ func TestMergeRemovesGroup(t *testing.T) {
 	d, err := r.Get(context.Background(), "OS-5", "")
 	if err != nil || d.Summary.State != wire.ReviewMerged {
 		t.Fatal(err, d.Summary)
+	}
+}
+
+// A change in the primary checkout in a file that the branch does not change stays through the merge.
+func TestMergeKeepsPrimaryChanges(t *testing.T) {
+	w := newWS(t)
+	app := w.repo("app")
+	g := w.group("app-1", "app")
+	head := w.commit(filepath.Join(g, "app"), "Work", map[string]string{"n.go": "package lib\n"})
+	w.write(filepath.Join(app, "README.md"), "changed\n")
+	r := newRig(t, w.root)
+	res, err := r.Merge(context.Background(), "APP-1", wire.MergeRequest{})
+	if err != nil || !res.Merged || res.Error != "" {
+		t.Fatalf("%v %+v", err, res)
+	}
+	if got := w.git(app, "rev-parse", "main"); got != head {
+		t.Fatal(got)
+	}
+	if data, err := os.ReadFile(filepath.Join(app, "README.md")); err != nil || string(data) != "changed\n" {
+		t.Fatal("the change is gone", err)
 	}
 }
 
