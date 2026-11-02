@@ -1,0 +1,21 @@
+{
+  "seq": 151,
+  "id": "app:mbp:SLING-124:reopen:1793621980971",
+  "at": "2026-11-02T12:59:40Z",
+  "seenAt": "2026-11-02T12:59:41Z",
+  "kind": "item.state_changed",
+  "item": "SLING-124",
+  "project": "sling",
+  "machine": "mbp",
+  "actorType": "system",
+  "actor": "parent-guard",
+  "onBehalf": "flarco@gmail.com",
+  "via": "app@mbp",
+  "summary": "Done → In Progress: 3 sub-items are open",
+  "payload": {
+    "from": "Done",
+    "to": "In Progress",
+    "group": "started",
+    "reason": "open-sub-items"
+  }
+}

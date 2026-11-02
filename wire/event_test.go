@@ -20,7 +20,7 @@ func TestEventCatalogMatchesTheFixtures(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	special := map[string]bool{"parent-unknown.json": true, "private-prompt.json": true, "provider-human.json": true}
+	special := map[string]bool{"parent-unknown.json": true, "private-prompt.json": true, "provider-human.json": true, "system-reopen.json": true}
 	seen := map[string]bool{}
 	for name, data := range fixtures(t, "event") {
 		var e Event
