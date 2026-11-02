@@ -269,7 +269,10 @@ func TestGroupOf(t *testing.T) {
 		"/w/cli":                 {"", ""},
 		"/":                      {"", ""},
 	} {
-		root, name, ok := groupOf(dir)
+		root, name, ok := groupOf(filepath.FromSlash(dir))
+		if want[0] != "" {
+			want[0] = filepath.FromSlash(want[0])
+		}
 		if root != want[0] || name != want[1] || ok != (want[1] != "") {
 			t.Errorf("%s: %s %s %v", dir, root, name, ok)
 		}

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -167,7 +168,7 @@ func TestRoutes(t *testing.T) {
 
 	// A plan from loopback.
 	root := t.TempDir()
-	plan := `{"key":"APP-2","version":1,"root":"` + root + `","blocks":[{"id":"goal","heading":"Goal","markdown":"x"}]}`
+	plan := `{"key":"APP-2","version":1,"root":` + strconv.Quote(root) + `,"blocks":[{"id":"goal","heading":"Goal","markdown":"x"}]}`
 	if code, body = send(t, "PUT", loop+"/v1/reviews/app-2/plan", plan); code != 200 || decodeAs[wire.PlanDoc](t, body).Version != 1 {
 		t.Fatal(code, body)
 	}

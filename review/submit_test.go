@@ -18,7 +18,7 @@ var update = flag.Bool("update", false, "write the golden files in testdata")
 // golden compares text with testdata/name. The root and the comment ids are placeholders in the file.
 func golden(t *testing.T, name, text string, repl ...string) {
 	t.Helper()
-	text = strings.NewReplacer(repl...).Replace(text)
+	text = filepath.ToSlash(strings.NewReplacer(repl...).Replace(text))
 	path := filepath.Join("testdata", name)
 	if *update {
 		if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
