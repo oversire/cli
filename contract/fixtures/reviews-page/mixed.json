@@ -89,6 +89,6 @@
     }
   ],
   "notPushed": [
-    { "root": "/Users/fritz/Projects/oversire-workspace", "repo": "oversire", "base": "main", "ahead": 7 }
+    { "root": "/Users/fritz/Projects/oversire-workspace", "repo": "oversire", "base": "main", "ahead": 7, "items": ["OVERSIRE-383", "OVERSIRE-384"] }
   ]
 }

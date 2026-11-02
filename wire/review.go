@@ -94,6 +94,8 @@ type NotPushed struct {
 	Repo  string `json:"repo"`
 	Base  string `json:"base"`
 	Ahead int    `json:"ahead"`
+	// Items are the item keys that the commits name.
+	Items []string `json:"items,omitempty"`
 }
 
 // ReviewsPage is the answer of GET /v1/reviews.

@@ -4,10 +4,12 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/oversire/cli/proc"
 	"github.com/oversire/cli/wire"
 )
 
@@ -32,7 +34,8 @@ func TestMergeFastForward(t *testing.T) {
 	if got := w.git(app, "rev-parse", "main"); got != head {
 		t.Fatal(got)
 	}
-	if len(res.NotPushed) != 1 || res.NotPushed[0] != (wire.NotPushed{Root: w.root, Repo: "app", Base: "main", Ahead: 1}) {
+	// The fast-forward leaves no merge commit: the reflog names the branch.
+	if len(res.NotPushed) != 1 || !reflect.DeepEqual(res.NotPushed[0], wire.NotPushed{Root: w.root, Repo: "app", Base: "main", Ahead: 1, Items: []string{"APP-1"}}) {
 		t.Fatalf("%+v", res.NotPushed)
 	}
 	// The group stays, with nothing to merge: the review is merged and leaves the list.
@@ -223,5 +226,34 @@ func TestMergeKeepsUnknownFiles(t *testing.T) {
 	}
 	if data, err := os.ReadFile(filepath.Join(g, "notes.txt")); err != nil || string(data) != "keep me\n" {
 		t.Fatal("the file is gone", err)
+	}
+}
+
+func TestNotPushedItems(t *testing.T) {
+	w := newWS(t)
+	app := w.repo("app")
+	remote := filepath.Join(t.TempDir(), "app.git")
+	w.git(w.root, "init", "-q", "--bare", remote)
+	w.git(app, "remote", "add", "origin", remote)
+	w.git(app, "push", "-q", "-u", "origin", "main")
+	gt := NewGit(proc.Local{})
+	ctx := context.Background()
+
+	w.commit(app, "Fix the docs", map[string]string{"a.md": "a\n"})
+	if np, ok := gt.notPushed(ctx, w.root, "app"); !ok || np.Items != nil {
+		t.Fatalf("%+v", np)
+	}
+	w.commit(app, "Status card (OVERSIRE-383, mcpq-2)\n\nItem: SLING-9", map[string]string{"b.md": "b\n"})
+	w.git(app, "checkout", "-q", "-b", "web-12")
+	w.commit(app, "Page", map[string]string{"c.md": "c\n"})
+	w.git(app, "checkout", "-q", "main")
+	w.git(app, "merge", "-q", "--ff-only", "web-12")
+	np, ok := gt.notPushed(ctx, w.root, "app")
+	if !ok || np.Ahead != 3 || !reflect.DeepEqual(np.Items, []string{"OVERSIRE-383", "SLING-9", "WEB-12"}) {
+		t.Fatalf("%+v", np)
+	}
+	w.git(app, "push", "-q")
+	if _, ok := gt.notPushed(ctx, w.root, "app"); ok {
+		t.Fatal("pushed")
 	}
 }

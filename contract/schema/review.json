@@ -93,7 +93,12 @@
         "root": { "type": "string", "minLength": 1 },
         "repo": { "type": "string", "minLength": 1 },
         "base": { "type": "string", "minLength": 1 },
-        "ahead": { "type": "integer", "minimum": 1 }
+        "ahead": { "type": "integer", "minimum": 1 },
+        "items": {
+          "description": "The item keys that the commits name: in the message, a trailer Item: KEY or a merged branch.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/Key" }
+        }
       },
       "required": ["root", "repo", "base", "ahead"],
       "additionalProperties": false

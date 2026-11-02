@@ -20,6 +20,8 @@ const MaxCommits = 50
 var (
 	keyPattern = regexp.MustCompile(`^[A-Z0-9][A-Z0-9_-]*$`)
 	itemLine   = regexp.MustCompile(`(?m)^Item:\s*(.+)$`)
+	textKey    = regexp.MustCompile(`\b[A-Z][A-Z0-9_]*-\d+\b`)
+	branchKey  = regexp.MustCompile(`(?i)\b[a-z][a-z0-9_]*-\d+\b`)
 )
 
 // validKey tells if key is a review key: upper case, at most 60 characters.
@@ -327,7 +329,40 @@ func (gt Git) notPushed(ctx context.Context, root, name string) (wire.NotPushed,
 	if err != nil || atoi(n) < 1 {
 		return wire.NotPushed{}, false
 	}
-	return wire.NotPushed{Root: root, Repo: name, Base: base, Ahead: atoi(n)}, true
+	return wire.NotPushed{Root: root, Repo: name, Base: base, Ahead: atoi(n), Items: gt.items(ctx, dir, base)}, true
+}
+
+// items gives the item keys that the commits of base after its upstream name: in a message or in a merged branch.
+func (gt Git) items(ctx context.Context, dir, base string) []string {
+	rng := base + "@{upstream}.." + base
+	var keys []string
+	add := func(k string) {
+		if k = strings.ToUpper(k); validKey(k) && !slices.Contains(keys, k) {
+			keys = append(keys, k)
+		}
+	}
+	if body, err := gt.Run(ctx, dir, "log", "-n", "500", "--format=%B", rng); err == nil {
+		for _, k := range textKey.FindAllString(body, -1) {
+			add(k)
+		}
+	}
+	// A fast-forward merge leaves no merge commit. The reflog of base names the branch.
+	shas, _ := gt.Run(ctx, dir, "rev-list", "-n", "500", rng)
+	ahead := strings.Fields(shas)
+	reflog, _ := gt.Run(ctx, dir, "log", "-g", "-n", "500", "--format=%H %gs", base)
+	for _, line := range strings.Split(reflog, "\n") {
+		sha, msg, _ := strings.Cut(line, " ")
+		branch, ok := strings.CutPrefix(msg, "merge ")
+		if !ok || !slices.Contains(ahead, sha) {
+			continue
+		}
+		branch, _, _ = strings.Cut(branch, ":")
+		for _, k := range branchKey.FindAllString(branch, -1) {
+			add(k)
+		}
+	}
+	slices.Sort(keys)
+	return keys
 }
 
 // primaries gives the folders of root whose .git is a folder: the main checkouts.
