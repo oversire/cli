@@ -1,0 +1,8 @@
+{
+  "name": "claude-local",
+  "cli": "claude",
+  "runsOn": ["mbp"],
+  "env": [{ "key": "ANTHROPIC_BASE_URL", "value": "http://localhost:4000", "secret": false }],
+  "updatedAt": "2026-11-02T18:21:00Z",
+  "updatedBy": "mbp"
+}

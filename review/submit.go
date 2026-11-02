@@ -258,7 +258,7 @@ func (e *Engine) launch(ctx context.Context, kind wire.ReviewKind, key, dir stri
 		start = "plan:" + key
 	}
 	req := wire.LaunchRequest{Repo: dir, InPlace: true, Name: key, Agent: l.CLI, Command: l.Command, Model: l.Model, Effort: l.Effort, Profile: l.Profile,
-		Title: fmt.Sprintf("%s · review %d", key, n), Key: start, Prompt: text}
+		Title: fmt.Sprintf("%s · review %d", key, n), Key: start, Prompt: text, Env: l.Env, EnvSecrets: l.EnvSecrets}
 	o := runtime.Order{ID: "review-" + strings.ToLower(key) + "-" + randomHex(4), ExpiresAt: e.d.Clock().Add(launchTTL)}
 	st, err := e.d.Launcher.Launch(ctx, rt, o, req)
 	if err != nil {

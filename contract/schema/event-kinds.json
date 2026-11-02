@@ -39,6 +39,15 @@
           },
           "profile": {
             "type": "string"
+          },
+          "agent": {
+            "type": "string"
+          },
+          "envKeys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "additionalProperties": false,
@@ -1525,6 +1534,111 @@
           }
         },
         "additionalProperties": false
+      }
+    },
+    {
+      "kind": "agent.changed",
+      "domain": "human",
+      "actorTypes": [
+        "human"
+      ],
+      "private": false,
+      "summary": "the agent and the change",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "agent": {
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "shared",
+              "local"
+            ]
+          },
+          "action": {
+            "enum": [
+              "saved",
+              "removed",
+              "moved"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "agent",
+          "scope",
+          "action"
+        ]
+      }
+    },
+    {
+      "kind": "secret.set",
+      "domain": "human",
+      "actorTypes": [
+        "human"
+      ],
+      "private": false,
+      "summary": "the agent and the key, never the value",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "agent": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "action": {
+            "enum": [
+              "set",
+              "removed"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "agent",
+          "key",
+          "action"
+        ]
+      }
+    },
+    {
+      "kind": "secret.resolved",
+      "domain": "system",
+      "actorTypes": [
+        "system"
+      ],
+      "private": false,
+      "summary": "the agent, the keys and the machine, never a value",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "agent": {
+            "type": "string"
+          },
+          "keys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "machine": {
+            "type": "string"
+          },
+          "order": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "keys",
+          "machine"
+        ]
       }
     }
   ]

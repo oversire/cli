@@ -1,0 +1,7 @@
+{
+  "secrets": [
+    { "scope": "shared", "agent": "claude", "key": "ANTHROPIC_AUTH_TOKEN", "setAt": "2026-10-30T12:00:00Z" },
+    { "scope": "shared", "agent": "*", "key": "GITHUB_TOKEN", "setAt": "2026-10-31T09:30:00Z" },
+    { "scope": "0A1B2C3D4E5F6071", "agent": "claude-local", "key": "LOCAL_TOKEN", "setAt": "2026-11-01T08:00:00Z" }
+  ]
+}

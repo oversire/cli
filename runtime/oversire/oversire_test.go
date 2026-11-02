@@ -581,3 +581,25 @@ func TestInPlaceUsesTheFolder(t *testing.T) {
 		t.Fatalf("a worktree: %s", out)
 	}
 }
+
+func TestStartPassesTheEnvAndOversireSessionWins(t *testing.T) {
+	var spy *startSpy
+	f := setupWith(t, chat, Options{}, func(v *agentvisor.Visor) Host {
+		spy = &startSpy{Visor: v}
+		return spy
+	})
+	env := map[string]string{"ANTHROPIC_AUTH_TOKEN": "sk-\"q\"\nv", "OVERSIRE_SESSION": "not-this"}
+	ref, err := f.rt.Start(context.Background(), runtime.Order{ID: "o1"}, wire.LaunchRequest{Repo: f.repo, Name: "APP-10", Agent: "fake", Prompt: "go", Env: env})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.rec.wait(t, ref.ID, wire.SessionWaitingInput)
+	spy.mu.Lock()
+	defer spy.mu.Unlock()
+	if sp := spy.spec; sp.Env["ANTHROPIC_AUTH_TOKEN"] != env["ANTHROPIC_AUTH_TOKEN"] || sp.Env["OVERSIRE_SESSION"] != ref.ID {
+		t.Fatalf("env %v", sp.Env)
+	}
+	if env["OVERSIRE_SESSION"] != "not-this" {
+		t.Fatal("the spec changed the env map of the request")
+	}
+}

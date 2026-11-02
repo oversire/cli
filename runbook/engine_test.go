@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -309,7 +310,7 @@ func TestLaunchRequest(t *testing.T) {
 		t.Fatalf("item %+v", req.Item)
 	}
 	req.Item = want.Item
-	if req != want {
+	if !reflect.DeepEqual(req, want) {
 		t.Fatalf("request\n%+v\nwant\n%+v", req, want)
 	}
 	g.done(t, r.ID, "implement", wire.VerdictDone, "Store first.")
@@ -879,5 +880,27 @@ func TestOversireStepsDoNotWait(t *testing.T) {
 	expect(t, r, wire.RunPaused, "plan", "plan.1:failed")
 	if r.Reason != reasonNoStart {
 		t.Fatal(r.Reason)
+	}
+}
+
+func TestStepCarriesTheAgentEnv(t *testing.T) {
+	g := newRig(t, "")
+	withEnv := map[string]wire.AgentLaunch{"claude": {CLI: "claude", Profile: "claude", Env: map[string]string{"PLANE_ITEM": "OVERSIRE-341"},
+		EnvSecrets: map[string]wire.AgentSecretRef{"PLANE_API_TOKEN": {Agent: "claude", Scope: wire.AgentSecretShared}}}}
+	b := wire.Runbook{ID: "one", Name: "One", Steps: []wire.RunbookStep{{ID: "implement", Name: "Implement", Agent: "claude", Prompt: prompt("Do {key}.")}}}
+	if _, err := g.e.Start(context.Background(), wire.RunbookStart{Item: item, Repo: "/r/app", Runbook: b, Agents: withEnv}); err != nil {
+		t.Fatal(err)
+	}
+	g.e.wg.Wait()
+	req := g.l.last()
+	if req.Env["PLANE_ITEM"] != "OVERSIRE-341" || req.EnvSecrets["PLANE_API_TOKEN"] != (wire.AgentSecretRef{Agent: "claude", Scope: "shared"}) {
+		t.Fatalf("env %+v %+v", req.Env, req.EnvSecrets)
+	}
+	bad := map[string]wire.AgentLaunch{"claude": {CLI: "claude", Profile: "claude", Env: map[string]string{"OVERSIRE_SESSION": "x"}}}
+	other := item
+	other.Key = "OVERSIRE-9"
+	var e *Error
+	if _, err := g.e.Start(context.Background(), wire.RunbookStart{Item: other, Repo: "/r/app", Runbook: b, Agents: bad}); !errors.As(err, &e) || e.Kind != Invalid {
+		t.Fatalf("a reserved key: %v", err)
 	}
 }

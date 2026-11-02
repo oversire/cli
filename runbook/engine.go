@@ -652,7 +652,7 @@ func (e *Engine) request(r *wire.RunbookRun, step string, round int) wire.Launch
 	}
 	item := r.Item
 	return wire.LaunchRequest{Repo: r.Repo, Item: &item, Agent: a.CLI, Command: a.Command, Model: a.Model, Effort: a.Effort, Profile: a.Profile,
-		Title: title, Key: stepKey(r.ID, step, round), Prompt: render(r, *st, round)}
+		Title: title, Key: stepKey(r.ID, step, round), Prompt: render(r, *st, round), Env: a.Env, EnvSecrets: a.EnvSecrets}
 }
 
 // changed saves the run and tells the change.

@@ -34,7 +34,7 @@ const (
 var Synced = []string{
 	"queue-lanes", "queue-triggers", "ignored-failures", "pins", "snoozes", "notes", "agent-links", "memory", "jobs", "suggestions",
 	"item-areas", "work-orders", "billing", "runners", "runner-sessions", "planner-settings", "area-catalog", "area-claims",
-	"area-candidates", "changed-paths", "ai-outputs",
+	"area-candidates", "changed-paths", "ai-outputs", "agents",
 }
 
 // HubOnly are the synced collections that only the cloud hub writes. A daemon refuses them.
@@ -126,9 +126,10 @@ func utf16Len(raw json.RawMessage) int {
 
 // OpLog is the op log of the store in SQLite. It has the tables of the cloud hub: ops, records and store_meta.
 type OpLog struct {
-	db    *sql.DB
-	clock func() time.Time
-	mu    sync.Mutex // one write at a time, so that a batch is atomic and seq grows
+	db      *sql.DB
+	clock   func() time.Time
+	mu      sync.Mutex // one write at a time, so that a batch is atomic and seq grows
+	onApply func(accepted []wire.StoreOp)
 }
 
 // Open opens or makes the op log at path (<data>/store.db).
@@ -162,9 +163,40 @@ func Open(path string, clock func() time.Time) (*OpLog, error) {
 // Close closes the database.
 func (l *OpLog) Close() error { return l.db.Close() }
 
+// OnApply calls fn with the accepted ops after each Apply, outside the lock of the log.
+func (l *OpLog) OnApply(fn func(accepted []wire.StoreOp)) {
+	l.mu.Lock()
+	l.onApply = fn
+	l.mu.Unlock()
+}
+
 // Apply writes the ops that are newer than the stored record, in one transaction. The answer holds the accepted ops.
 // It does not check the ops: DecodeOps does that.
 func (l *OpLog) Apply(ops []wire.StoreOp) (wire.StoreApplyResult, error) {
+	res, err := l.apply(ops)
+	l.mu.Lock()
+	fn := l.onApply
+	l.mu.Unlock()
+	if err == nil && fn != nil && len(res.Accepted) > 0 {
+		fn(res.Accepted)
+	}
+	return res, err
+}
+
+// Record gives the record of collection and id. ok is false for a missing record and for a tombstone.
+func (l *OpLog) Record(collection, id string) (record json.RawMessage, ok bool, err error) {
+	var rec sql.NullString
+	err = l.db.QueryRow("SELECT record FROM records WHERE collection = ? AND id = ? AND op = 'put'", collection, id).Scan(&rec)
+	if errors.Is(err, sql.ErrNoRows) || err == nil && !rec.Valid {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	return json.RawMessage(rec.String), true, nil
+}
+
+func (l *OpLog) apply(ops []wire.StoreOp) (wire.StoreApplyResult, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	now := l.clock().UnixMilli()

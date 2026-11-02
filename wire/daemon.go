@@ -78,6 +78,8 @@ type DaemonSession struct {
 	Effort         string        `json:"effort,omitempty"`  // LaunchRequest.Effort of the start
 	Profile        string        `json:"profile,omitempty"` // LaunchRequest.Profile: the OverSire agent name
 	View           SessionView   `json:"view,omitempty"`    // empty: chat for the oversire runtime, terminal for the others
+	// EnvKeys are the env keys of the start, for the session.started row. Not in the contract: the book keeps it in memory.
+	EnvKeys []string `json:"-"`
 }
 
 // AgentModel is one model of an agent CLI, as agent-wire ModelInfo gives it.
@@ -160,8 +162,15 @@ type DaemonInfo struct {
 	Home      string         `json:"home,omitempty"`
 	Device    string         `json:"device,omitempty"`
 	Update    *UpdateStatus  `json:"update,omitempty"`
+	Features  []string       `json:"features,omitempty"`
 	Listen    DaemonListen   `json:"listen"`
 }
+
+// Values of DaemonInfo.Features. Open set.
+const (
+	FeatureLaunchEnv    = "launch-env"    // LaunchRequest.Env reaches the agent process
+	FeatureAgentSecrets = "agent-secrets" // the /v1/agent-secrets routes and LaunchRequest.EnvSecrets
+)
 
 // UpdateStatus is the last self-update check of a daemon.
 type UpdateStatus struct {

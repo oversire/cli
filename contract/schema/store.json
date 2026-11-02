@@ -249,6 +249,34 @@
       "required": ["id", "kind", "subject", "hash", "body", "at"],
       "additionalProperties": false
     },
+    "AgentEnvVar": {
+      "description": "One env row of an agent. A secret row has no value: the value is on the home daemon (daemon.json AgentSecretSet). A value can hold the placeholders {name}, {KEY}, {key} and {title}.",
+      "type": "object",
+      "properties": {
+        "key": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$", "maxLength": 200 },
+        "value": { "description": "Absent for a secret.", "type": "string", "maxLength": 8192 },
+        "secret": { "type": "boolean" }
+      },
+      "required": ["key", "secret"],
+      "additionalProperties": false
+    },
+    "AgentDef": {
+      "description": "Collection agents. One shared agent: on all the Macs of the user. The id is the agent name. The id * holds the env for all agents and only uses env. The env of an agent wins over the env for all agents.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "cli": { "description": "The base CLI: an AgentBinder Harness raw value. Absent: a terminal-only agent.", "type": "string", "minLength": 1, "maxLength": 64 },
+        "command": { "description": "The start command template. Absent: the default of the CLI.", "type": "string", "minLength": 1, "maxLength": 2000 },
+        "model": { "description": "Absent: Auto, the default of the CLI.", "type": "string", "minLength": 1, "maxLength": 200 },
+        "effort": { "description": "Absent: Auto. Open set: low, medium, high, max.", "type": "string", "minLength": 1, "maxLength": 40 },
+        "runsOn": { "description": "The machine names that can start the agent. Absent: any machine.", "type": "array", "items": { "$ref": "daemon.json#/$defs/MachineName" }, "maxItems": 50 },
+        "env": { "type": "array", "items": { "$ref": "#/$defs/AgentEnvVar" }, "maxItems": 64 },
+        "updatedAt": { "$ref": "#/$defs/Date" },
+        "updatedBy": { "description": "The machine of the last edit.", "type": "string", "minLength": 1, "maxLength": 200 }
+      },
+      "required": ["name", "env", "updatedAt"],
+      "additionalProperties": false
+    },
     "StoreOp": {
       "description": "One write to a synced collection. The hub keeps an op log of them. Last write wins for each collection and id, by hlc.",
       "type": "object",

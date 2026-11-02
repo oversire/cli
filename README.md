@@ -248,6 +248,45 @@ The home member of a group without cloud keeps the synced store of the apps in `
 
 A member that is not home answers 409 `{"error":"<machine> is home","home":"<machine>"}`. When the group has cloud, each member answers 409 `{"error":"the cloud is home","cloud":{...}}`. `POST /v1/group/home` with this machine copies all records of the old home before it sets home. When the old home does not answer, the move goes on and the answer has `"offline":true`.
 
+### Agent env and secrets
+
+A `sessionStart` order (a `LaunchRequest`) can carry the env of the agent (OVERSIRE-401):
+
+- `env`: env key to value. These are the plain values of the agent definition.
+- `envSecrets`: env key to `{agent, scope}`. The value is a secret on home. `scope` is `shared` (all machines) or the name of one machine. `agent` is the agent name, or `*` for the env of all agents.
+
+An env key matches `^[A-Za-z_][A-Za-z0-9_]*$` and has at most 200 characters. The keys `OVERSIRE_*`, `AGENT_VISOR_*` and `ORCA_PANE_KEY` are reserved. An order has at most 64 keys, and a value has at most 8192 characters. A key cannot be in `env` and in `envSecrets`. `POST /v1/orders` answers 400 to a bad key.
+
+`GET /v1/whoami` has `features: ["launch-env","agent-secrets"]`. The app sends `env` and `envSecrets` only to a daemon with these features.
+
+The home daemon keeps the secret values in the Keychain (service `oversire.agent-env`, account `<scope>/<agent>/<KEY>`). The value goes to `security -i` on stdin, as base64, so quotes and new lines are safe. On Linux the store is the Secret Service, else a 0600 file for each account in `<data>/agent-secrets/`. `<data>/agent-secrets.json` is the index: the keys and their `setAt`, no value.
+
+| Route | Access | What it does |
+|---|---|---|
+| `GET /v1/agent-secrets` | Member: an app of the group, or loopback | Answers `{secrets: [{scope, agent, key, setAt}]}`. It never gives a value. |
+| `PUT /v1/agent-secrets/{scope}/{agent}/{key}` | Member: an app of the group, or loopback | Body `{value}` with 1 to 8192 characters. Answers 200 with the index row. Writes `secret.set` with `action: "set"`. |
+| `DELETE /v1/agent-secrets/{scope}/{agent}/{key}` | Member: an app of the group, or loopback | Removes the value and answers 204. Writes `secret.set` with `action: "removed"` when the key was there. |
+| `POST /v1/agent-secrets/resolve` | Only a daemon credential of the group, over Tailscale | Body `{order?, machine, refs}`. `machine` must be the machine of the credential. Answers `{env}` with the values. Writes `secret.resolved` with the keys only. |
+
+- The app percent-escapes each path segment. The agent can be `*` (`%2A`). A scope or an agent name has 1 to 200 characters, and no `/` or control character.
+- A daemon credential gets 403 on `GET`, `PUT` and `DELETE`. Loopback and app credentials get 403 on `resolve`: no app reads a value back.
+- `resolve` checks the `runsOn` list of the `agents` record of each shared agent. The agent `*` and a secret of one machine have no such check. A machine that is not on the list gets 403 `"claude cannot run on build-box. Its Runs on list is mbp, mba."`. A missing value gets 404 `"mini has no value for ANTHROPIC_AUTH_TOKEN of claude. Type it again in Settings › Agents."`.
+- A daemon that is not home answers 409 `{"error":"<machine> is home","home":"<machine>"}`, as the home store does.
+- When the home store deletes an `agents` record, home removes each `shared/<agent>/*` secret.
+
+At a launch, the daemon checks the env keys. Then it gets the secret values: on home in process, else from `resolve` on home with the group credential. It merges the values into `env` in memory, and the order goes to the runtime with no `envSecrets`. The values do not go into the order journal, a log line, an event or an error. A failed resolve fails the order with one of these reasons:
+
+- `mini (home) is offline. claude needs the secret ANTHROPIC_AUTH_TOKEN.`
+- `mba cannot reach mini (home). A secret needs a route to home.`
+- the 403 or 404 text of home, above.
+
+How the env gets to the agent:
+
+- `oversire` runtime: agent-visor sets the env of the agent process (not argv). `OVERSIRE_SESSION` comes last, so the order cannot change it. agent-visor keeps the start spec, with the env, in `<data>/visor/sessions/<id>/spec.json` (0600) to restart and resume the session.
+- `orca` runtime with the visor: the Orca backend writes the env into a 0700 start script that removes itself. The terminal gets only `sh <script>`, so no value is in argv or in the scrollback. The `orca` runtime with no visor refuses an order with an env.
+
+The session book keeps the env keys (not the values) of a session. `session.started` has `agent` (the OverSire agent name) and `envKeys`.
+
 ### Events
 
 The daemon keeps the events table in `<data>/events.db` (SQLite, OVERSIRE-377). Each change in the work makes one row: agent sessions, turns, waits, prompts, git, CI, provider activity, automation. The schema is `contract/schema/event.json` and the kinds are in `contract/schema/event-kinds.json`. The home member holds the full table. Each other member keeps a local copy and sends its new rows to the home through an outbox, with backoff from 2 s to 5 min. Without a group, or with cloud, each daemon keeps its own rows.
@@ -480,6 +519,7 @@ The daemon writes its log to stderr. The service puts it in the log of the table
 - **Expiry.** Each order has an expiry time. The daemon never does an expired order.
 - **At most once.** The daemon keeps the last 500 finished orders in `orders.json`. An order that the hub or an app sends again does not run again. The daemon only sends its result again.
 - **Secrets on stdin.** The token goes to `security` and `secret-tool` on stdin, never in argv.
+- **Agent secrets.** Only home keeps the secret env of the agents. Only a daemon of the group gets a value, for its own machine, at a launch. It keeps the value in memory. See "Agent env and secrets".
 - **Signed updates.** `daemon run` checks the latest GitHub release one minute after the start, then each 6 hours, on `POST /v1/update` and when the hub tells it about a new version. It reads the release tag from the redirect of `github.com/oversire/cli/releases/latest`, so the limit of the GitHub API does not apply. It verifies the sha256 checksum. On macOS it also verifies the code signature and the Team ID `Q56WK6TB88`. A `dev` build never updates.
 
 ## Development
@@ -519,6 +559,7 @@ The layout:
 | `allow` | The allow list. |
 | `config` | The config folder, `config.json` and `state.json`. |
 | `secret` | The token storage. |
+| `agentsecret` | The secret env of the agents: the Keychain store, the `/v1/agent-secrets` routes on home and the resolve at a launch. |
 | `service` | LaunchAgent, systemd unit and logon task. |
 | `update` | The self-update. |
 | `migrate` | The move from an `oversire-runner` install. |

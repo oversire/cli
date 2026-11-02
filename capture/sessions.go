@@ -76,7 +76,10 @@ func (r *SessionRows) rows(s wire.DaemonSession, action string, at time.Time) []
 			pl["cwd"] = s.Cwd
 		}
 		if s.Profile != "" {
-			pl["profile"] = s.Profile
+			pl["profile"], pl["agent"] = s.Profile, s.Profile
+		}
+		if len(s.EnvKeys) > 0 {
+			pl["envKeys"] = s.EnvKeys
 		}
 		d := mk(wire.KindSessionStarted, wire.ActorAgent, "Session started", pl)
 		d.ID, d.At = ID("session", s.ID, strconv.FormatInt(started.UnixMilli(), 10), "started"), started

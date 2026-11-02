@@ -1,0 +1,13 @@
+{
+  "seq": 210,
+  "id": "app:agent:claude:1793650000",
+  "at": "2026-11-02T18:20:00Z",
+  "seenAt": "2026-11-02T18:20:01Z",
+  "kind": "agent.changed",
+  "machine": "mba",
+  "actorType": "human",
+  "actor": "flarco@gmail.com",
+  "via": "app@mba",
+  "summary": "Agent claude saved (shared)",
+  "payload": { "agent": "claude", "scope": "shared", "action": "saved" }
+}

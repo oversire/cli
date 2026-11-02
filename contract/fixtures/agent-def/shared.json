@@ -1,0 +1,14 @@
+{
+  "name": "claude",
+  "cli": "claude",
+  "command": "claude -n {name}",
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "env": [
+    { "key": "ANTHROPIC_BASE_URL", "value": "https://llm-gateway.lan/anthropic", "secret": false },
+    { "key": "ANTHROPIC_AUTH_TOKEN", "secret": true },
+    { "key": "OTEL_RESOURCE_ATTRIBUTES", "value": "item={KEY}", "secret": false }
+  ],
+  "updatedAt": "2026-11-02T18:20:00Z",
+  "updatedBy": "mba"
+}

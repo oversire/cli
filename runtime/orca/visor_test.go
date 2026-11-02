@@ -3,6 +3,7 @@ package orca
 import (
 	"context"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -128,5 +129,35 @@ func TestWorktreesFromTheSnapshot(t *testing.T) {
 	r.on("worktree ps", `{"ok":true,"result":{"worktrees":[{"worktreeId":"w2"}]}}`)
 	if wts, err := o.Worktrees(context.Background()); err != nil || wts[0].ID != "w2" {
 		t.Fatalf("old snapshot: %v %v", err, wts)
+	}
+}
+
+func TestLaunchInTheVisorPassesTheEnv(t *testing.T) {
+	o, r := setup()
+	h := &fakeHost{}
+	o.WithVisor(h, &fakeBackend{})
+	r.on("repo list", `{"ok":true,"result":{"repos":[{"id":"r1","path":"/src/app"}]}}`)
+	r.on("worktree ps", `{"ok":true,"result":{"worktrees":[]}}`)
+	r.on("worktree create", `{"ok":true,"result":{"worktree":{"id":"r1::/src/app-1","path":"/src/app-1"}}}`)
+	r.on("terminal list", `{"ok":true,"result":{"terminals":[{"handle":"sh1","worktreeId":"r1::/src/app-1","tabId":"t1","leafId":"l1"}]}}`)
+	env := map[string]string{"ANTHROPIC_AUTH_TOKEN": "sk-SECRET", "PLAIN": "1"}
+	if _, err := o.Launch(context.Background(), runtime.Order{}, wire.LaunchRequest{Repo: "/src/app", Name: "eng-5", Agent: "claude", Prompt: "go", Env: env}); err != nil {
+		t.Fatal(err)
+	}
+	if got := h.starts[0].Env; got["ANTHROPIC_AUTH_TOKEN"] != "sk-SECRET" || got["PLAIN"] != "1" {
+		t.Fatalf("env %v", got)
+	}
+	for _, c := range append(r.calls, h.starts[0].Command) {
+		if strings.Contains(strings.Join(c, " "), "sk-SECRET") {
+			t.Fatalf("a value is in argv: %q", c)
+		}
+	}
+}
+
+func TestLaunchWithEnvNeedsTheVisor(t *testing.T) {
+	o, r := setup()
+	_, err := o.Launch(context.Background(), runtime.Order{}, wire.LaunchRequest{Repo: "/src/app", Name: "eng-5", Agent: "claude", Prompt: "go", Env: map[string]string{"K": "v"}})
+	if err == nil || !strings.Contains(err.Error(), "no visor") || len(r.calls) != 0 {
+		t.Fatalf("err %v, calls %q", err, r.calls)
 	}
 }

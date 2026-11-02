@@ -3,6 +3,7 @@ package runbook
 
 import (
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -90,6 +91,12 @@ func validateStart(s wire.RunbookStart) []Problem {
 	}
 	if s.StartAt != "" && s.Runbook.Index(s.StartAt) < 0 {
 		out = append(out, Problem{Step: s.StartAt, Text: fmt.Sprintf("The runbook has no step %q to start at.", s.StartAt)})
+	}
+	for _, name := range slices.Sorted(maps.Keys(s.Agents)) {
+		a := s.Agents[name]
+		if err := (wire.LaunchRequest{Env: a.Env, EnvSecrets: a.EnvSecrets}).CheckEnv(); err != nil {
+			out = append(out, Problem{Text: fmt.Sprintf("The agent %s: %v", name, err)})
+		}
 	}
 	for _, st := range s.Runbook.Steps {
 		if _, ok := s.Agents[st.Agent]; !ok {

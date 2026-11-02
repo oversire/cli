@@ -268,7 +268,7 @@ func TestRecordFixturesPass(t *testing.T) {
 		"suggestion": "suggestions", "memory-entry": "memory", "job": "jobs", "item-areas": "item-areas", "planner-settings": "planner-settings",
 		"area-catalog": "area-catalog", "area-candidates": "area-candidates", "changed-paths": "changed-paths", "pin": "pins", "note": "notes",
 		"snooze": "snoozes", "queue-lane": "queue-lanes", "agent-link": "agent-links", "ignored-failure": "ignored-failures",
-		"queue-trigger": "queue-triggers", "ai-output": "ai-outputs",
+		"queue-trigger": "queue-triggers", "ai-output": "ai-outputs", "agent-def": "agents",
 	}
 	for kind, collection := range kinds {
 		paths, _ := filepath.Glob(filepath.Join("..", "contract", "fixtures", kind, "*.json"))
@@ -297,5 +297,29 @@ func TestOpenMakesTheFolder(t *testing.T) {
 	l.Close()
 	if st, err := os.Stat(dir); err != nil || (runtime.GOOS != "windows" && st.Mode().Perm() != 0o700) {
 		t.Fatalf("folder: %v %v", st, err)
+	}
+}
+
+func TestRecordAndOnApply(t *testing.T) {
+	l := openLog(t)
+	var got []wire.StoreOp
+	l.OnApply(func(ops []wire.StoreOp) { got = append(got, ops...) })
+	put := wire.StoreOp{Schema: 2, Collection: "agents", ID: "claude", Op: wire.StorePut, Record: json.RawMessage(`{"name":"claude","runsOn":["mba"]}`),
+		HLC: hlc(1000, 0, "mac"), Device: "mac"}
+	mustApply(t, l, put)
+	if rec, ok, err := l.Record("agents", "claude"); !ok || err != nil || !strings.Contains(string(rec), `"runsOn":["mba"]`) {
+		t.Fatalf("record = %s %v %v", rec, ok, err)
+	}
+	del := wire.StoreOp{Schema: 2, Collection: "agents", ID: "claude", Op: wire.StoreDelete, HLC: hlc(2000, 0, "mac"), Device: "mac"}
+	mustApply(t, l, del)
+	mustApply(t, l, put) // older: not accepted, no call
+	if _, ok, err := l.Record("agents", "claude"); ok || err != nil {
+		t.Fatalf("a tombstone gives a record: %v %v", ok, err)
+	}
+	if _, ok, _ := l.Record("agents", "nope"); ok {
+		t.Fatal("a missing record")
+	}
+	if len(got) != 2 || got[1].Op != wire.StoreDelete {
+		t.Fatalf("on apply = %+v", got)
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -57,6 +58,7 @@ type Patch struct {
 	Key *string
 	// Model, Effort and Profile come from the LaunchRequest of the start.
 	Model, Effort, Profile *string
+	EnvKeys                *[]string // the env keys of the start, never a value
 	View                   *wire.SessionView
 }
 
@@ -174,6 +176,9 @@ func (e *entry) merge(p Patch) {
 	set(&e.s.Model, p.Model)
 	set(&e.s.Effort, p.Effort)
 	set(&e.s.Profile, p.Profile)
+	if p.EnvKeys != nil {
+		e.s.EnvKeys = slices.Clone(*p.EnvKeys)
+	}
 	if p.View != nil {
 		e.s.View = *p.View
 	}
@@ -450,6 +455,7 @@ func (b *Book) load() {
 
 func copySession(s wire.DaemonSession) wire.DaemonSession {
 	s.Sources = append([]string{}, s.Sources...)
+	s.EnvKeys = slices.Clone(s.EnvKeys)
 	return s
 }
 

@@ -1,0 +1,9 @@
+{
+  "name": "*",
+  "env": [
+    { "key": "GITHUB_TOKEN", "secret": true },
+    { "key": "TASK_TITLE", "value": "{title}", "secret": false }
+  ],
+  "updatedAt": "2026-11-02T18:23:00Z",
+  "updatedBy": "mbp"
+}

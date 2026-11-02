@@ -49,6 +49,10 @@ func TestDaemonFixtures(t *testing.T) {
 	roundTrip[WorkspaceFilesResult](t, "workspace-files-result")
 	roundTrip[LeaseRequest](t, "lease-request")
 	roundTrip[Lease](t, "lease")
+	roundTrip[AgentSecretSet](t, "agent-secret-set")
+	roundTrip[AgentSecretList](t, "agent-secret-list")
+	roundTrip[AgentSecretResolve](t, "agent-secret-resolve")
+	roundTrip[AgentSecretValues](t, "agent-secret-values")
 }
 
 func TestSessionSubject(t *testing.T) {

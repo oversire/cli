@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -159,10 +160,20 @@ func (s *session) spec() agentvisor.StartSpec {
 		Workdir: s.workdir, WorkingDir: s.dir, Instructions: s.instructions(), Prompt: s.req.Prompt,
 		Permissions: agentvisor.Permissions{Mode: agentwire.PermissionAsk},
 		Labels:      labels,
-		// The hook command drops the calls of a session with this env, so the book has no copy of it.
-		Env:     map[string]string{"OVERSIRE_SESSION": s.id},
-		Restart: agentvisor.RestartPolicy{Mode: agentvisor.RestartResume, Prompt: restartPrompt},
+		Env:         s.env(),
+		Restart:     agentvisor.RestartPolicy{Mode: agentvisor.RestartResume, Prompt: restartPrompt},
 	}
+}
+
+// env is the env of the launch, then OVERSIRE_SESSION. The hook command drops the calls of a session with it,
+// so the book has no copy of it.
+func (s *session) env() map[string]string {
+	env := maps.Clone(s.req.Env)
+	if env == nil {
+		env = map[string]string{}
+	}
+	env["OVERSIRE_SESSION"] = s.id
+	return env
 }
 
 // key is the workspace key: the part of the workspace id after the repo name.

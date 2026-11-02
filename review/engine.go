@@ -13,6 +13,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"sort"
 	"strings"
@@ -397,7 +398,7 @@ func (e *Engine) fill(s *wire.ReviewSummary, r *record, ses wire.DaemonSession, 
 // remember keeps the session and its agent in r, for a new session after it ends. It tells if r changed.
 func (e *Engine) remember(r *record, s wire.DaemonSession) bool {
 	a := &agentMemo{Runtime: s.Runtime, Launch: wire.AgentLaunch{CLI: s.Harness, Model: s.Model, Effort: s.Effort, Profile: s.Profile}}
-	if s.Harness == "" || r.Session == s.ID && r.Agent != nil && *r.Agent == *a {
+	if s.Harness == "" || r.Session == s.ID && r.Agent != nil && reflect.DeepEqual(*r.Agent, *a) {
 		return false
 	}
 	if r.Agent != nil && r.Agent.Launch.CLI == a.Launch.CLI && r.Agent.Runtime == a.Runtime {

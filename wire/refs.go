@@ -47,6 +47,16 @@ type LaunchRequest struct {
 	Model       string   `json:"model,omitempty"`   // the vendor model id; empty: the CLI default
 	Effort      string   `json:"effort,omitempty"`  // low, medium, high, max; empty: the CLI default
 	Profile     string   `json:"profile,omitempty"` // the OverSire agent name, display only; Agent stays the base CLI
+	// Env is the plain env of the agent process. EnvSecrets names the secrets on home; the order never holds their values.
+	Env        map[string]string         `json:"env,omitempty"`
+	EnvSecrets map[string]AgentSecretRef `json:"envSecrets,omitempty"`
+}
+
+// AgentSecretRef is one secret value on the home daemon. Agent "*" is the env for all agents.
+// Scope is AgentSecretShared or the device id of the app of an agent of one Mac only.
+type AgentSecretRef struct {
+	Agent string `json:"agent"`
+	Scope string `json:"scope"`
 }
 
 // WorkspaceName is the name, else the item key.

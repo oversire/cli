@@ -51,6 +51,9 @@ type AgentLaunch struct {
 	Model   string `json:"model,omitempty"`
 	Effort  string `json:"effort,omitempty"`
 	Profile string `json:"profile"`
+	// Env and EnvSecrets go into LaunchRequest as they are. EnvSecrets holds refs, never values.
+	Env        map[string]string         `json:"env,omitempty"`
+	EnvSecrets map[string]AgentSecretRef `json:"envSecrets,omitempty"`
 }
 
 // RunbookStart is the body of POST /v1/runbook-runs.

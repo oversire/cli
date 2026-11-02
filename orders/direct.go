@@ -96,6 +96,12 @@ func (d *Direct) post(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if l, ok := o.Payload.(wire.LaunchRequest); ok {
+		if err := l.CheckEnv(); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
 	if res, ok := d.runner.Result(o.ID); ok {
 		d.send(res)
 		writeJSON(w, http.StatusOK, OrderState{State: wire.State(res.State), Result: res.Result})

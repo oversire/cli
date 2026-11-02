@@ -149,6 +149,9 @@ func (o *Orca) Launch(ctx context.Context, _ runtime.Order, r wire.LaunchRequest
 	if o.host != nil {
 		return o.launchInVisor(ctx, r, name, title, command)
 	}
+	if len(r.Env) > 0 {
+		return none, errors.New("This Orca driver has no visor, so it cannot set the env of an agent.")
+	}
 
 	var t terminal
 	if r.InPlace {
@@ -176,6 +179,8 @@ func (o *Orca) launchInVisor(ctx context.Context, r wire.LaunchRequest, name, ti
 	spec := agentvisor.StartSpec{
 		Kind: vorca.Kind, Role: agentvisor.RoleAgent, Harness: r.Agent, Title: title, WorkingDir: r.Repo,
 		Prompt: r.Prompt, Command: []string{"sh", "-c", command}, Labels: map[string]string{},
+		// The backend writes the env into a 0700 start script that removes itself: no value in argv or in the terminal.
+		Env: r.Env,
 	}
 	if !r.InPlace {
 		ws, err := o.cli.EnsureWorkspace(ctx, vorca.WorkspaceSpec{Repo: r.Repo, Name: name, BaseBranch: r.BaseBranch, Comment: r.WorkspaceNote()}, o.shellWait)

@@ -1,0 +1,8 @@
+{
+  "order": "work:OVERSIRE-318",
+  "machine": "mba",
+  "refs": {
+    "ANTHROPIC_AUTH_TOKEN": { "agent": "claude", "scope": "shared" },
+    "GITHUB_TOKEN": { "agent": "*", "scope": "shared" }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "machine": "mini",
+  "version": "0.9.0",
+  "contract": 2,
+  "roles": ["serve", "runner"],
+  "runtimes": ["orca", "oversire"],
+  "harnesses": [{ "name": "claude", "hooks": "installed" }],
+  "group": "9f3c1a2b7d4e5f60",
+  "home": "mini",
+  "features": ["launch-env", "agent-secrets"],
+  "listen": { "loopback": "127.0.0.1:7690", "tailscale": "100.97.81.24:7690" }
+}

@@ -41,6 +41,11 @@ type Keys interface {
 	Unkey(ref string)
 }
 
+// Env fills the secret env of a launch from home (agentsecret.Env).
+type Env interface {
+	Fill(ctx context.Context, order string, r wire.LaunchRequest) (wire.LaunchRequest, error)
+}
+
 // startKey is the form of LaunchRequest.Key in the contract.
 var startKey = regexp.MustCompile(`^[a-z]+:[A-Za-z0-9._-]+$`)
 
@@ -69,6 +74,7 @@ type Runner struct {
 	now      func() time.Time
 
 	keys Keys
+	env  Env
 
 	mu       sync.Mutex
 	running  map[string]bool
@@ -82,6 +88,12 @@ func NewRunner(runtimes Runtimes, allow Allow, journal Journal, now func() time.
 // WithKeys turns on the start keys. Without it, a keyed start launches each time.
 func (r *Runner) WithKeys(k Keys) *Runner {
 	r.keys = k
+	return r
+}
+
+// WithEnv turns on the secret env. Without it, a launch with EnvSecrets fails.
+func (r *Runner) WithEnv(e Env) *Runner {
+	r.env = e
 	return r
 }
 
@@ -159,11 +171,12 @@ func (r *Runner) start(ctx context.Context, o wire.WorkOrder) (*wire.WorkOrderRe
 		return out, err
 	}
 	p, ok := o.Payload.(wire.LaunchRequest)
-	tagged := p.Model != "" || p.Effort != "" || p.Profile != ""
-	if !ok || (p.Key == "" && !tagged) || r.keys == nil {
+	if !ok {
 		return r.runtimes.Do(ctx, o)
 	}
-	if p.Key != "" {
+	tagged := p.Model != "" || p.Effort != "" || p.Profile != "" || len(p.Env) > 0 || len(p.EnvSecrets) > 0
+	keyed := r.keys != nil && (p.Key != "" || tagged)
+	if keyed && p.Key != "" {
 		if !startKey.MatchString(p.Key) || len(p.Key) > 200 {
 			return nil, fmt.Errorf("The start key %q is not valid.", p.Key)
 		}
@@ -177,18 +190,47 @@ func (r *Runner) start(ctx context.Context, o wire.WorkOrder) (*wire.WorkOrderRe
 			return &wire.WorkOrderResult{Session: &ref, PaneKey: s.ID, Reused: true}, nil
 		}
 	}
+	filled, err := r.fill(ctx, cmpOr(p.Key, o.ID), p)
+	if err != nil {
+		return nil, err
+	}
+	o.Payload = filled
 	out, err := r.runtimes.Do(ctx, o)
-	if err != nil || out.Session == nil || out.PaneKey == "" {
+	if !keyed || err != nil || out.Session == nil || out.PaneKey == "" {
 		return out, err
 	}
 	// The session ref names the terminal when its id is not the session id.
 	patch := sessions.Patch{ID: out.PaneKey, Runtime: &o.Runtime, Workspace: &out.Session.Workspace.ID,
 		Key: nonEmpty(p.Key), Model: nonEmpty(p.Model), Effort: nonEmpty(p.Effort), Profile: nonEmpty(p.Profile)}
+	if keys := p.EnvKeys(); len(keys) > 0 {
+		patch.EnvKeys = &keys
+	}
 	if out.Session.ID != out.PaneKey {
 		patch.Terminal = &out.Session.ID
 	}
 	r.keys.Apply(patch)
 	return out, nil
+}
+
+// fill checks the env keys and gets the secret values. The values stay in the order in memory.
+func (r *Runner) fill(ctx context.Context, order string, p wire.LaunchRequest) (wire.LaunchRequest, error) {
+	if len(p.EnvSecrets) == 0 || r.env == nil {
+		if err := p.CheckEnv(); err != nil {
+			return p, err
+		}
+		if len(p.EnvSecrets) > 0 {
+			return p, errors.New("This daemon has no route to the agent secrets.")
+		}
+		return p, nil
+	}
+	return r.env.Fill(ctx, order, p)
+}
+
+func cmpOr(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }
 
 // nonEmpty is nil for "", so the patch keeps the field.

@@ -50,7 +50,9 @@
         "command": { "description": "LaunchRequest.command: the resolved start command.", "type": "string" },
         "model": { "type": "string", "minLength": 1 },
         "effort": { "type": "string", "minLength": 1 },
-        "profile": { "description": "LaunchRequest.profile: the agent name.", "type": "string", "minLength": 1 }
+        "profile": { "description": "LaunchRequest.profile: the agent name.", "type": "string", "minLength": 1 },
+        "env": { "description": "LaunchRequest.env: the plain env, with the placeholders filled.", "$ref": "actions.json#/$defs/LaunchEnv" },
+        "envSecrets": { "description": "LaunchRequest.envSecrets: the secret env, as references to home.", "$ref": "actions.json#/$defs/LaunchEnvSecrets" }
       },
       "required": ["cli", "profile"],
       "additionalProperties": false

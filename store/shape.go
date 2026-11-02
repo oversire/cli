@@ -96,6 +96,7 @@ var (
 	providerID   = pattern(regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`), "not a provider id")
 	area         = pattern(regexp.MustCompile(`^[a-z0-9-]{1,32}$`), "not an area")
 	aiOutputKind = pattern(regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`), "not an AI output kind")
+	envKey       = pattern(regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,199}$`), "not an env key")
 	hlcPattern   = regexp.MustCompile(`^[0-9]{15}-[0-9]{6}-.+$`)
 )
 
@@ -322,6 +323,10 @@ var recordShapes = map[string]shape{
 	"changed-paths": object(fields{"id": nonEmpty, "subject": subjectRef, "paths": maxItems(500, nonEmpty), "at": date}),
 	"ai-outputs": object(fields{"id": text(1, 600), "kind": aiOutputKind, "subject": text(1, 500), "hash": text(0, 200),
 		"body": mapOf(func(any, string) error { return nil }), "at": date}),
+	"agents": object(fields{"name": text(1, 200), "cli?": text(1, 64), "command?": text(1, 2000), "model?": text(1, 200),
+		"effort?": text(1, 40), "runsOn?": maxItems(50, nonEmpty),
+		"env":       maxItems(64, object(fields{"key": envKey, "value?": text(0, 8192), "secret": boolean})),
+		"updatedAt": date, "updatedBy?": text(1, 200)}),
 }
 
 func subject(kind string, ref shape) shape {

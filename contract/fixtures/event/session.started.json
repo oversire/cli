@@ -18,6 +18,11 @@
     "harness": "claude",
     "model": "opus-5-5",
     "runtime": "oversire",
-    "cwd": "/Users/fritz/Projects/oversire-workspace/.wt/oversire-374"
+    "cwd": "/Users/fritz/Projects/oversire-workspace/.wt/oversire-374",
+    "agent": "claude",
+    "envKeys": [
+      "ANTHROPIC_AUTH_TOKEN",
+      "ANTHROPIC_BASE_URL"
+    ]
   }
 }

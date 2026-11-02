@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/oversire/cli/agents"
+	"github.com/oversire/cli/agentsecret"
 	"github.com/oversire/cli/ask"
 	"github.com/oversire/cli/capture"
 	"github.com/oversire/cli/config"
@@ -130,6 +131,16 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	if err != nil {
 		return nil, err
 	}
+	// The agent secrets live on home. A daemon that is not home answers 409 and resolves through home.
+	secretValues, err := agentsecret.NewStore(agentsecret.NewKeychain(proc.Local{}, goos, filepath.Join(data, "agent-secrets"), exec.LookPath),
+		filepath.Join(data, "agent-secrets.json"), time.Now)
+	if err != nil {
+		return nil, err
+	}
+	secretHome := agentsecret.NewHome(secretValues, store, oplog, capt, time.Now)
+	secretHome.Log = c.log
+	oplog.OnApply(secretHome.Forget)
+	runner.WithEnv(agentsecret.NewEnv(store, secretHome, nil))
 	storeRoutes := homestore.NewRoutes(oplog, store, func(m any) { srv.Notify(false, m) }, c.log)
 	syncer.WithHomeTaker(storeRoutes)
 	eventRoutes := events.NewRoutes(rows, func(m any) { srv.Notify(false, m) }, c.log)
@@ -146,6 +157,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 		d := wire.DaemonInfo{Machine: cfg.Machine(), Version: version, Contract: wire.DaemonContract, Roles: cfg.Roles, Runtimes: reg.IDs(), Harnesses: installer.Status()}
 		d.Group, d.Home = store.Info()
 		d.Update = updates.Status()
+		d.Features = []string{wire.FeatureLaunchEnv, wire.FeatureAgentSecrets}
 		return d
 	}
 	srv = server.NewServer(serveCfg, info, store, hints, book, ingest)
@@ -156,6 +168,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	srv.Handle(joins.Routes()...)
 	srv.Handle(syncer.Routes()...)
 	srv.Handle(storeRoutes.Routes()...)
+	srv.Handle(secretHome.Routes()...)
 	srv.Handle(eventRoutes.Routes()...)
 	leases := lease.NewBook(filepath.Join(data, "leases.json"), time.Now)
 	leases.OnChange = func(l wire.Lease) { srv.Notify(false, map[string]any{"type": "lease", "lease": l}) }

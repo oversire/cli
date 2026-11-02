@@ -155,3 +155,24 @@ func TestRunbookRows(t *testing.T) {
 		t.Errorf("skipped payload %s", rows[3].Payload)
 	}
 }
+
+func TestSessionStartedNamesTheAgentAndTheEnvKeys(t *testing.T) {
+	st, w := open(t)
+	t0 := time.Date(2026, 11, 2, 9, 0, 0, 0, time.UTC)
+	s := wire.DaemonSession{ID: "s4", Key: "work:OVERSIRE-13", Harness: "claude", Runtime: "oversire", Profile: "claude-glm",
+		EnvKeys: []string{"ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL"}, Sources: []string{"wire"}, StartedAt: &t0, State: wire.PhaseWorking, StateSince: t0}
+	NewSessionRows(w).OnSend(s, string(wire.PhaseWorking), t0)
+	w.Flush(context.Background())
+	rows := item(t, st, "OVERSIRE-13")
+	if len(rows) == 0 || rows[0].Kind != wire.KindSessionStarted {
+		t.Fatalf("rows %v", kinds(rows))
+	}
+	var pl struct {
+		Agent   string   `json:"agent"`
+		Profile string   `json:"profile"`
+		EnvKeys []string `json:"envKeys"`
+	}
+	if err := json.Unmarshal(rows[0].Payload, &pl); err != nil || pl.Agent != "claude-glm" || pl.Profile != "claude-glm" || len(pl.EnvKeys) != 2 || pl.EnvKeys[0] != "ANTHROPIC_AUTH_TOKEN" {
+		t.Fatalf("payload %s, %v", rows[0].Payload, err)
+	}
+}

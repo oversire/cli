@@ -139,6 +139,7 @@
         "home": { "description": "The home machine of the group.", "$ref": "#/$defs/MachineName" },
         "device": { "description": "The device id of the credential of the call.", "type": "string" },
         "update": { "$ref": "#/$defs/UpdateStatus" },
+        "features": { "description": "The features of this daemon version. Open set: launch-env (LaunchRequest.env on the session), agent-secrets (the /v1/agent-secrets routes and LaunchRequest.envSecrets).", "type": "array", "items": { "type": "string", "minLength": 1 } },
         "listen": {
           "type": "object",
           "properties": {
@@ -544,6 +545,62 @@
         "until": { "$ref": "#/$defs/Date" }
       },
       "required": ["name", "holder", "holderName", "epoch", "until"],
+      "additionalProperties": false
+    },
+    "AgentSecretSet": {
+      "description": "The body of PUT /v1/agent-secrets/{scope}/{agent}/{key} (Member) on the home daemon. The value goes only to the secret store of home. No route answers it back to an app.",
+      "type": "object",
+      "properties": { "value": { "type": "string", "minLength": 1, "maxLength": 8192 } },
+      "required": ["value"],
+      "additionalProperties": false
+    },
+    "AgentSecretKey": {
+      "description": "One secret on home, with no value.",
+      "type": "object",
+      "properties": {
+        "scope": { "description": "shared, or the device id of the app of an agent of one Mac only.", "type": "string", "minLength": 1, "maxLength": 200 },
+        "agent": { "description": "The agent name. * is the env for all agents.", "type": "string", "minLength": 1, "maxLength": 200 },
+        "key": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$", "maxLength": 200 },
+        "setAt": { "$ref": "#/$defs/Date" }
+      },
+      "required": ["scope", "agent", "key", "setAt"],
+      "additionalProperties": false
+    },
+    "AgentSecretList": {
+      "description": "The answer of GET /v1/agent-secrets (Member) on the home daemon: the keys, never the values.",
+      "type": "object",
+      "properties": { "secrets": { "type": "array", "items": { "$ref": "#/$defs/AgentSecretKey" } } },
+      "required": ["secrets"],
+      "additionalProperties": false
+    },
+    "AgentSecretResolve": {
+      "description": "The body of POST /v1/agent-secrets/resolve on the home daemon. Only a daemon credential of the group can call it. Home checks the runsOn list of each shared agent against machine.",
+      "type": "object",
+      "properties": {
+        "order": { "description": "The start key or the work order id, for the secret.resolved event.", "type": "string", "maxLength": 200 },
+        "machine": { "description": "The machine that starts the session.", "$ref": "#/$defs/MachineName" },
+        "refs": {
+          "description": "Env key to the secret, as in LaunchRequest.envSecrets.",
+          "type": "object",
+          "propertyNames": { "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+          "additionalProperties": { "$ref": "actions.json#/$defs/AgentSecretRef" },
+          "minProperties": 1,
+          "maxProperties": 64
+        }
+      },
+      "required": ["machine", "refs"],
+      "additionalProperties": false
+    },
+    "AgentSecretValues": {
+      "description": "The answer of POST /v1/agent-secrets/resolve: env key to value. The runner keeps it in memory only. HTTP 403: the machine is not on runsOn. HTTP 404: home has no value for a key (error names the key). HTTP 409 with home: this daemon is not home.",
+      "type": "object",
+      "properties": {
+        "env": {
+          "type": "object",
+          "additionalProperties": { "type": "string", "maxLength": 8192 }
+        }
+      },
+      "required": ["env"],
       "additionalProperties": false
     }
   }
