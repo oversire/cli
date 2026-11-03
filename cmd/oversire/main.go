@@ -16,6 +16,7 @@ import (
 	"syscall"
 
 	"github.com/oversire/cli/config"
+	"github.com/oversire/cli/group"
 	"github.com/oversire/cli/migrate"
 	"github.com/oversire/cli/proc"
 	"github.com/oversire/cli/secret"
@@ -258,6 +259,17 @@ func (c *cli) setup(ctx context.Context) (config.Config, error) {
 		if err := c.paths.SaveConfig(cfg); err != nil {
 			return cfg, err
 		}
+	}
+	// A fixed name: the host name of a Mac changes with the network, and a new name starts a new group (OVERSIRE-413).
+	if cfg.Name == "" {
+		cfg.Name = group.SelfName(filepath.Join(c.paths.Dir, "group.json"))
+		if cfg.Name == "" {
+			cfg.Name = config.ShortHost()
+		}
+		if err := c.paths.SaveConfig(cfg); err != nil {
+			return cfg, err
+		}
+		c.log.Info("machine name set", "name", cfg.Name)
 	}
 	if c.level != nil {
 		l, err := cfg.LogLevel(os.Getenv("OVERSIRE_LOG_LEVEL"))

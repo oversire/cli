@@ -45,6 +45,8 @@ The app owns `~/.config/oversire/` (`config.json`, `store/`). The CLI uses only 
 
 `config.json` has the fields `roles`, `hub`, `device`, `account`, `name`, `keepAwake`, `maxSessions`, `dataDir`, `serve` and `log`. The file has mode 0600.
 
+`name` is the machine name in the group. The daemon sets it at its first start: the name in `group.json`, else the host name up to the first dot. Do not change it in a group. A new name starts a new group, and the other machines must join again.
+
 ## Pair with the hub
 
 1. In the OverSire console, make a pairing code with the role **runner**.

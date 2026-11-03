@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	goruntime "runtime"
 	"strings"
 	"testing"
@@ -157,6 +158,32 @@ func TestNewInstallGetsServe(t *testing.T) {
 	cfg, err := c.setup(context.Background())
 	if err != nil || !cfg.Has(config.RoleServe) || cfg.Has(config.RoleRunner) {
 		t.Fatalf("%#v %v", cfg, err)
+	}
+}
+
+// OVERSIRE-413: the first start writes a fixed machine name. The name of the group file wins.
+func TestSetupSetsTheName(t *testing.T) {
+	c, _, _ := testCLI(t, "")
+	cfg, err := c.setup(context.Background())
+	if err != nil || cfg.Name != config.ShortHost() || strings.Contains(cfg.Name, ".") {
+		t.Fatalf("%q %v", cfg.Name, err)
+	}
+	if saved, _, _ := c.paths.LoadConfig(); saved.Name != cfg.Name {
+		t.Fatalf("saved %q", saved.Name)
+	}
+
+	c, _, _ = testCLI(t, "")
+	c.paths.SaveConfig(config.Config{Roles: []string{config.RoleServe}})
+	os.WriteFile(filepath.Join(c.paths.Dir, "group.json"), []byte(`{"id":"g1","self":"mbp.tail8ed2.ts.net"}`), 0o600)
+	if cfg, _ := c.setup(context.Background()); cfg.Name != "mbp.tail8ed2.ts.net" {
+		t.Fatalf("got %q, want the name in the group", cfg.Name)
+	}
+
+	c, _, _ = testCLI(t, "")
+	c.paths.SaveConfig(config.Config{Roles: []string{config.RoleServe}, Name: "mbp"})
+	os.WriteFile(filepath.Join(c.paths.Dir, "group.json"), []byte(`{"id":"g1","self":"mbp.local"}`), 0o600)
+	if cfg, _ := c.setup(context.Background()); cfg.Name != "mbp" {
+		t.Fatalf("got %q, want the name of the config", cfg.Name)
 	}
 }
 

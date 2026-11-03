@@ -302,3 +302,13 @@ func TestFixtures(t *testing.T) {
 		}
 	}
 }
+
+func TestSelfName(t *testing.T) {
+	s, _ := newTestStore(t, newClock(), "mbp.local")
+	if got := SelfName(s.path); got != "mbp.local" {
+		t.Fatalf("got %q", got)
+	}
+	if got := SelfName(filepath.Join(t.TempDir(), "none.json")); got != "" {
+		t.Fatalf("got %q with no file", got)
+	}
+}

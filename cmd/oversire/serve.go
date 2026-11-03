@@ -107,6 +107,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 			srv.Notify(false, map[string]string{"type": "group"})
 		}
 	})
+	store.Log = c.log
 	if err := store.Load(); err != nil {
 		return nil, err
 	}

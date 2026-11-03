@@ -50,3 +50,11 @@ func TestLogLevel(t *testing.T) {
 		}
 	}
 }
+
+func TestShortHost(t *testing.T) {
+	for in, want := range map[string]string{"mbp.local": "mbp", "mbp.tail8ed2.ts.net": "mbp", "mba": "mba", "": "", ".x": ".x"} {
+		if got := shortHost(in); got != want {
+			t.Errorf("shortHost(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

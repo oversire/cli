@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"slices"
 	"strings"
@@ -62,6 +63,8 @@ type stored struct {
 
 // Store holds the group of this machine. It implements server.Verifier.
 type Store struct {
+	Log *slog.Logger
+
 	path    string
 	secrets Secrets
 	clock   func() time.Time
@@ -88,8 +91,21 @@ func NewStore(path string, secrets Secrets, clock func() time.Time, notify func(
 	if notify == nil {
 		notify = func() {}
 	}
-	return &Store{path: path, secrets: secrets, clock: clock, notify: notify,
+	return &Store{Log: slog.Default(), path: path, secrets: secrets, clock: clock, notify: notify,
 		revoked: make(chan string, 64), changed: make(chan struct{}, 1)}
+}
+
+// SelfName gives the machine name of this machine in the group file at path, or "" with no group.
+func SelfName(path string) string {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	var st stored
+	if json.Unmarshal(b, &st) != nil {
+		return ""
+	}
+	return st.Self
 }
 
 // Load reads group.json and the secret. A group without its secret is not loaded.
@@ -145,11 +161,14 @@ func (s *Store) ensureLocked(self wire.GroupMember) error {
 	if self.JoinedAt.IsZero() {
 		self.JoinedAt = now
 	}
+	before := s.self.Machine
 	s.self = self
 	if s.g != nil {
 		i := slices.IndexFunc(s.g.Members, func(m wire.GroupMember) bool { return m.Machine == self.Machine })
 		if i < 0 {
 			// The group does not have this machine any more: start a new group of one.
+			s.Log.Warn("group: this machine is not in the group; it starts a new group, so the other machines must join again",
+				"group", s.g.ID, "machine", self.Machine, "before", before)
 			s.dropLocked()
 			return s.ensureLocked(self)
 		}
@@ -173,6 +192,7 @@ func (s *Store) ensureLocked(self wire.GroupMember) error {
 	g := wire.Group{ID: hex.EncodeToString(id), Name: DefaultName, Home: self.Machine, Members: []wire.GroupMember{self}}
 	s.g, s.key, s.prev, s.prevUntil, s.rekeying = &g, key, nil, time.Time{}, false
 	s.addDeviceLocked(wire.GroupDevice{Name: daemonName(self.Machine), Kind: wire.DeviceDaemon, Machine: self.Machine})
+	s.Log.Info("group: new group of one", "group", g.ID, "machine", self.Machine)
 	if err := s.saveKeysLocked(); err != nil {
 		s.g, s.key = nil, nil
 		return err

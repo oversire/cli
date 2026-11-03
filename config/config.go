@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strings"
 )
 
 // Roles of a daemon.
@@ -159,12 +160,25 @@ func (c Config) Has(role string) bool { return slices.Contains(c.Roles, role) }
 // Paired tells if this daemon has a hub device.
 func (c Config) Paired() bool { return c.Device != "" }
 
-// Machine is Name, or the host name when Name is not set.
+// Machine is Name, or ShortHost when Name is not set. The daemon sets Name at its first start (OVERSIRE-413).
 func (c Config) Machine() string {
 	if c.Name != "" {
 		return c.Name
 	}
+	return ShortHost()
+}
+
+// ShortHost is the host name up to the first dot. On macOS with no HostName, the host name changes
+// with the network, for example mbp.local or mbp.<tailnet>.ts.net. The part before the dot stays.
+func ShortHost() string {
 	h, _ := os.Hostname()
+	return shortHost(h)
+}
+
+func shortHost(h string) string {
+	if i := strings.IndexByte(h, '.'); i > 0 {
+		return h[:i]
+	}
 	return h
 }
 
