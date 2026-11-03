@@ -1,8 +1,8 @@
 ---
 taskKind: status
-version: 1
+version: 2
 maxTokens: 900
-inputs: key, title, status, description, turns, earlier, last, screen, state, idle, ci, pr, previous
+inputs: key, title, status, description, turns, earlier, last, screen, state, idle, ci, pr, previous, decisions
 ---
 
 <!-- system -->
@@ -18,6 +18,7 @@ Reply with one JSON object only:
 - If code is shipped but the developer must still test, approve or set up something, the state is blocked.
 - The description gives the goal. Count a goal as met when an earlier turn reports it, not only the last turns.
 - An offer such as "If you want, I can..." is not a step. A question about a next task is not a step.
+- Decisions of the developer, when the input has them, came after the last turn. A decision closes the step that it matches: do not list that step in needsYou. If no step stays open, the agent does not wait for the developer.
 - blockedBy lists only other items that block this one. Never list {{key}}.
 Use simple English.
 
@@ -26,6 +27,9 @@ Item {{key}}: {{title}}
 Plane status: {{status}}. Session state: {{state}}. Idle for {{idle}} min.
 CI: {{ci}}. PR: {{pr}}.
 {{#if previous}}Previous status: {{previous}}
+{{/if}}{{#if decisions}}
+The decisions of the developer after the last turn, oldest first:
+{{decisions}}
 {{/if}}{{#if description}}
 The item description:
 {{description}}
