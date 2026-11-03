@@ -31,6 +31,9 @@ const (
 	launchTTL = 30 * time.Minute
 	// doneGrace is the time between a verdict and the stop of an oversire session, so that the agent can end its turn.
 	doneGrace = 10 * time.Second
+	// EndWait is how long a step session with a prompt stays done before its step ends. A background sub-agent
+	// works on after the Stop hook. Orca reports it after sessions.OrcaLag plus one busy poll (20 s).
+	EndWait = 45 * time.Second
 )
 
 // The reasons of a paused run.
@@ -608,7 +611,10 @@ func (e *Engine) follow(r *wire.RunbookRun, now time.Time) bool {
 		switch {
 		case s.Reason == wire.ReasonQuestion:
 			sr.State = wire.StepAsks
-		case s.Runtime == wire.RuntimeOversire || s.Prompt != "":
+		case s.Runtime == wire.RuntimeOversire:
+			e.end(r, sr, now)
+			return true
+		case s.Prompt != "" && now.Sub(s.StateSince) >= EndWait:
 			e.end(r, sr, now)
 			return true
 		}

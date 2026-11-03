@@ -362,7 +362,7 @@ The daemon owns the agent runtimes of this machine: `oversire`, and `orca` when 
 
 ### Runbooks
 
-A runbook is a fixed list of steps on one item (OVERSIRE-349). Each step is one agent session in the workspace of the item, and the step ends when its agent runs `oversire step done`. The bodies are in `contract/schema/runbook.json`. The daemon keeps each run in `<data>/runbooks/<run>.json`, so a run goes on after a restart. The app finds these routes by the capability `runbooks` in `GET /v1/runtimes`.
+A runbook is a fixed list of steps on one item (OVERSIRE-349). Each step is one agent session in the workspace of the item, and the step ends when its agent runs `oversire step done`. When the session of a step stays done for 45 s with no verdict, the step ends and the run pauses. The wait lets a background sub-agent of Claude work on after the end of the main turn. The bodies are in `contract/schema/runbook.json`. The daemon keeps each run in `<data>/runbooks/<run>.json`, so a run goes on after a restart. The app finds these routes by the capability `runbooks` in `GET /v1/runtimes`.
 
 All routes need member access. A daemon credential only reads: a change gets 403.
 

@@ -457,6 +457,34 @@ func TestSessionFollow(t *testing.T) {
 	expect(t, r, wire.RunRunning, "build", "plan.1:done build.1:starting")
 }
 
+// The Stop hook says done while a background sub-agent works. Orca then says working.
+func TestShortDoneKeepsTheStep(t *testing.T) {
+	g := newRig(t, "")
+	r := g.start(t, linear())
+	set := func(p wire.SessionPhase) {
+		g.b.set(wire.DaemonSession{ID: "pane-1", Runtime: "orca", State: p, Reason: wire.ReasonTurnEnd, Prompt: "x", StateSince: g.c.now()})
+		g.e.check()
+	}
+	set(wire.PhaseWorking)
+	set(wire.PhaseDone)
+	g.c.add(EndWait - time.Second)
+	g.e.check()
+	r = g.run(t, r.ID)
+	expect(t, r, wire.RunRunning, "plan", "plan.1:working")
+	set(wire.PhaseWorking)
+	g.c.add(time.Minute)
+	g.e.check()
+	expect(t, g.run(t, r.ID), wire.RunRunning, "plan", "plan.1:working")
+
+	set(wire.PhaseDone)
+	g.c.add(EndWait)
+	g.e.check()
+	r = g.run(t, r.ID)
+	if r.State != wire.RunPaused || r.Reason != reasonEnded || r.Steps[0].State != wire.StepEnded {
+		t.Fatalf("run %s %q, step %s", r.State, r.Reason, r.Steps[0].State)
+	}
+}
+
 func TestSessionGoneOrFailed(t *testing.T) {
 	g := newRig(t, "")
 	r := g.start(t, linear())
