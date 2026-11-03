@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -73,7 +74,8 @@ func TestStoreRoundTripsQuotesAndNewLines(t *testing.T) {
 			if strings.Contains(string(index), "quoted") {
 				t.Fatalf("the index holds the value: %s", index)
 			}
-			if fi, err := os.Stat(filepath.Join(dir, "agent-secrets.json")); err != nil || fi.Mode().Perm() != 0o600 {
+			// Windows has no Unix file modes.
+			if fi, err := os.Stat(filepath.Join(dir, "agent-secrets.json")); err != nil || runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600 {
 				t.Fatalf("index mode = %v, %v", fi.Mode(), err)
 			}
 			// A new Store reads the index again.
