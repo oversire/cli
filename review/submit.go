@@ -116,8 +116,12 @@ func (e *Engine) Fix(ctx context.Context, key string, launch *wire.AgentLaunch) 
 	return e.round(wire.ReviewCode, key, n), nil
 }
 
-// Run sends the queued rounds: on each change in the book and each 30 s.
+// Run sends the queued rounds: on each change in the book and each 30 s. It also runs the cache loop, which tells
+// review.changed for each group whose git state changed.
 func (e *Engine) Run(ctx context.Context) error {
+	go e.cache.Run(ctx, func(key string) {
+		e.d.Notify(wire.ReviewEvent{Type: "review", Event: wire.EventReviewChanged, Key: key, Kind: wire.ReviewCode, Machine: e.d.Machine})
+	})
 	ids, cancel := e.d.Sessions.Watch()
 	defer cancel()
 	t := time.NewTicker(tick)

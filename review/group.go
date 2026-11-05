@@ -318,18 +318,46 @@ func (gt Git) diff(ctx context.Context, g group, r wire.ReviewRepo, f wire.Revie
 	return d, nil
 }
 
-// notPushed gives the base of the primary checkout dir when it has commits that its upstream does not have.
-func (gt Git) notPushed(ctx context.Context, root, name string) (wire.NotPushed, bool) {
+// baseState gives the current branch of the primary checkout root/name and, when it has commits that its upstream
+// does not have, the NotPushed row.
+func (gt Git) baseState(ctx context.Context, root, name string) baseState {
 	dir := filepath.Join(root, name)
+	var st baseState
 	base, err := gt.Run(ctx, dir, "branch", "--show-current")
 	if err != nil || base == "" {
-		return wire.NotPushed{}, false
+		return st
+	}
+	st.Base = base
+	if st.Upstream, err = gt.Run(ctx, dir, "rev-parse", "--symbolic-full-name", base+"@{upstream}"); err != nil {
+		st.Upstream = ""
+		return st
 	}
 	n, err := gt.Run(ctx, dir, "rev-list", "--count", base+"@{upstream}.."+base)
 	if err != nil || atoi(n) < 1 {
-		return wire.NotPushed{}, false
+		return st
 	}
-	return wire.NotPushed{Root: root, Repo: name, Base: base, Ahead: atoi(n), Items: gt.items(ctx, dir, base)}, true
+	st.Ahead = true
+	st.NotPushed = wire.NotPushed{Root: root, Repo: name, Base: base, Ahead: atoi(n), Items: gt.items(ctx, dir, base)}
+	return st
+}
+
+// groupState gives the repos of g in merge order, computed at the same time, and the time of the newest commit.
+func (gt Git) groupState(ctx context.Context, g group, order Order) groupState {
+	names := order.Sort(g.Repos)
+	repos := make([]wire.ReviewRepo, len(names))
+	ats := make([]time.Time, len(names))
+	errs := make([]error, len(names))
+	parallel(len(names), func(i int) { repos[i], ats[i], errs[i] = gt.repo(ctx, g, names[i]) })
+	st := groupState{Repos: repos}
+	for i := range names {
+		if errs[i] != nil {
+			return groupState{Err: errs[i]}
+		}
+		if ats[i].After(st.Newest) {
+			st.Newest = ats[i]
+		}
+	}
+	return st
 }
 
 // items gives the item keys that the commits of base after its upstream name: in a message or in a merged branch.

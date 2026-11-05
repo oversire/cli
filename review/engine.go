@@ -111,6 +111,8 @@ type Engine struct {
 
 	send sync.Mutex
 
+	cache *Cache
+
 	mu    sync.Mutex
 	recs  map[string]*record // by kind + ":" + key
 	roots []string           // the roots that a hand-off named
@@ -125,7 +127,7 @@ func NewEngine(d Deps) *Engine {
 	if d.Notify == nil {
 		d.Notify = func(wire.ReviewEvent) {}
 	}
-	e := &Engine{Log: slog.Default(), d: d, recs: map[string]*record{}, sent: map[string]time.Time{}}
+	e := &Engine{Log: slog.Default(), d: d, cache: NewCache(d.Git, d.Order, d.Clock), recs: map[string]*record{}, sent: map[string]time.Time{}}
 	recs, err := d.Store.Load()
 	if err != nil {
 		e.Log.Warn("review load", "err", err)
@@ -149,13 +151,15 @@ func (e *Engine) List(ctx context.Context, kind wire.ReviewKind) (wire.ReviewsPa
 	}
 	roots := e.allRoots(ctx)
 	if kind != wire.ReviewPlan {
-		for _, g := range scanGroups(roots) {
-			s, _, err := e.codeSummary(ctx, g)
-			if err != nil {
-				e.Log.Debug("review group", "group", g.Dir(), "err", err)
+		gs := scanGroups(roots)
+		states := e.cache.Groups(ctx, gs)
+		for _, g := range gs {
+			st := states[g.Dir()]
+			if st.Err != nil {
+				e.Log.Debug("review group", "group", g.Dir(), "err", st.Err)
 				continue
 			}
-			if listed(s) {
+			if s := e.summary(g, st); listed(s) {
 				page.Reviews = append(page.Reviews, s)
 			}
 		}
@@ -180,7 +184,7 @@ func (e *Engine) List(ctx context.Context, kind wire.ReviewKind) (wire.ReviewsPa
 		}
 		return a.Key+string(a.Kind) < b.Key+string(b.Kind)
 	})
-	page.NotPushed = e.notPushed(ctx, roots)
+	page.NotPushed = e.cache.NotPushed(ctx, roots)
 	return page, nil
 }
 
@@ -274,21 +278,22 @@ func (e *Engine) repoOf(ctx context.Context, key, repo string) (group, wire.Revi
 	return g, r, err
 }
 
-// codeSummary gives the summary of the group g and its repos in merge order.
+// codeSummary gives the summary of the group g and its repos in merge order, computed live.
 func (e *Engine) codeSummary(ctx context.Context, g group) (wire.ReviewSummary, []wire.ReviewRepo, error) {
-	key := g.Key()
-	s := wire.ReviewSummary{Key: key, Kind: wire.ReviewCode, Machine: e.d.Machine, Root: g.Root, Group: g.Rel(), Repos: []wire.ReviewRepo{}, Subitems: []string{}}
-	var newest time.Time
-	for _, name := range e.d.Order.Sort(g.Repos) {
-		r, at, err := e.d.Git.repo(ctx, g, name)
-		if err != nil {
-			return s, nil, err
-		}
-		s.Repos = append(s.Repos, r)
-		if at.After(newest) {
-			newest = at
-		}
+	st := e.cache.Group(ctx, g)
+	if st.Err != nil {
+		return wire.ReviewSummary{}, nil, st.Err
 	}
+	s := e.summary(g, st)
+	return s, s.Repos, nil
+}
+
+// summary makes the summary of the group g from its git state, its record and its session.
+func (e *Engine) summary(g group, st groupState) wire.ReviewSummary {
+	key := g.Key()
+	s := wire.ReviewSummary{Key: key, Kind: wire.ReviewCode, Machine: e.d.Machine, Root: g.Root, Group: g.Rel(),
+		Repos: append([]wire.ReviewRepo{}, st.Repos...), Subitems: []string{}}
+	newest := st.Newest
 	for _, r := range s.Repos {
 		if len(r.Commits) > 0 && s.Title == "" {
 			s.Title = r.Commits[len(r.Commits)-1].Subject
@@ -320,7 +325,7 @@ func (e *Engine) codeSummary(ctx context.Context, g group) (wire.ReviewSummary, 
 	case r != nil && r.MergedAt != nil && !slices.ContainsFunc(s.Repos, func(x wire.ReviewRepo) bool { return x.Ahead > 0 }):
 		s.State = wire.ReviewMerged
 	}
-	return s, s.Repos, nil
+	return s
 }
 
 // goneSummary is the summary of a merged code review whose group is gone.
@@ -524,14 +529,21 @@ func (e *Engine) addRoot(root string) {
 	}
 }
 
-// notPushed gives each base of the primary checkouts of the roots that is ahead of its upstream.
+// notPushed gives each base of the primary checkouts of the roots that is ahead of its upstream, computed live.
 func (e *Engine) notPushed(ctx context.Context, roots []string) []wire.NotPushed {
-	out := []wire.NotPushed{}
+	type place struct{ root, name string }
+	var all []place
 	for _, root := range roots {
 		for _, name := range primaries(root) {
-			if np, ok := e.d.Git.notPushed(ctx, root, name); ok {
-				out = append(out, np)
-			}
+			all = append(all, place{root, name})
+		}
+	}
+	states := make([]baseState, len(all))
+	parallel(len(all), func(i int) { states[i] = e.d.Git.baseState(ctx, all[i].root, all[i].name) })
+	out := []wire.NotPushed{}
+	for _, st := range states {
+		if st.Ahead {
+			out = append(out, st.NotPushed)
 		}
 	}
 	return out

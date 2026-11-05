@@ -218,6 +218,7 @@ type rig struct {
 	launch *fakeLauncher
 	clock  *clock
 	store  string
+	run    Runner // proc.Local when nil
 	events []wire.ReviewEvent
 	rows   []wire.EventDraft
 	mu     sync.Mutex
@@ -252,7 +253,11 @@ func newRig(t *testing.T, roots ...string) *rig {
 
 // engine makes an engine on the store and the fakes of r, as a daemon restart does.
 func (r *rig) engine(roots ...string) *Engine {
-	e := NewEngine(Deps{Store: NewStore(r.store), Git: NewGit(proc.Local{}), Repos: fakeRepos{roots}, Sessions: r.book,
+	var run Runner = proc.Local{}
+	if r.run != nil {
+		run = r.run
+	}
+	e := NewEngine(Deps{Store: NewStore(r.store), Git: NewGit(run), Repos: fakeRepos{roots}, Sessions: r.book,
 		Sender: r.sender, Launcher: r.launch, Picker: fakePicker{}, Machine: "mbp", Order: Order{"oversire", "cli"},
 		Notify: func(ev wire.ReviewEvent) { r.mu.Lock(); r.events = append(r.events, ev); r.mu.Unlock() }, Clock: r.clock.now, Events: r})
 	e.Log = slog.New(slog.NewTextHandler(io.Discard, nil))

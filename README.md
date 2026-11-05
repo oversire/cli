@@ -405,7 +405,7 @@ A code review is a worktree group: `<root>/.wt/<name>`, and the key is the name 
 
 | Route | Access | What it does |
 | --- | --- | --- |
-| `GET /v1/reviews?kind=code\|plan` | member | `ReviewsPage`: the reviews, newest first, and the bases that are not pushed. No `kind` gives both. |
+| `GET /v1/reviews?kind=code\|plan` | member | `ReviewsPage`: the reviews, newest first, and the bases that are not pushed. No `kind` gives both. The daemon keeps the git state of each group and base. A read computes live only the entries whose git files (HEAD, index, refs, logs) changed. The daemon computes a changed entry 1 min after its last change and sends `review.changed`, and each entry each 10 min. |
 | `GET /v1/reviews/{key}?kind=` | member | `ReviewDetail`: the summary, the changed files (from the merge base to the work tree, with untracked files), the comments, the rounds and the plan. |
 | `GET /v1/reviews/{key}/diff?repo=<repo>&path=<path>` | member | `FileDiff` of one file. A diff stops at 3000 lines with `truncated`. |
 | `POST /v1/reviews/{key}/comments` | app | Body `CommentDraft`. Answers 201 with the pending `ReviewComment`. |

@@ -260,20 +260,21 @@ func TestNotPushedItems(t *testing.T) {
 	ctx := context.Background()
 
 	w.commit(app, "Fix the docs", map[string]string{"a.md": "a\n"})
-	if np, ok := gt.notPushed(ctx, w.root, "app"); !ok || np.Items != nil {
-		t.Fatalf("%+v", np)
+	if st := gt.baseState(ctx, w.root, "app"); !st.Ahead || st.NotPushed.Items != nil || st.Upstream != "refs/remotes/origin/main" {
+		t.Fatalf("%+v", st)
 	}
 	w.commit(app, "Status card (OVERSIRE-383, mcpq-2)\n\nItem: SLING-9", map[string]string{"b.md": "b\n"})
 	w.git(app, "checkout", "-q", "-b", "web-12")
 	w.commit(app, "Page", map[string]string{"c.md": "c\n"})
 	w.git(app, "checkout", "-q", "main")
 	w.git(app, "merge", "-q", "--ff-only", "web-12")
-	np, ok := gt.notPushed(ctx, w.root, "app")
+	st := gt.baseState(ctx, w.root, "app")
+	np, ok := st.NotPushed, st.Ahead
 	if !ok || np.Ahead != 3 || !reflect.DeepEqual(np.Items, []string{"OVERSIRE-383", "SLING-9", "WEB-12"}) {
 		t.Fatalf("%+v", np)
 	}
 	w.git(app, "push", "-q")
-	if _, ok := gt.notPushed(ctx, w.root, "app"); ok {
+	if gt.baseState(ctx, w.root, "app").Ahead {
 		t.Fatal("pushed")
 	}
 }
