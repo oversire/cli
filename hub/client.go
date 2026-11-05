@@ -277,7 +277,7 @@ func (c *Client) handle(ctx context.Context, o wire.WorkOrder) {
 func (c *Client) Runner() *orders.Runner { return c.runner }
 
 func (c *Client) finish(ctx context.Context, r wire.Result) {
-	c.journal.Put(r)
+	c.journal.Put(r, "")
 	c.send(ctx, r)
 }
 

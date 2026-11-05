@@ -14,8 +14,12 @@ import (
 // RequestID is the header that the app sends on each request. The app log and the daemon log both show it.
 const RequestID = "X-Request-Id"
 
+// slowRequest is the time after which a request that works is at level info (OVERSIRE-427).
+const slowRequest = time.Second
+
 // accessLog writes one line for each request: the method, the path, the status, the time, the caller and the request id.
-// A failure has the error text. A read that works and a routine write are at level debug. No headers, bodies or query.
+// A failure has the error text. A read that works and a routine write are at level debug, unless they take slowRequest
+// or more. No headers, bodies or query.
 func (s *Server) accessLog(via string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -50,7 +54,7 @@ func (s *Server) accessLog(via string, next http.Handler) http.Handler {
 			s.Log.Debug("request", a...)
 		case code >= 400:
 			s.Log.Warn("request", append(a, "err", rec.errText())...)
-		case writes(r.Method) && !routine(r.URL.Path):
+		case writes(r.Method) && !routine(r.URL.Path), time.Since(start) >= slowRequest && !stream(r.URL.Path):
 			s.Log.Info("request", a...)
 		default:
 			s.Log.Debug("request", a...)
@@ -62,6 +66,9 @@ func (s *Server) accessLog(via string, next http.Handler) http.Handler {
 func routine(path string) bool {
 	return path == "/v1/ack" || strings.HasPrefix(path, "/v1/hooks/") || strings.HasPrefix(path, "/v1/leases/")
 }
+
+// stream tells a request that stays open by design: the live view of a session.
+func stream(path string) bool { return strings.HasSuffix(path, "/stream") }
 
 // note carries the caller from the access rule back to the access log.
 type note struct{ caller string }

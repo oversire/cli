@@ -30,7 +30,7 @@ type Allow interface {
 // Journal keeps the finished orders (hub.Journal).
 type Journal interface {
 	Get(order string) (wire.Result, bool)
-	Put(r wire.Result)
+	Put(r wire.Result, op wire.Op)
 	MarkSent(order string)
 }
 
@@ -132,7 +132,11 @@ func (r *Runner) Run(ctx context.Context, o wire.WorkOrder, h Hooks) (wire.Resul
 	call(h.Claimed)
 
 	res := r.do(ctx, o, h)
-	r.journal.Put(res)
+	var op wire.Op
+	if o.Payload != nil {
+		op = o.Payload.Op()
+	}
+	r.journal.Put(res, op)
 	return res, Ran
 }
 

@@ -2,6 +2,8 @@ package group
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -338,4 +340,21 @@ func TestRunPokes(t *testing.T) {
 	waitFor(t, "first round", func() bool { return len(a.group(t).Members) == 2 })
 	a.local(t, http.MethodPost, "/v1/group/home", map[string]string{"machine": "b"}, nil)
 	waitFor(t, "b pulls after the poke", func() bool { return b.group(t).Home == "b" })
+}
+
+func TestPeersWhenTailscaleDoesNotAnswer(t *testing.T) {
+	n := newNode(t, "a", newClock())
+	n.syncer.tailnet = func(context.Context) ([]server.Peer, error) {
+		return nil, fmt.Errorf("%w: The Tailscale GUI failed to start", server.ErrTailscaleDown)
+	}
+	res, err := http.Get(n.loop.URL + "/v1/group/peers")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	var body errorBody
+	_ = json.NewDecoder(res.Body).Decode(&body)
+	if res.StatusCode != http.StatusServiceUnavailable || body.Error != "Tailscale does not answer: The Tailscale GUI failed to start" {
+		t.Fatal(res.StatusCode, body)
+	}
 }

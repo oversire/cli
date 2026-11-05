@@ -1,6 +1,7 @@
 package server
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -11,6 +12,7 @@ import (
 	"os/exec"
 	"slices"
 	"strings"
+	"time"
 )
 
 // Runner runs a child process (proc.Local).
@@ -26,15 +28,19 @@ var tailnetRanges = []netip.Prefix{
 	netip.MustParsePrefix("fd7a:115c:a1e0::/48"),
 }
 
+// ErrTailscaleDown is a Tailscale CLI that gives text in place of JSON, for example "The Tailscale GUI failed to start".
+var ErrTailscaleDown = errors.New("Tailscale does not answer")
+
 // Tailnet finds the tailnet addresses and peers of this machine.
 type Tailnet struct {
 	run    Runner
 	exe    string                     // empty when the CLI is not on the machine
 	ifaces func() ([]net.Addr, error) // net.InterfaceAddrs
+	retry  time.Duration              // the wait before the second try of a status that is not JSON
 }
 
 func NewTailnet(run Runner) *Tailnet {
-	t := &Tailnet{run: run, ifaces: net.InterfaceAddrs}
+	t := &Tailnet{run: run, ifaces: net.InterfaceAddrs, retry: time.Second}
 	if exe, err := exec.LookPath("tailscale"); err == nil {
 		t.exe = exe
 	} else if _, err := os.Stat(macTailscale); err == nil {
@@ -78,18 +84,33 @@ func (t *Tailnet) Addrs(ctx context.Context) ([]netip.Addr, error) {
 	return addrs, nil
 }
 
+func jsonObject(b []byte) bool { return strings.HasPrefix(strings.TrimSpace(string(b)), "{") }
+
 func inTailnet(a netip.Addr) bool {
 	return slices.ContainsFunc(tailnetRanges, func(p netip.Prefix) bool { return p.Contains(a) })
 }
 
 // Peers gives the other nodes of `tailscale status --json`, sorted by name.
+// The app CLI can print text and exit 0 while the app starts. Then Peers tries again one time, and gives ErrTailscaleDown.
 func (t *Tailnet) Peers(ctx context.Context) ([]Peer, error) {
 	if t.exe == "" {
 		return nil, errors.New("the tailscale CLI is not on this machine")
 	}
 	out, _, err := t.run.Run(ctx, t.exe, []string{"status", "--json"}, nil)
+	if err == nil && !jsonObject(out) {
+		select {
+		case <-time.After(t.retry):
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+		out, _, err = t.run.Run(ctx, t.exe, []string{"status", "--json"}, nil)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("tailscale status: %w", err)
+	}
+	if !jsonObject(out) {
+		line, _, _ := strings.Cut(strings.TrimSpace(string(out)), "\n")
+		return nil, fmt.Errorf("%w: %s", ErrTailscaleDown, cmp.Or(line, "no output"))
 	}
 	var st struct {
 		Peer map[string]struct {

@@ -67,6 +67,16 @@ func TestAccessLogLevels(t *testing.T) {
 	}
 }
 
+func TestAccessLogASlowReadIsInfo(t *testing.T) {
+	slow := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { time.Sleep(slowRequest) })
+	if line := logged(t, slow, "GET", "/v1/workspaces", nil); !strings.Contains(line, "level=INFO") {
+		t.Errorf("want INFO in %q", line)
+	}
+	if line := logged(t, slow, "GET", "/v1/sessions/s1/stream", nil); !strings.Contains(line, "level=DEBUG") {
+		t.Errorf("want DEBUG in %q", line)
+	}
+}
+
 func TestAccessLogHasTheCallerOfTheAccessRule(t *testing.T) {
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { setCaller(r.Context(), "mba") })
 	if line := logged(t, h, "GET", "/v1/sessions", nil); !strings.Contains(line, "caller=mba") {

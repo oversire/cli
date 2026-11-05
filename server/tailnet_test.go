@@ -93,3 +93,28 @@ func TestTailnetPeers(t *testing.T) {
 		t.Fatal("no error on bad JSON")
 	}
 }
+
+// countRunner gives the replies in order. The last reply repeats.
+type countRunner struct {
+	replies []string
+	calls   int
+}
+
+func (c *countRunner) Run(context.Context, string, []string, []byte) ([]byte, []byte, error) {
+	out := c.replies[min(c.calls, len(c.replies)-1)]
+	c.calls++
+	return []byte(out), nil, nil
+}
+
+func TestTailnetPeersWhenTheAppDoesNotAnswer(t *testing.T) {
+	down := "The Tailscale GUI failed to start\nsee the log\n"
+	run := &countRunner{replies: []string{down}}
+	_, err := (&Tailnet{exe: "tailscale", run: run}).Peers(context.Background())
+	if !errors.Is(err, ErrTailscaleDown) || err.Error() != "Tailscale does not answer: The Tailscale GUI failed to start" || run.calls != 2 {
+		t.Fatal(err, run.calls)
+	}
+	run = &countRunner{replies: []string{down, statusJSON}}
+	if peers, err := (&Tailnet{exe: "tailscale", run: run}).Peers(context.Background()); err != nil || len(peers) != 2 {
+		t.Fatal(peers, err)
+	}
+}

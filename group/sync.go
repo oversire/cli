@@ -354,6 +354,10 @@ func (s *Syncer) Routes() []server.Route {
 				return
 			}
 			peers, err := s.tailnet(r.Context())
+			if errors.Is(err, server.ErrTailscaleDown) {
+				writeJSON(w, http.StatusServiceUnavailable, errorBody{Error: err.Error()})
+				return
+			}
 			if err != nil {
 				writeJSON(w, http.StatusServiceUnavailable, errorBody{Error: "tailscale: " + err.Error()})
 				return

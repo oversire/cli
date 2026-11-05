@@ -66,7 +66,7 @@ func (j *memJournal) Get(id string) (wire.Result, bool) {
 	r, ok := j.res[id]
 	return r, ok
 }
-func (j *memJournal) Put(r wire.Result) {
+func (j *memJournal) Put(r wire.Result, _ wire.Op) {
 	j.mu.Lock()
 	j.res[r.Order] = r
 	j.mu.Unlock()

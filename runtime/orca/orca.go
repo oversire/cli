@@ -51,11 +51,16 @@ func FindCLI() (path string, ok bool) {
 	return p, err == nil
 }
 
-// visorRunner gives the Runner to the Orca CLI of agent-visor.
-type visorRunner struct{ r Runner }
+// visorRunner gives the Runner to the Orca CLI of agent-visor. Its calls take a slot too.
+type visorRunner struct{ o *Orca }
 
 func (v visorRunner) Run(ctx context.Context, exe string, args []string) ([]byte, []byte, error) {
-	return v.r.Run(ctx, exe, args, nil)
+	release, err := v.o.slot(ctx, args)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer release()
+	return v.o.run.Run(ctx, exe, args, nil)
 }
 
 // Host is the part of the visor that the driver uses.
@@ -89,10 +94,37 @@ type Orca struct {
 	now     func() time.Time
 
 	pairing *Pairing // nil: the views are text only
+
+	slots chan struct{}             // the Orca processes that run now
+	reads *runtime.Shared[[]string] // the screen of each terminal, for readShare
 }
 
+// The limits of the Orca CLI calls (OVERSIRE-427). Each call starts a process that talks to the Orca app.
+const (
+	maxCalls  = 4
+	readShare = time.Second // reads of one terminal within this time share one call
+)
+
 func New(exe string, run Runner) *Orca {
-	return &Orca{exe: exe, run: run, cli: vorca.NewCLI(exe, visorRunner{run}), stat: os.Stat, shellWait: 300 * time.Millisecond, sendWait: 3 * time.Second, digests: digest.ForUser, now: time.Now}
+	o := &Orca{exe: exe, run: run, stat: os.Stat, shellWait: 300 * time.Millisecond, sendWait: 3 * time.Second, digests: digest.ForUser, now: time.Now,
+		slots: make(chan struct{}, maxCalls)}
+	o.cli = vorca.NewCLI(exe, visorRunner{o})
+	o.reads = runtime.NewShared[[]string](readShare, 30*time.Second, false, func() time.Time { return o.now() })
+	return o
+}
+
+// slot waits for a free process slot. A call that waits stops when ctx ends.
+// `terminal wait` takes no slot: it waits up to 45 s for an agent, and Orca does no work in that time.
+func (o *Orca) slot(ctx context.Context, args []string) (release func(), err error) {
+	if len(args) >= 2 && args[0] == "terminal" && args[1] == "wait" {
+		return func() {}, nil
+	}
+	select {
+	case o.slots <- struct{}{}:
+		return func() { <-o.slots }, nil
+	case <-ctx.Done():
+		return nil, fmt.Errorf("orca: no free call slot: %w", ctx.Err())
+	}
 }
 
 // WithVisor runs the sessions in the orca backend of the visor. The backend follows each session,
@@ -490,6 +522,7 @@ func hasAnyFlag(words, flags []string) bool {
 }
 
 func (o *Orca) Stop(ctx context.Context, s wire.SessionRef) error {
+	defer o.reads.Clear(s.ID)
 	if id, ok := o.visorSession(ctx, s.ID); ok {
 		return o.host.Stop(ctx, id)
 	}
@@ -510,6 +543,7 @@ func (o *Orca) Submit(ctx context.Context, p wire.SendPayload) (bool, error) {
 	if p.Answer != nil {
 		return false, errors.New("The orca runtime has no runner questions. Answer the agent in Orca.")
 	}
+	defer o.reads.Clear(p.Session.ID)
 	if id, ok := o.visorSession(ctx, p.Session.ID); ok {
 		d, err := o.host.Send(ctx, id, agentvisor.Input{Text: p.Text})
 		return err == nil && d == agentvisor.DeliveryPrompted, err
@@ -532,14 +566,26 @@ func (o *Orca) send(ctx context.Context, s wire.SessionRef, text string) (bool, 
 	return slices.Contains(r.Send.Prompt.Stages, "turn_started"), nil
 }
 
-// Read gives the last lines of the screen without blank lines and rules.
+// Read gives the last lines of the screen without blank lines and rules. Reads of one terminal within readShare share one call.
 func (o *Orca) Read(ctx context.Context, s wire.SessionRef, lines int) ([]string, error) {
+	all, err := o.reads.Get(ctx, s.ID, func(ctx context.Context) ([]string, error) { return o.screen(ctx, s.ID) })
+	if err != nil {
+		return nil, err
+	}
+	if lines > 0 && len(all) > lines {
+		all = all[len(all)-lines:]
+	}
+	return slices.Clone(all), nil
+}
+
+// screen gives the lines of the visible screen of the terminal, with no blank lines and no rules.
+func (o *Orca) screen(ctx context.Context, terminal string) ([]string, error) {
 	var r struct {
 		Terminal struct {
 			Tail []string `json:"tail"`
 		} `json:"terminal"`
 	}
-	if err := o.callInto(ctx, 20*time.Second, &r, "terminal", "read", "--terminal", s.ID, "--screen"); err != nil {
+	if err := o.callInto(ctx, 20*time.Second, &r, "terminal", "read", "--terminal", terminal, "--screen"); err != nil {
 		return nil, err
 	}
 	out := []string{}
@@ -549,9 +595,6 @@ func (o *Orca) Read(ctx context.Context, s wire.SessionRef, lines int) ([]string
 			continue
 		}
 		out = append(out, l)
-	}
-	if lines > 0 && len(out) > lines {
-		out = out[len(out)-lines:]
 	}
 	return out, nil
 }
@@ -636,8 +679,13 @@ func (o *Orca) callInto(ctx context.Context, timeout time.Duration, v any, args 
 	return nil
 }
 
-// call runs the CLI and gives the result object.
+// call runs the CLI and gives the result object. The timeout starts when the call has a slot.
 func (o *Orca) call(ctx context.Context, timeout time.Duration, args ...string) (json.RawMessage, error) {
+	release, err := o.slot(ctx, args)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	full := append(slices.Clone(args), "--json")

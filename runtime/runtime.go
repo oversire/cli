@@ -102,10 +102,13 @@ var ErrConflict = errors.New("the session cannot do this now")
 // ErrUnsupported is the error of a call that the runtime cannot do.
 var ErrUnsupported = errors.New("the runtime cannot do this")
 
-type Registry struct{ byID map[string]Runtime }
+type Registry struct {
+	byID  map[string]Runtime
+	cache *CatalogCache
+}
 
 func NewRegistry(rs ...Runtime) *Registry {
-	r := &Registry{byID: map[string]Runtime{}}
+	r := &Registry{byID: map[string]Runtime{}, cache: NewCatalogCache(time.Now)}
 	for _, rt := range rs {
 		r.byID[rt.ID()] = rt
 	}
@@ -135,6 +138,7 @@ func (r *Registry) Do(ctx context.Context, o wire.WorkOrder) (*wire.WorkOrderRes
 	}
 	switch p := o.Payload.(type) {
 	case wire.LaunchRequest:
+		defer r.cache.Changed(o.Runtime)
 		order := Order{ID: o.ID, ExpiresAt: o.ExpiresAt}
 		if l, ok := rt.(Launcher); ok {
 			st, err := l.Launch(ctx, order, p)
@@ -149,6 +153,7 @@ func (r *Registry) Do(ctx context.Context, o wire.WorkOrder) (*wire.WorkOrderRes
 		}
 		return &wire.WorkOrderResult{Session: &s}, nil
 	case wire.StopPayload:
+		defer r.cache.Changed(o.Runtime)
 		return &wire.WorkOrderResult{}, rt.Stop(ctx, p.Session)
 	case wire.ReadPayload:
 		n := min(max(p.Lines, 1), MaxReadLines)

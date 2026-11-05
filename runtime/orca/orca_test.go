@@ -9,7 +9,9 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/oversire/cli/digest"
 	"github.com/oversire/cli/runtime"
@@ -484,5 +486,89 @@ func TestStartAddsTheModelFlags(t *testing.T) {
 	}
 	if sends := r.args("terminal send"); len(sends) != 2 || sends[0][5] != "claude -n 'ENG-4' --model claude-opus-5-5 --effort max" {
 		t.Fatalf("sends %q", sends)
+	}
+}
+
+// slowRun answers each call after delay and counts the calls that run at the same time.
+type slowRun struct {
+	delay     time.Duration
+	calls     atomic.Int64
+	now, most atomic.Int64
+	reply     string
+}
+
+func (s *slowRun) Run(ctx context.Context, _ string, _ []string, _ []byte) ([]byte, []byte, error) {
+	s.calls.Add(1)
+	n := s.now.Add(1)
+	defer s.now.Add(-1)
+	for m := s.most.Load(); n > m && !s.most.CompareAndSwap(m, n); m = s.most.Load() {
+	}
+	select {
+	case <-time.After(s.delay):
+	case <-ctx.Done():
+		return nil, nil, ctx.Err()
+	}
+	return []byte(s.reply), nil, nil
+}
+
+func TestCallsHaveALimit(t *testing.T) {
+	run := &slowRun{delay: 30 * time.Millisecond, reply: `{"ok":true,"result":{"repos":[]}}`}
+	o := New("/bin/orca", run)
+	var wg sync.WaitGroup
+	for range 12 {
+		wg.Go(func() {
+			if _, err := o.call(context.Background(), time.Second, "repo", "list"); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+	wg.Wait()
+	if run.most.Load() != maxCalls || run.calls.Load() != 12 {
+		t.Fatalf("most %d, calls %d", run.most.Load(), run.calls.Load())
+	}
+	// A queued call stops when its context ends, and it starts no process.
+	for range maxCalls {
+		wg.Go(func() { _, _ = o.call(context.Background(), time.Second, "repo", "list") })
+	}
+	time.Sleep(5 * time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
+	defer cancel()
+	if _, err := o.call(ctx, time.Second, "repo", "list"); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal(err)
+	}
+	// A wait for an agent takes no slot.
+	if _, err := o.call(context.Background(), time.Second, "terminal", "wait"); err != nil {
+		t.Fatal(err)
+	}
+	wg.Wait()
+	if run.calls.Load() != 13+maxCalls || run.most.Load() != maxCalls+1 {
+		t.Fatalf("calls %d, most %d", run.calls.Load(), run.most.Load())
+	}
+}
+
+func TestReadsOfOneTerminalShareACall(t *testing.T) {
+	run := &slowRun{delay: 20 * time.Millisecond, reply: `{"ok":true,"result":{"terminal":{"tail":["a","b"]}}}`}
+	o := New("/bin/orca", run)
+	at := time.Date(2026, 11, 5, 9, 0, 0, 0, time.UTC)
+	var mu sync.Mutex
+	o.now = func() time.Time { mu.Lock(); defer mu.Unlock(); return at }
+	s := wire.SessionRef{ID: "h1"}
+	var wg sync.WaitGroup
+	for range 5 {
+		wg.Go(func() {
+			if lines, err := o.Read(context.Background(), s, 1); err != nil || !slices.Equal(lines, []string{"b"}) {
+				t.Error(lines, err)
+			}
+		})
+	}
+	wg.Wait()
+	if _, err := o.Read(context.Background(), wire.SessionRef{ID: "h2"}, 5); err != nil || run.calls.Load() != 2 {
+		t.Fatal(err, run.calls.Load())
+	}
+	mu.Lock()
+	at = at.Add(readShare)
+	mu.Unlock()
+	if lines, _ := o.Read(context.Background(), s, 5); len(lines) != 2 || run.calls.Load() != 3 {
+		t.Fatal(lines, run.calls.Load())
 	}
 }

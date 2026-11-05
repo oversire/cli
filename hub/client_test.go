@@ -3,10 +3,12 @@ package hub
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -480,7 +482,7 @@ func TestJournalKeepsTheLast500(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "orders.json")
 	j := OpenJournal(path)
 	for i := range JournalSize + 5 {
-		j.Put(wire.Result{Order: "o" + string(rune('a'+i%26)) + strings.Repeat("x", i/26), State: wire.ResultDone})
+		j.Put(wire.Result{Order: "o" + string(rune('a'+i%26)) + strings.Repeat("x", i/26), State: wire.ResultDone}, wire.OpSessionStart)
 	}
 	j = OpenJournal(path)
 	if len(j.entries) != JournalSize {
@@ -488,6 +490,60 @@ func TestJournalKeepsTheLast500(t *testing.T) {
 	}
 	if _, ok := j.Get("oa"); ok {
 		t.Fatal("the oldest entry stays")
+	}
+}
+
+func TestJournalKeepsReadsInMemory(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "orders.json")
+	j := OpenJournal(path)
+	j.Put(wire.Result{Order: "start", State: wire.ResultDone}, wire.OpSessionStart)
+	j.Put(wire.Result{Order: "read", State: wire.ResultDone}, wire.OpSessionRead)
+	j.Put(wire.Result{Order: "history", State: wire.ResultDone}, wire.OpSessionHistory)
+	if _, ok := j.Get("read"); !ok {
+		t.Fatal("a read is not in memory")
+	}
+	if n := len(j.Unsent()); n != 3 {
+		t.Fatal(n)
+	}
+	j.MarkSent("read")
+	if n := len(j.Unsent()); n != 2 {
+		t.Fatal(n)
+	}
+	b, err := os.ReadFile(path)
+	if err != nil || !strings.Contains(string(b), `"start"`) || strings.Contains(string(b), `"read"`) || strings.Contains(string(b), `"history"`) {
+		t.Fatalf("%s %v", b, err)
+	}
+	for i := range readSize + 5 {
+		j.Put(wire.Result{Order: fmt.Sprint("r", i)}, wire.OpSessionRead)
+	}
+	if _, ok := j.Get("r0"); ok || len(j.reads) != readSize {
+		t.Fatal(len(j.reads))
+	}
+}
+
+func TestJournalDropsOldReads(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "orders.json")
+	old := `[{"result":{"order":"r","state":"done","result":{"lines":["a"]}},"sent":true},
+		{"result":{"order":"s","state":"done","result":{"paneKey":"p"}},"sent":true}]`
+	if err := os.WriteFile(path, []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	j := OpenJournal(path)
+	if _, ok := j.Get("r"); ok || len(j.entries) != 1 {
+		t.Fatalf("%+v", j.entries)
+	}
+}
+
+func TestJournalParallelWritesKeepTheLastState(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "orders.json")
+	j := OpenJournal(path)
+	var wg sync.WaitGroup
+	for i := range 40 {
+		wg.Go(func() { j.Put(wire.Result{Order: fmt.Sprint("o", i)}, wire.OpSessionStart) })
+	}
+	wg.Wait()
+	if n := len(OpenJournal(path).entries); n != 40 {
+		t.Fatal(n)
 	}
 }
 

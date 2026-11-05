@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"sync"
+	"time"
 
 	"github.com/oversire/cli/wire"
 )
@@ -175,7 +176,7 @@ func (r *Registry) Repos(ctx context.Context) wire.DaemonReposPage {
 		if !ok {
 			return
 		}
-		repos, err := c.Repos(ctx)
+		repos, err := r.cache.Repos(ctx, rt.ID(), c)
 		if err != nil {
 			return
 		}
@@ -193,7 +194,7 @@ func (r *Registry) Workspaces(ctx context.Context) wire.DaemonWorkspacesPage {
 	errs := make([]error, len(ids))
 	r.each(ids, func(i int, rt Runtime) {
 		if c, ok := rt.(Catalog); ok {
-			lists[i], errs[i] = c.Workspaces(ctx)
+			lists[i], errs[i] = r.cache.Workspaces(ctx, rt.ID(), c)
 		}
 	})
 	page := wire.DaemonWorkspacesPage{Workspaces: []wire.DaemonWorkspace{}}
@@ -220,6 +221,7 @@ func (r *Registry) RemoveWorkspace(ctx context.Context, id string, rm wire.Works
 	if !ok {
 		return wire.WorkspaceRemoval{}, ErrUnsupported
 	}
+	defer r.cache.Changed(rm.Runtime)
 	return wr.RemoveWorkspace(ctx, id, rm.Force, rm.RunHooks)
 }
 
@@ -250,3 +252,35 @@ func (r *Registry) each(ids []string, f func(i int, rt Runtime)) {
 	}
 	wg.Wait()
 }
+
+// The times of CatalogCache. Repos change seldom. Workspaces carry the live terminals.
+const (
+	reposTTL      = 30 * time.Second
+	workspacesTTL = 2 * time.Second
+	catalogLimit  = time.Minute // of one fetch: Orca workspaces take two CLI calls of up to 20 s
+)
+
+// CatalogCache keeps the repos and workspaces of each runtime for a short time (OVERSIRE-427).
+// Many parallel calls make one fetch. A failed fetch gives the last good list.
+type CatalogCache struct {
+	repos      *Shared[[]wire.DaemonRepo]
+	workspaces *Shared[[]wire.DaemonWorkspace]
+}
+
+func NewCatalogCache(now func() time.Time) *CatalogCache {
+	return &CatalogCache{
+		repos:      NewShared[[]wire.DaemonRepo](reposTTL, catalogLimit, true, now),
+		workspaces: NewShared[[]wire.DaemonWorkspace](workspacesTTL, catalogLimit, true, now),
+	}
+}
+
+func (c *CatalogCache) Repos(ctx context.Context, id string, cat Catalog) ([]wire.DaemonRepo, error) {
+	return c.repos.Get(ctx, id, cat.Repos)
+}
+
+func (c *CatalogCache) Workspaces(ctx context.Context, id string, cat Catalog) ([]wire.DaemonWorkspace, error) {
+	return c.workspaces.Get(ctx, id, cat.Workspaces)
+}
+
+// Changed makes the next call read the workspaces of runtime id again: a start, a stop or a remove changed them.
+func (c *CatalogCache) Changed(id string) { c.workspaces.Clear(id) }
