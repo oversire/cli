@@ -1,0 +1,15 @@
+{
+  "seq": 230,
+  "id": "app:fav:OVERSIRE-289:1793922000",
+  "at": "2026-11-05T21:45:00Z",
+  "seenAt": "2026-11-05T21:45:01Z",
+  "kind": "item.unfavorited",
+  "item": "OVERSIRE-289",
+  "project": "oversire",
+  "machine": "mba",
+  "actorType": "human",
+  "actor": "flarco@gmail.com",
+  "via": "app@mba",
+  "summary": "Removed from Favorites",
+  "payload": {}
+}

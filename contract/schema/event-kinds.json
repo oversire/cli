@@ -566,6 +566,34 @@
       }
     },
     {
+      "kind": "item.favorited",
+      "domain": "human",
+      "actorTypes": [
+        "human"
+      ],
+      "private": false,
+      "summary": "you added the item to Favorites",
+      "payload": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "kind": "item.unfavorited",
+      "domain": "human",
+      "actorTypes": [
+        "human"
+      ],
+      "private": false,
+      "summary": "you removed the item from Favorites",
+      "payload": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
       "kind": "worktree.added",
       "domain": "git",
       "actorTypes": [
