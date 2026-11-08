@@ -55,6 +55,10 @@ Usage:
   oversire review ls [--kind code|plan] [--json]       show the reviews of this machine
   oversire visor ls | session | workdir | project | harness | status
                                                        show and control the agent sessions of the daemon
+  oversire ticket skill [new|plan|work|done|spec] [--install|--refresh] [--harness claude,codex]
+                                                       print the body of the oversire agent skill, or install it
+  oversire ticket new|plan|work <KEY> [--session ID]    bind this session to a ticket (the agent runs it)
+  oversire ticket done [KEY] [--session ID] [--out DIR]  pack the session transcript for the ticket
   oversire update                                      install the latest release now
   oversire version                                     show the version
 `
@@ -107,6 +111,10 @@ func main() {
 	if os.Args[1] == "visor" {
 		// The holders and the hooks of the visor sessions run this. It makes no config folder.
 		exit(visorCLI(os.Args[2:]))
+	}
+	if os.Args[1] == "ticket" {
+		// The skill runs it each time it loads, so it makes no config folder.
+		exit(ticketCLI().ticket(os.Args[2:]))
 	}
 	if os.Args[1] == "digest" {
 		// digest also runs on hosts without a daemon setup, so it makes no config folder.
