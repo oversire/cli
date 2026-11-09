@@ -114,7 +114,8 @@ func TestRoutesLifecycle(t *testing.T) {
 	r.watch.set("s1", runtime.Inspection{Session: wire.RunnerSession{State: wire.SessionWaitingInput,
 		Question: &wire.RunnerQuestion{ID: "q-1", Items: []wire.RunnerQuestionItem{{ID: "i1", Text: "Which?"}}}}})
 
-	code, body := send(t, "POST", base+"/v1/workers", `{"key":"oversire-12","harness":"codex","dir":"/w/.wt/oversire-12","overseer":"ov1","budget":7200000000000}`)
+	dir, _ := json.Marshal(groupDir)
+	code, body := send(t, "POST", base+"/v1/workers", `{"key":"oversire-12","harness":"codex","dir":`+string(dir)+`,"overseer":"ov1","budget":7200000000000}`)
 	var st Started
 	if code != 200 || json.Unmarshal([]byte(body), &st) != nil || st.Reused || st.Record.Session != "s1" || st.Record.Budget != 2*time.Hour {
 		t.Fatalf("start %d %s", code, body)
