@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/oversire/cli/config"
 	"github.com/oversire/cli/sessions"
@@ -298,5 +300,77 @@ func TestTicketAppliedPosts(t *testing.T) {
 	out.Reset()
 	if err := c.ticket([]string{"applied", "groom", "--file", f, "--session", "s1"}); err != nil || !strings.Contains(out.String(), "No daemon answers") {
 		t.Fatal(err, out)
+	}
+}
+
+func TestTicketSweepJSON(t *testing.T) {
+	c, out, _ := testCLI(t, "")
+	reviewDaemon(t, c)
+	root, wt := gitGroup(t)
+	c.wd = wt
+	if err := c.dispatch(context.Background(), []string{"review", "ready", "--note", "Adds N."}); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	if err := c.ticket([]string{"sweep", "APP-1", "--json", "--root", root}); err != nil {
+		t.Fatal(err)
+	}
+	var rep ticket.SweepReport
+	if err := json.Unmarshal(out.Bytes(), &rep); err != nil {
+		t.Fatal(err, out)
+	}
+	if !rep.Daemon || len(rep.Rows) != 1 {
+		t.Fatalf("%+v", rep)
+	}
+	r := rep.Rows[0]
+	if r.Key != "APP-1" || r.Group == "" || r.Review != wire.ReviewReadyState || r.Signal != ticket.SignalReady {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestTicketStop(t *testing.T) {
+	c, out, _ := testCLI(t, "")
+	var posted []wire.WorkOrder
+	fakeDaemon(t, c, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/sessions":
+			json.NewEncoder(w).Encode(wire.DaemonSessionsPage{Sessions: []wire.DaemonSession{
+				{ID: "s1", Machine: "mbp", Runtime: "orca", Workspace: "ws1", Terminal: "term-1", HarnessSession: "h1", State: wire.PhaseWaiting},
+				{ID: "cli:c1", Runtime: wire.RuntimeCLI, HarnessSession: "c1", State: wire.PhaseWorking},
+			}})
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/orders":
+			var o wire.WorkOrder
+			if err := json.NewDecoder(r.Body).Decode(&o); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			posted = append(posted, o)
+			w.WriteHeader(http.StatusAccepted)
+			json.NewEncoder(w).Encode(map[string]any{"order": o})
+		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/v1/orders/"):
+			json.NewEncoder(w).Encode(map[string]any{"state": wire.StateDone})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	if err := c.ticket([]string{"stop", "s1", "--session", "me"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(posted) != 1 || !strings.Contains(out.String(), "s1: stopped") {
+		t.Fatal(posted, out)
+	}
+	o := posted[0]
+	stop, ok := o.Payload.(wire.StopPayload)
+	if !ok || stop.Session.ID != "term-1" || stop.Session.Workspace.ID != "ws1" || o.Runtime != "orca" || o.Runner != "mbp" || !o.ExpiresAt.After(time.Now()) {
+		t.Fatalf("%+v", o)
+	}
+	var e *exitError
+	for _, args := range [][]string{{"stop", "c1"}, {"stop", "s1", "--session", "s1"}, {"stop", "h1", "--session", "h1"}, {"stop", "nope"}} {
+		if err := c.ticket(args); !errors.As(err, &e) || e.code != 2 {
+			t.Errorf("%v: %v", args, err)
+		}
+	}
+	if len(posted) != 1 {
+		t.Fatal(len(posted))
 	}
 }

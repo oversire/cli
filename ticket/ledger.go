@@ -130,3 +130,17 @@ func (l *Ledger) Close(key, session string) error {
 	}
 	return l.save(f)
 }
+
+// Keys gives the keys of the tickets in the ledger, sorted. A missing folder gives none.
+func (l *Ledger) Keys() ([]string, error) {
+	names, err := filepath.Glob(filepath.Join(l.dir, "*.json"))
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(names))
+	for _, n := range names {
+		out = append(out, strings.TrimSuffix(filepath.Base(n), ".json"))
+	}
+	sort.Strings(out)
+	return out, nil
+}

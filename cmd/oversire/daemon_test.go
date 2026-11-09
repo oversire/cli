@@ -33,3 +33,15 @@ func TestDaemonCallStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestDaemonReview404(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(`{"error":"no review A-1"}`))
+	}))
+	defer srv.Close()
+	d := daemonClient{base: srv.URL, http: srv.Client()}
+	if _, err := d.Review(context.Background(), "A-1"); !errors.Is(err, ticket.ErrNoReview) {
+		t.Fatal(err)
+	}
+}

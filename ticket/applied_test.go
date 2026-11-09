@@ -40,6 +40,11 @@ func TestAppliedDrafts(t *testing.T) {
 			t.Errorf("%s: no error", name)
 		}
 	}
+	sw, err := AppliedDrafts(wire.KindSweepApplied, "A", []AppliedLine{{Item: "A-1", Summary: "Done: merged",
+		Payload: json.RawMessage(`{"bucket":"merged","action":"done"}`)}}, a, now)
+	if err != nil || sw[0].ID != "cli:sweep:s1:A-1:done" || sw[0].Kind != "sweep.applied" {
+		t.Fatal(sw, err)
+	}
 	if _, err := AppliedDrafts("x.applied", "A", lines, a, now); err == nil {
 		t.Error("x.applied: no error")
 	}

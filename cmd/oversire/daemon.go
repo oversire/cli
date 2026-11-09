@@ -4,15 +4,18 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/oversire/cli/events"
+	"github.com/oversire/cli/orders"
 	"github.com/oversire/cli/ticket"
 	"github.com/oversire/cli/wire"
 )
@@ -108,4 +111,65 @@ func (d daemonClient) AppendEvents(ctx context.Context, rows []wire.EventDraft) 
 		rows = rows[n:]
 	}
 	return sum, nil
+}
+
+// Reviews reads GET /v1/reviews.
+func (d daemonClient) Reviews(ctx context.Context) (wire.ReviewsPage, error) {
+	var p wire.ReviewsPage
+	err := d.call(ctx, http.MethodGet, "/v1/reviews", nil, &p)
+	return p, err
+}
+
+// Review reads the code review of key. A 404 gives ticket.ErrNoReview.
+func (d daemonClient) Review(ctx context.Context, key string) (wire.ReviewDetail, error) {
+	var r wire.ReviewDetail
+	err := d.call(ctx, http.MethodGet, "/v1/reviews/"+url.PathEscape(key)+"?kind=code", nil, &r)
+	if de, ok := errors.AsType[*daemonError](err); ok && de.Status == http.StatusNotFound {
+		return r, ticket.ErrNoReview
+	}
+	return r, err
+}
+
+// sessionStopWait is how long Stop waits for the daemon to end the session.
+var sessionStopWait = 30 * time.Second
+
+// Stop ends a daemon session with a sessionStop order and waits for its result.
+func (d daemonClient) Stop(ctx context.Context, s wire.DaemonSession) error {
+	now := time.Now().UTC()
+	ref := wire.SessionRef{Workspace: wire.WorkspaceRef{Account: wire.AccountID{Provider: s.Runtime, ID: "local"}, ID: s.Workspace}, ID: s.ID}
+	if s.Terminal != "" {
+		ref.ID = s.Terminal
+	}
+	// A direct order names itself as its suggestion, as the app does.
+	id := fmt.Sprintf("ticket-stop-%d", now.UnixMilli())
+	o := wire.WorkOrder{ID: id, Runner: s.Machine, Runtime: s.Runtime, Suggestion: id, CreatedAt: now,
+		ExpiresAt: now.Add(5 * time.Minute), Payload: wire.StopPayload{Session: ref}}
+	if err := d.call(ctx, http.MethodPost, "/v1/orders", o, nil); err != nil {
+		return err
+	}
+	deadline := time.Now().Add(sessionStopWait)
+	for {
+		var st orders.OrderState
+		if err := d.call(ctx, http.MethodGet, "/v1/orders/"+url.PathEscape(o.ID), nil, &st); err != nil {
+			return err
+		}
+		switch st.State {
+		case wire.StateDone:
+			return nil
+		case wire.StateFailed, wire.StateExpired:
+			reason := string(st.State)
+			if st.Result != nil && st.Result.Error != "" {
+				reason = st.Result.Error
+			}
+			return fmt.Errorf("The daemon did not stop the session: %s", reason)
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("The daemon did not stop the session in %s.", sessionStopWait)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(200 * time.Millisecond):
+		}
+	}
 }

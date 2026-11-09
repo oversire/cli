@@ -168,12 +168,14 @@ The budget of the order has caps: 50 earlier turns, 10 last turns and 20000 char
 | `oversire review reply [--key K] <comment id> "<text>"` | Answer a review comment. The agent runs it. |
 | `oversire review ls [--kind code\|plan] [--json]` | Show the reviews of this machine. |
 | `oversire visor ls\|session\|workdir\|project\|harness\|status` | Show and control the agent sessions of the `oversire` runtime. See "runtime:oversire". |
-| `oversire ticket skill [new\|plan\|work\|done\|groom\|spec]` | Print the body of the `oversire` agent skill. See "Ticket skill". |
+| `oversire ticket skill [new\|plan\|work\|done\|groom\|sweep\|spec]` | Print the body of the `oversire` agent skill. See "Ticket skill". |
 | `oversire ticket skill --install\|--refresh [--harness claude,codex]` | Install the skill file, or update the installed files. |
 | `oversire ticket new\|work <KEY> [--session ID] [--harness H]` | Bind the agent session to a ticket. `work` prints the earlier sessions and a digest. The agent runs it. |
 | `oversire ticket plan <KEY>... [--session ID] [--harness H]` | Bind the agent session to one ticket or a batch of at most 20. With one key it prints the earlier sessions and a digest. With more keys it prints one line for each key. The agent runs it. |
 | `oversire ticket groom <PROJECT> [--session ID]` | Check that no Groom of the project runs on this daemon (key `groom:<PROJECT>`), and list the items of the project with a live session. It sets no key. The agent runs it. |
 | `oversire ticket applied groom\|sweep --file F [--project P] [--session ID]` | Write one event row for each item that the skill changed (`groom.applied`, `sweep.applied`). The agent runs it. |
+| `oversire ticket sweep [KEY...] [--project P] [--root DIR] [--stale DAYS] [--json]` | The facts of the started tickets: the sessions (daemon and ledger), the code review, the worktree group, the commits on the base branches, and a signal (merged, conflict, approved, ready, working, stalled, open, none). With no key it finds the keys of the local work. The agent runs it. |
+| `oversire ticket stop <SESSION> [--session ID]` | End a daemon session (runtime `orca` or `oversire`) with a sessionStop order. It refuses a `cli` session and the session of the caller. |
 | `oversire ticket done [KEY] [--session ID] [--harness H] [--out DIR]` | Pack the transcript of the session as gzip files for the ticket. The agent runs it. |
 | `oversire update` | Install the latest release now. The running daemon does the update and restarts. Without a daemon, the command updates the binary itself. |
 | `oversire version` | Show the version. |
@@ -585,6 +587,7 @@ The `oversire` agent skill (OVERSIRE-434) makes, plans, works and closes tracker
 - The ledger `<config>/tickets/<KEY>.json` keeps the sessions of each ticket on this machine. `work` uses it to print the digest of the last session. When the transcript is on a different machine, it prints the `ssh` command that gets the digest.
 - `plan` with no key or many keys plans a batch: one group brief, at most 5 planners at one time, and one round of questions.
 - `groom` does the Groom of the app in the chat: the same kinds and the same Plane writes, after a yes. `oversire ticket groom` checks the key `groom:<PROJECT>` on the local daemon and lists the busy items. It sets no key, because the app adopts each live `groom:` session.
+- `sweep` reads the facts from the daemon, the ledger and git. The agent adds the Plane state, sorts the items into buckets and asks one time for each bucket. It does not merge. `stop` ends only the sessions of the `orca` and `oversire` runtimes.
 - The skill calls Plane with `plane-cli`. The CLI makes no Plane calls.
 - `TestSkillCommandsExist` fails when the body names an `oversire` command that is not in the usage.
 

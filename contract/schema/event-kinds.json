@@ -387,6 +387,54 @@
       }
     },
     {
+      "kind": "sweep.applied",
+      "domain": "agent",
+      "actorTypes": [
+        "agent"
+      ],
+      "private": false,
+      "summary": "what Sweep did on the item, for example Done: merged in oversire",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "bucket": {
+            "enum": [
+              "merged",
+              "wrong_state",
+              "stalled",
+              "orphan"
+            ]
+          },
+          "action": {
+            "enum": [
+              "done",
+              "state",
+              "stop",
+              "remove_group"
+            ]
+          },
+          "state": {
+            "type": "string"
+          },
+          "sessions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10
+          },
+          "group": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "bucket",
+          "action"
+        ]
+      }
+    },
+    {
       "kind": "prompt.submitted",
       "domain": "human",
       "actorTypes": [

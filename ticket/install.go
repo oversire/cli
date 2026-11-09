@@ -12,14 +12,14 @@ import (
 // mark identifies a skill file that OverSire wrote. A file without it is not ours, so we do not change it.
 const mark = "<!-- oversire-skill -->"
 
-const description = `Make, plan, work and close tracker tickets (Plane) with full specs, plan a batch of tickets, and groom the intake. Use for /oversire new|plan|work|done|groom, and when the user says "create a ticket", "make a ticket for this", "plan OVERSIRE-12", "work SLING-40", "pick up <KEY>", "plan the new items", "groom the intake", "clean up the intake" or "close the ticket".`
+const description = `Make, plan, work and close tracker tickets (Plane) with full specs, plan a batch of tickets, groom the intake, and clean up started tickets. Use for /oversire new|plan|work|done|groom|sweep, and when the user says "create a ticket", "make a ticket for this", "plan OVERSIRE-12", "work SLING-40", "pick up <KEY>", "plan the new items", "groom the intake", "clean up the intake", "clean up the tickets" or "close the ticket".`
 
 // The thin files only load the body from the CLI, so they change very rarely.
 var thin = map[string]string{
 	"claude": `---
 name: oversire
 description: ` + description + `
-argument-hint: new|plan|work|done|groom [KEY or text]
+argument-hint: new|plan|work|done|groom|sweep [KEY or text]
 allowed-tools: Bash(oversire ticket:*)
 ---
 ` + mark + `

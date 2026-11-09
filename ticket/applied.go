@@ -10,7 +10,7 @@ import (
 )
 
 // The event kinds of the skill writes.
-var appliedKinds = map[string]bool{wire.KindGroomApplied: true}
+var appliedKinds = map[string]bool{wire.KindGroomApplied: true, wire.KindSweepApplied: true}
 
 // AppliedLine is one item that the skill changed. The agent writes these lines to a file.
 type AppliedLine struct {

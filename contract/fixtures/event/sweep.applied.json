@@ -1,0 +1,25 @@
+{
+  "seq": 241,
+  "id": "cli:sweep:8390f639:OVERSIRE-14:done",
+  "at": "2026-11-09T11:30:00Z",
+  "seenAt": "2026-11-09T11:30:01Z",
+  "kind": "sweep.applied",
+  "item": "OVERSIRE-14",
+  "parentItem": "OVERSIRE-10",
+  "project": "oversire",
+  "machine": "mbp",
+  "session": "8390f639",
+  "actorType": "agent",
+  "actor": "claude",
+  "via": "cli",
+  "summary": "Done: merged in oversire",
+  "payload": {
+    "bucket": "merged",
+    "action": "done",
+    "state": "Done",
+    "sessions": [
+      "orca:wt-14"
+    ],
+    "group": ".wt/oversire-14"
+  }
+}

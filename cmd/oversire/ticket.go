@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -12,16 +13,20 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"text/tabwriter"
 	"time"
 
 	"github.com/oversire/cli/config"
 	"github.com/oversire/cli/digest"
+	"github.com/oversire/cli/proc"
+	"github.com/oversire/cli/review"
 	"github.com/oversire/cli/ticket"
 	"github.com/oversire/cli/wire"
 )
 
 const ticketUsage = `Usage:
-  oversire ticket skill [new|plan|work|done|groom|spec]    print the body of the oversire agent skill
+  oversire ticket skill [new|plan|work|done|groom|sweep|spec]
+                                                          print the body of the oversire agent skill
   oversire ticket skill --install|--refresh [--harness claude,codex]
                                                           install the skill file, or update the installed files
   oversire ticket new|work <KEY> [--session ID] [--harness H]
@@ -32,6 +37,10 @@ const ticketUsage = `Usage:
                                                           check the Groom key of the project and list the busy items
   oversire ticket applied groom|sweep --file F [--project P] [--session ID]
                                                           write the event rows of the applied changes
+  oversire ticket sweep [KEY...] [--project P] [--root DIR] [--stale DAYS] [--json]
+                                                          the facts of the started tickets: sessions, review, worktree group, base commits
+  oversire ticket stop <SESSION> [--session ID]
+                                                          end a daemon session of a finished ticket
   oversire ticket done [KEY] [--session ID] [--harness H] [--out DIR]
                                                           pack the transcript of this session for the ticket
 `
@@ -73,6 +82,9 @@ func (c *cli) ticket(args []string) error {
 	out := fs.String("out", "", "the folder for the transcript files")
 	file := fs.String("file", "", "the JSON file of the applied lines")
 	project := fs.String("project", "", "the project identifier")
+	root := fs.String("root", "", "the workspace root")
+	stale := fs.Int("stale", 7, "the days with no work before a ticket is stalled")
+	asJSON := fs.Bool("json", false, "print JSON")
 	if err := fs.Parse(interleave(args[1:])); err != nil {
 		return &exitError{2, fmt.Errorf("%w\n\n%s", err, ticketUsage)}
 	}
@@ -114,6 +126,13 @@ func (c *cli) ticket(args []string) error {
 			return &exitError{2, fmt.Errorf("give groom or sweep, and --file\n\n%s", ticketUsage)}
 		}
 		return c.ticketApplied(context.Background(), fs.Arg(0), *file, *project, h, *session)
+	case "sweep":
+		return c.ticketSweep(context.Background(), fs.Args(), *project, *root, *stale, *asJSON)
+	case "stop":
+		if fs.NArg() != 1 {
+			return &exitError{2, fmt.Errorf("a session id is missing\n\n%s", ticketUsage)}
+		}
+		return c.ticketStop(context.Background(), fs.Arg(0), *session)
 	case "done":
 		if fs.NArg() > 1 {
 			return &exitError{2, errors.New(ticketUsage)}
@@ -143,7 +162,7 @@ func interleave(args []string) []string {
 
 func takesValue(flag string) bool {
 	switch strings.TrimLeft(flag, "-") {
-	case "session", "harness", "out", "file", "project":
+	case "session", "harness", "out", "file", "project", "root", "stale":
 		return true
 	}
 	return false
@@ -424,5 +443,107 @@ func (c *cli) ticketApplied(ctx context.Context, verb, file, project, harness, s
 		return err
 	}
 	fmt.Fprintf(c.out, "%d event rows written\n", len(rows))
+	return nil
+}
+
+func (c *cli) ticketSweep(ctx context.Context, keys []string, project, root string, staleDays int, asJSON bool) error {
+	if project != "" {
+		p, err := ticket.NormalProject(project)
+		if err != nil {
+			return &exitError{2, err}
+		}
+		project = p
+	}
+	if root == "" {
+		root = c.sweepRoot()
+	}
+	d, err := c.daemonClient()
+	if err != nil {
+		return err
+	}
+	if staleDays < 1 {
+		return &exitError{2, errors.New("--stale must be 1 or more days")}
+	}
+	s := ticket.Sweeper{Daemon: d, Git: review.NewGit(proc.Local{}), Ledger: c.ledger(), Root: root,
+		Stale: time.Duration(staleDays) * 24 * time.Hour}
+	rep, err := s.Sweep(ctx, keys, project)
+	if err != nil {
+		return &exitError{2, err}
+	}
+	if asJSON {
+		enc := json.NewEncoder(c.out)
+		enc.SetIndent("", "  ")
+		return enc.Encode(rep)
+	}
+	tw := tabwriter.NewWriter(c.out, 0, 2, 2, ' ', 0)
+	fmt.Fprintln(tw, "KEY\tSIGNAL\tREVIEW\tSESSIONS\tGROUP\tBASE\tLAST")
+	for _, r := range rep.Rows {
+		live := 0
+		for _, s := range r.Sessions {
+			if s.Live {
+				live++
+			}
+		}
+		group, last := "-", "-"
+		if r.Group != "" {
+			group = "yes"
+		}
+		if r.LastWork != nil {
+			last = r.LastWork.Local().Format("2006-01-02 15:04")
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%d/%d\t%s\t%d\t%s\n", r.Key, r.Signal, cmp.Or(string(r.Review), "-"), live, len(r.Sessions),
+			group, len(r.OnBase), last)
+	}
+	tw.Flush()
+	for _, w := range rep.Warnings {
+		fmt.Fprintf(c.out, "warning: %s\n", w)
+	}
+	return nil
+}
+
+// sweepRoot is the root of the group of the folder, else the first parent with a .wt folder, else the folder.
+func (c *cli) sweepRoot() string {
+	if root, _, ok := ticket.GroupOf(c.wd); ok {
+		return root
+	}
+	for d := filepath.Clean(c.wd); ; d = filepath.Dir(d) {
+		if isDir(filepath.Join(d, ".wt")) {
+			return d
+		}
+		if filepath.Dir(d) == d {
+			return c.wd
+		}
+	}
+}
+
+func (c *cli) ticketStop(ctx context.Context, ref, session string) error {
+	if session != "" && ref == session {
+		return &exitError{2, errors.New("This is the session of the caller. Do not stop it.")}
+	}
+	d, err := c.daemonClient()
+	if err != nil {
+		return err
+	}
+	list, err := d.Sessions(ctx)
+	if err != nil {
+		return err
+	}
+	i := slices.IndexFunc(list, func(s wire.DaemonSession) bool {
+		return s.ID == ref || s.HarnessSession != "" && s.HarnessSession == ref || s.Terminal != "" && s.Terminal == ref
+	})
+	if i < 0 {
+		return &exitError{2, fmt.Errorf("The daemon has no session %s.", ref)}
+	}
+	s := list[i]
+	switch {
+	case session != "" && s.HarnessSession == session:
+		return &exitError{2, errors.New("This is the session of the caller. Do not stop it.")}
+	case s.Runtime == wire.RuntimeCLI:
+		return &exitError{2, errors.New("The daemon does not own this terminal session. Close it there.")}
+	}
+	if err := d.Stop(ctx, s); err != nil {
+		return err
+	}
+	fmt.Fprintf(c.out, "%s: stopped\n", s.ID)
 	return nil
 }

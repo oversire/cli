@@ -1,7 +1,9 @@
 package ticket
 
 import (
+	"path/filepath"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 )
@@ -59,5 +61,17 @@ func TestLedgerClose(t *testing.T) {
 	got, _ := l.Sessions("A-1")
 	if !got[0].Done {
 		t.Fatal(got)
+	}
+}
+
+func TestLedgerKeys(t *testing.T) {
+	l := NewLedger(filepath.Join(t.TempDir(), "tickets"))
+	if keys, err := l.Keys(); err != nil || len(keys) != 0 {
+		t.Fatal(keys, err)
+	}
+	l.Add(SessionRecord{Key: "B-2", Session: "s"})
+	l.Add(SessionRecord{Key: "A-1", Session: "s"})
+	if keys, err := l.Keys(); err != nil || !slices.Equal(keys, []string{"A-1", "B-2"}) {
+		t.Fatal(keys, err)
 	}
 }

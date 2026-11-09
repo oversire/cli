@@ -454,3 +454,13 @@ func primaries(root string) []string {
 	}
 	return out
 }
+
+// GroupRepos gives the repos of the group <root>/.wt/<key>. ok is false when the folder does not exist.
+func (gt Git) GroupRepos(ctx context.Context, root, key string) ([]wire.ReviewRepo, bool, error) {
+	g, ok := readGroup(root, strings.ToLower(key))
+	if !ok {
+		return nil, false, nil
+	}
+	st := gt.groupState(ctx, g, nil)
+	return st.Repos, true, st.Err
+}

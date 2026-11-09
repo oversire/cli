@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/oversire/cli/proc"
 	"github.com/oversire/cli/wire"
 )
 
@@ -336,5 +337,20 @@ func TestFullDiffOfALongFileFallsBack(t *testing.T) {
 	}
 	if fd.Full || fd.Truncated || len(fd.Hunks) != 2 || len(fd.Hunks[0].Lines) != 8 {
 		t.Fatalf("full %v, truncated %v, %d hunks", fd.Full, fd.Truncated, len(fd.Hunks))
+	}
+}
+
+func TestGroupRepos(t *testing.T) {
+	w := newWS(t)
+	w.repo("app")
+	g := w.group("app-1", "app")
+	w.commit(filepath.Join(g, "app"), "Add N", map[string]string{"n.go": "package lib\n"})
+	gt := NewGit(proc.Local{})
+	repos, ok, err := gt.GroupRepos(context.Background(), w.root, "APP-1")
+	if err != nil || !ok || len(repos) != 1 || repos[0].Ahead != 1 {
+		t.Fatalf("%+v %v %v", repos, ok, err)
+	}
+	if _, ok, err := gt.GroupRepos(context.Background(), w.root, "APP-2"); ok || err != nil {
+		t.Fatal(ok, err)
 	}
 }
