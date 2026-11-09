@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -20,8 +21,10 @@ const ticketUsage = `Usage:
   oversire ticket skill [new|plan|work|done|spec]          print the body of the oversire agent skill
   oversire ticket skill --install|--refresh [--harness claude,codex]
                                                           install the skill file, or update the installed files
-  oversire ticket new|plan|work <KEY> [--session ID] [--harness H]
-                                                          bind this session to a ticket (plan and work print the earlier sessions)
+  oversire ticket new|work <KEY> [--session ID] [--harness H]
+                                                          bind this session to a ticket (work prints the earlier sessions)
+  oversire ticket plan <KEY>... [--session ID] [--harness H]
+                                                          bind this session to one ticket or a batch (at most 20)
   oversire ticket done [KEY] [--session ID] [--harness H] [--out DIR]
                                                           pack the transcript of this session for the ticket
 `
@@ -85,10 +88,13 @@ func (c *cli) ticket(args []string) error {
 		}
 		return c.ticketSkill(verb, h, *session)
 	case "new", "plan", "work":
-		if fs.NArg() != 1 {
+		if fs.NArg() == 0 {
 			return &exitError{2, fmt.Errorf("a ticket key is missing\n\n%s", ticketUsage)}
 		}
-		return c.ticketBind(sub, fs.Arg(0), h, *session)
+		if sub != "plan" && fs.NArg() != 1 {
+			return &exitError{2, fmt.Errorf("%s takes exactly one ticket key\n\n%s", sub, ticketUsage)}
+		}
+		return c.ticketBind(sub, fs.Args(), h, *session)
 	case "done":
 		if fs.NArg() > 1 {
 			return &exitError{2, errors.New(ticketUsage)}
@@ -167,49 +173,82 @@ func (c *cli) printInstalled(done []ticket.Installed) {
 	}
 }
 
-func (c *cli) ticketBind(role, key, harness, session string) error {
-	key, err := ticket.NormalKey(key)
-	if err != nil {
-		return &exitError{2, err}
+// maxPlanKeys caps a batch plan.
+const maxPlanKeys = 20
+
+func (c *cli) ticketBind(role string, keys []string, harness, session string) error {
+	var norm []string
+	for _, k := range keys {
+		k, err := ticket.NormalKey(k)
+		if err != nil {
+			return &exitError{2, err}
+		}
+		if !slices.Contains(norm, k) {
+			norm = append(norm, k)
+		}
+	}
+	if len(norm) > maxPlanKeys {
+		return &exitError{2, fmt.Errorf("Plan at most %d tickets in one batch.", maxPlanKeys)}
 	}
 	l := c.ledger()
-	earlier, err := l.Sessions(key)
-	if err != nil {
-		return err
+	earlier := make([][]ticket.SessionRecord, len(norm))
+	for i, k := range norm {
+		var err error
+		if earlier[i], err = l.Sessions(k); err != nil {
+			return err
+		}
 	}
-	if session != "" {
+	for _, key := range norm {
+		if session == "" {
+			fmt.Fprintf(c.out, "%s: no session id (set --session), so this session is not bound.\n", key)
+			continue
+		}
 		r := ticket.SessionRecord{Key: key, Harness: harness, Session: session, Machine: c.machine(), Cwd: c.wd,
 			Role: role, At: time.Now().UTC()}
 		if err := l.Add(r); err != nil {
 			return err
 		}
 		fmt.Fprintf(c.out, "%s: this session (%s %s) is bound (%s).\n", key, harness, session, role)
-	} else {
-		fmt.Fprintf(c.out, "%s: no session id (set --session), so this session is not bound.\n", key)
 	}
 	if role == "new" {
 		return nil
 	}
-	var last *ticket.SessionRecord
-	for i := range earlier {
-		if earlier[i].Session != session {
-			last = &earlier[i]
+	if len(norm) > 1 {
+		fmt.Fprintln(c.out)
+		for i, key := range norm {
+			others := otherSessions(earlier[i], session)
+			if len(others) == 0 {
+				fmt.Fprintf(c.out, "%s: no earlier sessions on this machine\n", key)
+				continue
+			}
+			s := others[len(others)-1]
+			fmt.Fprintf(c.out, "%s: %d earlier sessions, last %s %s %s on %s %s\n", key, len(others), s.Role, s.Harness,
+				s.Session, s.Machine, s.At.Local().Format("2006-01-02 15:04"))
 		}
+		return nil
 	}
-	if last == nil {
+	others := otherSessions(earlier[0], session)
+	if len(others) == 0 {
 		fmt.Fprintln(c.out, "No earlier sessions on this machine.")
 		return nil
 	}
 	fmt.Fprintln(c.out, "\nEarlier sessions:")
-	for _, s := range earlier {
-		if s.Session == session {
-			continue
-		}
+	for _, s := range others {
 		fmt.Fprintf(c.out, "- %s  %-4s  %s %s  on %s  in %s\n", s.At.Local().Format("2006-01-02 15:04"), s.Role,
 			s.Harness, s.Session, s.Machine, s.Cwd)
 	}
-	c.printDigest(*last)
+	c.printDigest(others[len(others)-1])
 	return nil
+}
+
+func otherSessions(rs []ticket.SessionRecord, session string) []ticket.SessionRecord {
+	var out []ticket.SessionRecord
+	for _, r := range rs {
+		if r.Session != session {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 // printDigest prints the digest of a session as text, or how to get it when its transcript is not here.

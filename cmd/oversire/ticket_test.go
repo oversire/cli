@@ -3,10 +3,12 @@ package main
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -155,5 +157,54 @@ func TestTicketSkillBody(t *testing.T) {
 	}
 	if err := c.ticket([]string{"work"}); err == nil {
 		t.Fatal("no error without a key")
+	}
+}
+
+func TestTicketPlanManyKeys(t *testing.T) {
+	c, out := ticketTest(t)
+	if err := c.ticket([]string{"plan", "a-1", "B-2", "a-1", "--session", "s1"}); err != nil {
+		t.Fatal(err)
+	}
+	if items, _ := c.ledger().Items("s1"); !slices.Equal(items, []string{"A-1", "B-2"}) {
+		t.Fatal(items)
+	}
+	if n := strings.Count(out.String(), "is bound (plan)"); n != 2 || strings.Contains(out.String(), "Digest of session") {
+		t.Fatal(out)
+	}
+	if !strings.Contains(out.String(), "B-2: no earlier sessions on this machine") {
+		t.Fatal(out)
+	}
+}
+
+func TestTicketPlanBadKeyBindsNone(t *testing.T) {
+	c, _ := ticketTest(t)
+	var e *exitError
+	if err := c.ticket([]string{"plan", "A-1", "nokey", "--session", "s1"}); !errors.As(err, &e) || e.code != 2 {
+		t.Fatal(err)
+	}
+	if items, _ := c.ledger().Items("s1"); len(items) != 0 {
+		t.Fatal(items)
+	}
+}
+
+func TestTicketPlanTooManyKeys(t *testing.T) {
+	c, _ := ticketTest(t)
+	args := []string{"plan", "--session", "s1"}
+	for i := 1; i <= 21; i++ {
+		args = append(args, fmt.Sprintf("A-%d", i))
+	}
+	var e *exitError
+	if err := c.ticket(args); !errors.As(err, &e) || e.code != 2 || !strings.Contains(err.Error(), "at most 20") {
+		t.Fatal(err)
+	}
+}
+
+func TestTicketWorkOneKey(t *testing.T) {
+	c, _ := ticketTest(t)
+	for _, verb := range []string{"work", "new"} {
+		var e *exitError
+		if err := c.ticket([]string{verb, "A-1", "B-2", "--session", "s1"}); !errors.As(err, &e) || e.code != 2 {
+			t.Fatalf("%s: %v", verb, err)
+		}
 	}
 }

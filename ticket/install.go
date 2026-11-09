@@ -12,7 +12,7 @@ import (
 // mark identifies a skill file that OverSire wrote. A file without it is not ours, so we do not change it.
 const mark = "<!-- oversire-skill -->"
 
-const description = `Make, plan, work and close tracker tickets (Plane) with full specs. Use for /oversire new|plan|work|done, and when the user says "create a ticket", "make a ticket for this", "plan OVERSIRE-12", "work SLING-40", "pick up <KEY>" or "close the ticket".`
+const description = `Make, plan, work and close tracker tickets (Plane) with full specs, and plan a batch of tickets. Use for /oversire new|plan|work|done, and when the user says "create a ticket", "make a ticket for this", "plan OVERSIRE-12", "work SLING-40", "pick up <KEY>", "plan the new items" or "close the ticket".`
 
 // The thin files only load the body from the CLI, so they change very rarely.
 var thin = map[string]string{

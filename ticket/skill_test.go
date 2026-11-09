@@ -26,6 +26,12 @@ func TestBodyRendersEachVerb(t *testing.T) {
 			t.Errorf("%s: %v %q", v, err, b)
 		}
 	}
+	pb, _ := s.Body("plan", c)
+	for _, want := range []string{"## Many tickets", "all but 3", "at most 5"} {
+		if !strings.Contains(pb, want) {
+			t.Errorf("plan body has no %q", want)
+		}
+	}
 	nb, _ := s.Body("new", c)
 	if !strings.Contains(nb, "planner subagent") {
 		t.Error("new has no planning steps")

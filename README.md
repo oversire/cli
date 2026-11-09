@@ -170,7 +170,8 @@ The budget of the order has caps: 50 earlier turns, 10 last turns and 20000 char
 | `oversire visor ls\|session\|workdir\|project\|harness\|status` | Show and control the agent sessions of the `oversire` runtime. See "runtime:oversire". |
 | `oversire ticket skill [new\|plan\|work\|done\|spec]` | Print the body of the `oversire` agent skill. See "Ticket skill". |
 | `oversire ticket skill --install\|--refresh [--harness claude,codex]` | Install the skill file, or update the installed files. |
-| `oversire ticket new\|plan\|work <KEY> [--session ID] [--harness H]` | Bind the agent session to a ticket. `plan` and `work` print the earlier sessions and a digest. The agent runs it. |
+| `oversire ticket new\|work <KEY> [--session ID] [--harness H]` | Bind the agent session to a ticket. `work` prints the earlier sessions and a digest. The agent runs it. |
+| `oversire ticket plan <KEY>... [--session ID] [--harness H]` | Bind the agent session to one ticket or a batch of at most 20. With one key it prints the earlier sessions and a digest. With more keys it prints one line for each key. The agent runs it. |
 | `oversire ticket done [KEY] [--session ID] [--harness H] [--out DIR]` | Pack the transcript of the session as gzip files for the ticket. The agent runs it. |
 | `oversire update` | Install the latest release now. The running daemon does the update and restarts. Without a daemon, the command updates the binary itself. |
 | `oversire version` | Show the version. |
@@ -580,6 +581,7 @@ The `oversire` agent skill (OVERSIRE-434) makes, plans, works and closes tracker
 - The body is in `ticket/skill/*.md`, embedded in the binary. Thus `oversire update` makes the skill fresh. Each run of `oversire ticket skill` also rewrites an old installed file that has the OverSire mark.
 - `new` writes a brief, then a planner subagent writes the spec at the interface level (`oversire ticket skill spec`), and a checker subagent compares it with the code.
 - The ledger `<config>/tickets/<KEY>.json` keeps the sessions of each ticket on this machine. `work` uses it to print the digest of the last session. When the transcript is on a different machine, it prints the `ssh` command that gets the digest.
+- `plan` with no key or many keys plans a batch: one group brief, at most 5 planners at one time, and one round of questions.
 - The skill calls Plane with `plane-cli`. The CLI makes no Plane calls.
 - `TestSkillCommandsExist` fails when the body names an `oversire` command that is not in the usage.
 
