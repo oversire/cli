@@ -111,3 +111,16 @@ func TestFoldWritesTheHeader(t *testing.T) {
 		t.Fatalf("%q", b.String())
 	}
 }
+
+func TestWriteBriefKeepsEverySection(t *testing.T) {
+	var out strings.Builder
+	if err := (Fold{}).WriteBrief(&out, Brief{Header: Header{Key: "work:X-1", State: wire.PhaseWorking}}); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	for _, h := range []string{"## Plan\nnone", "## Decisions\nnone", "## Last report\nnone", "## Failed tools\nnone", "## Open request\nnone", "## Diff\nnone"} {
+		if !strings.Contains(got, h) {
+			t.Fatalf("missing %q in:\n%s", h, got)
+		}
+	}
+}

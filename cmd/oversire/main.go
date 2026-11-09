@@ -55,6 +55,9 @@ Usage:
   oversire review ls [--kind code|plan] [--json]       show the reviews of this machine
   oversire worker read <id|KEY> [--reader NAME] [--limit N] [--json]
                                                        show the new turns of a worker session since the last read
+  oversire worker wait <id|KEY> [--reader NAME] [--timeout 8m]
+                                                       block until the worker needs an action, then show the new turns (exit 3: timeout)
+  oversire worker brief <id|KEY>                       show the plan, decisions, last report, failed tools and diff of a worker
   oversire visor ls | session | workdir | project | harness | status
                                                        show and control the agent sessions of the daemon
   oversire ticket skill [new|plan|work|done|groom|sweep|spec] [--install|--refresh] [--harness claude,codex]

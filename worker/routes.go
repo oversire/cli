@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/oversire/cli/server"
 	"github.com/oversire/cli/wire"
@@ -21,6 +22,8 @@ func NewRoutes(e *Engine) *Routes { return &Routes{e: e} }
 func (rt *Routes) Routes() []server.Route {
 	return []server.Route{
 		{Pattern: "GET /v1/workers/{id}/read", Access: server.LoopbackOnly, Handle: rt.read},
+		{Pattern: "GET /v1/workers/{id}/wait", Access: server.LoopbackOnly, Handle: rt.wait},
+		{Pattern: "GET /v1/workers/{id}/brief", Access: server.LoopbackOnly, Handle: rt.brief},
 		{Pattern: "PUT /v1/workers/{id}/cursors/{reader}", Access: server.LoopbackOnly, Handle: rt.commit},
 	}
 }
@@ -36,6 +39,33 @@ func (rt *Routes) read(w http.ResponseWriter, r *http.Request) {
 		limit = n
 	}
 	out, err := rt.e.Read(r.Context(), r.PathValue("id"), r.URL.Query().Get("reader"), limit)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (rt *Routes) wait(w http.ResponseWriter, r *http.Request) {
+	max := MaxWait
+	if raw := r.URL.Query().Get("max"); raw != "" {
+		d, err := time.ParseDuration(raw)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, errorBody{Error: "The max is not a duration."})
+			return
+		}
+		max = d
+	}
+	out, err := rt.e.Wait(r.Context(), r.PathValue("id"), max)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (rt *Routes) brief(w http.ResponseWriter, r *http.Request) {
+	out, err := rt.e.Brief(r.Context(), r.PathValue("id"))
 	if err != nil {
 		fail(w, err)
 		return

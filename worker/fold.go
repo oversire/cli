@@ -49,6 +49,49 @@ func (f Fold) Write(w io.Writer, r Read) error {
 	return err
 }
 
+// WriteBrief writes the status line and the sections of a brief. Each section is there, also when empty.
+func (f Fold) WriteBrief(w io.Writer, br Brief) error {
+	maxText, tail := f.limits()
+	var b strings.Builder
+	f.status(&b, br.Header)
+	section := func(name string) { fmt.Fprintf(&b, "\n## %s\n", name) }
+	none := func(empty bool) {
+		if empty {
+			b.WriteString("none\n")
+		}
+	}
+	section("Plan")
+	b.WriteString(orNone(cut(br.Plan, maxText)) + "\n")
+	section("Decisions")
+	for _, n := range br.Notes {
+		fmt.Fprintf(&b, "%s %s\n", userLabel(n.Origin), cut(n.Text, maxText))
+	}
+	none(len(br.Notes) == 0)
+	section("Last report")
+	b.WriteString(orNone(cut(br.Last, maxText)) + "\n")
+	section("Failed tools")
+	for _, t := range br.Failed {
+		f.tool(&b, t, tail)
+	}
+	none(len(br.Failed) == 0)
+	section("Open request")
+	b.WriteString(orNone(br.Header.Request) + "\n")
+	section("Diff")
+	for _, r := range br.Header.Repos {
+		b.WriteString(repoLine(r) + "\n")
+	}
+	none(len(br.Header.Repos) == 0)
+	_, err := io.WriteString(w, b.String())
+	return err
+}
+
+func orNone(s string) string {
+	if s == "" {
+		return "none"
+	}
+	return s
+}
+
 func (f Fold) limits() (maxText, tail int) {
 	maxText, tail = f.MaxText, f.TailLines
 	if maxText <= 0 {
@@ -61,6 +104,21 @@ func (f Fold) limits() (maxText, tail int) {
 }
 
 func (f Fold) header(b *strings.Builder, h Header) {
+	f.status(b, h)
+	if h.Request != "" {
+		fmt.Fprintf(b, "Open request: %s\n", h.Request)
+	}
+	for _, r := range h.Repos {
+		fmt.Fprintf(b, "%s\n", repoLine(r))
+	}
+}
+
+func repoLine(r wire.ReviewRepo) string {
+	return fmt.Sprintf("%s +%d -%d, %d files", r.Name, r.Added, r.Removed, r.Files)
+}
+
+// status writes the first line of the header.
+func (f Fold) status(b *strings.Builder, h Header) {
 	name := h.Key
 	if name == "" {
 		name = h.Session
@@ -92,12 +150,6 @@ func (f Fold) header(b *strings.Builder, h Header) {
 	}
 	b.WriteString(strings.Join(parts, " | "))
 	b.WriteByte('\n')
-	if h.Request != "" {
-		fmt.Fprintf(b, "Open request: %s\n", h.Request)
-	}
-	for _, r := range h.Repos {
-		fmt.Fprintf(b, "%s +%d -%d, %d files\n", r.Name, r.Added, r.Removed, r.Files)
-	}
 }
 
 func elapsed(d time.Duration) string {

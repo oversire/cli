@@ -127,3 +127,108 @@ func TestWorkerUsage(t *testing.T) {
 		}
 	}
 }
+
+// waitDaemon serves wait, read, cursor and brief routes. waits gives the reasons of the wait calls in order; the last one repeats.
+type waitDaemon struct {
+	workerDaemon
+	waits  []worker.WakeReason
+	calls  int
+	maxes  []string
+	brief  worker.Brief
+	header worker.Header
+}
+
+func (w *waitDaemon) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
+	switch {
+	case r.URL.Path == "/v1/workers/OVERSIRE-12/wait":
+		w.mu.Lock()
+		reason := w.waits[min(w.calls, len(w.waits)-1)]
+		w.calls++
+		w.maxes = append(w.maxes, r.URL.Query().Get("max"))
+		w.mu.Unlock()
+		json.NewEncoder(rw).Encode(worker.Wake{Reason: reason, Header: w.header})
+	case r.URL.Path == "/v1/workers/OVERSIRE-12/brief":
+		json.NewEncoder(rw).Encode(w.brief)
+	default:
+		w.workerDaemon.ServeHTTP(rw, r)
+	}
+}
+
+func TestWorkerWaitPrintsTheReadOnWake(t *testing.T) {
+	c, out, _ := testCLI(t, "")
+	d := &waitDaemon{workerDaemon: workerDaemon{read: sampleRead()}, waits: []worker.WakeReason{worker.WakeNone, worker.WakeInput}}
+	fakeDaemon(t, c, d)
+	if err := c.worker(context.Background(), []string{"wait", "OVERSIRE-12", "--reader", "main"}); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	if !strings.HasPrefix(got, "work:OVERSIRE-12 | codex | working") || !strings.Contains(got, "[overseer] Run the tests.\n") || strings.Contains(got, "Stalled") {
+		t.Fatalf("output:\n%s", got)
+	}
+	if d.calls != 2 || d.maxes[0] != "25s" || len(d.puts) != 1 || d.puts[0] != "/v1/workers/OVERSIRE-12/cursors/main" || d.cursor[0].Seq != 5 {
+		t.Fatalf("calls %d %v puts %v", d.calls, d.maxes, d.puts)
+	}
+}
+
+func TestWorkerWaitSaysAStall(t *testing.T) {
+	c, out, _ := testCLI(t, "")
+	d := &waitDaemon{workerDaemon: workerDaemon{read: sampleRead()}, waits: []worker.WakeReason{worker.WakeStall}}
+	fakeDaemon(t, c, d)
+	if err := c.worker(context.Background(), []string{"wait", "--timeout", "1m", "OVERSIRE-12"}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(out.String(), "Stalled: ") || len(d.puts) != 1 {
+		t.Fatalf("output:\n%s", out)
+	}
+}
+
+func TestWorkerWaitExits3OnTimeout(t *testing.T) {
+	c, out, _ := testCLI(t, "")
+	hdr := worker.Header{Session: "s1", Key: "work:OVERSIRE-12", Harness: "codex", State: wire.PhaseWorking}
+	d := &waitDaemon{waits: []worker.WakeReason{worker.WakeNone}, header: hdr}
+	fakeDaemon(t, c, d)
+	err := c.worker(context.Background(), []string{"wait", "OVERSIRE-12", "--timeout", "1s"})
+	var e *exitError
+	if !errors.As(err, &e) || e.code != 3 || !errors.Is(err, errSilent) {
+		t.Fatalf("err %v", err)
+	}
+	got := out.String()
+	if got != "work:OVERSIRE-12 | codex | working | no new turns\n" || len(d.puts) != 0 {
+		t.Fatalf("output %q puts %v", got, d.puts)
+	}
+}
+
+func TestWorkerWaitRefusesBadUsage(t *testing.T) {
+	c, _, _ := testCLI(t, "")
+	fakeDaemon(t, c, &waitDaemon{waits: []worker.WakeReason{worker.WakeInput}})
+	for _, args := range [][]string{{"wait"}, {"wait", "X", "--timeout", "10m"}, {"wait", "X", "--timeout", "0s"}, {"brief"}} {
+		var e *exitError
+		if err := c.worker(context.Background(), args); !errors.As(err, &e) || e.code != 2 {
+			t.Fatalf("%v: %v", args, err)
+		}
+	}
+}
+
+func TestWorkerBriefPrintsTheSections(t *testing.T) {
+	c, out, _ := testCLI(t, "")
+	at := time.Date(2026, 11, 9, 9, 0, 0, 0, time.UTC)
+	d := &waitDaemon{brief: worker.Brief{
+		Header: worker.Header{Key: "work:OVERSIRE-12", State: wire.PhaseWaiting, Reason: wire.ReasonPermission, Request: "permission Bash npm test",
+			Repos: []wire.ReviewRepo{{Name: "cli", Added: 10, Removed: 2, Files: 3}}},
+		Plan:   "Build the thing.",
+		Notes:  []wire.SessionTurn{{Seq: 3, Role: wire.RoleUser, At: at, Text: "Use sqlite.", Origin: wire.OriginOverseer}},
+		Last:   "Part one is done.",
+		Failed: []wire.SessionTurn{{Seq: 4, Role: wire.RoleTool, At: at, Tool: &wire.TurnTool{Name: "Bash", Status: wire.ToolFailed, Input: "go test", Summary: "FAIL"}}},
+	}}
+	fakeDaemon(t, c, d)
+	if err := c.worker(context.Background(), []string{"brief", "OVERSIRE-12"}); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	for _, want := range []string{"## Plan\nBuild the thing.", "## Decisions\n[overseer] Use sqlite.", "## Last report\nPart one is done.",
+		"## Failed tools\n✗ Bash go test\n    FAIL", "## Open request\npermission Bash npm test", "## Diff\ncli +10 -2, 3 files"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in:\n%s", want, got)
+		}
+	}
+}

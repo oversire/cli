@@ -168,6 +168,8 @@ The budget of the order has caps: 50 earlier turns, 10 last turns and 20000 char
 | `oversire review reply [--key K] <comment id> "<text>"` | Answer a review comment. The agent runs it. |
 | `oversire review ls [--kind code\|plan] [--json]` | Show the reviews of this machine. |
 | `oversire worker read <id or KEY> [--reader NAME] [--limit N] [--json]` | Show the turns of a worker session since the last read of the reader, as a short fold. `--json` prints the raw turns. See "Workers". |
+| `oversire worker wait <id or KEY> [--reader NAME] [--timeout 8m]` | Block until the worker needs an action, then print the new turns as `worker read` does and move the cursor. The timeout is at most 9m. Exit code 0 is a wake, 3 is the end of the timeout (it prints only the header), 2 is bad usage. After a stall wake, the output starts with a `Stalled:` line. |
+| `oversire worker brief <id or KEY>` | Print the summary of a run for a new overseer: the plan, the decisions, the last report, the failed tools, the open request and the diff. It moves no cursor. |
 | `oversire visor ls\|session\|workdir\|project\|harness\|status` | Show and control the agent sessions of the `oversire` runtime. See "runtime:oversire". |
 | `oversire ticket skill [new\|plan\|work\|done\|groom\|sweep\|spec]` | Print the body of the `oversire` agent skill. See "Ticket skill". |
 | `oversire ticket skill --install\|--refresh [--harness claude,codex]` | Install the skill file, or update the installed files. |
@@ -495,6 +497,10 @@ A worker is a session of the `oversire` runtime that an overseer reads. The rout
 |---|---|
 | `GET /v1/workers/{id}/read?reader=<name>&limit=<n>` | A `Read` `{header, turns, next}`: the turns after the cursor of the reader. `{id}` is a session id or an item key (`OVERSIRE-12` finds the session with the key `work:OVERSIRE-12`, also after the session stopped). 400: no reader, or a bad limit. 404: no such session. 409: the session is not on the `oversire` runtime, or has no chat view. |
 | `PUT /v1/workers/{id}/cursors/{reader}` | Body `{seq}`. Sets the cursor of the reader and answers 204. |
+| `GET /v1/workers/{id}/wait?max=25s` | A `Wake` `{reason, header}`. It holds the call until the worker needs an action, or until `max` (default and limit 25s, so the call ends before the 30 s client timeout). 400: `max` is not a duration, or is 0 or above 25s. |
+| `GET /v1/workers/{id}/brief` | A `Brief` `{header, plan, notes, last, failed}`, built from all the turns: `plan` is the first user turn, `notes` are the later user turns of the overseer and the user (clipped to 500 characters), `last` is the last agent text, `failed` are the last 5 failed tools. |
+
+The reasons of a wake: `input` (waiting, turn end or interrupted), `permission`, `question`, `done`, `failed`, `stall`, and `none` (the call reached `max` with no change). A worker is stalled when its phase is `working` and the last turn is older than 10 min. While the last turn is a tool with the status `running`, the limit is 30 min. A worker with no turn counts from the start of its state. `oversire worker wait` calls the route again until its own timeout.
 
 `next` never passes the first tool turn with the status `running`, because a tool turn changes in place with the same seq. `oversire worker read` prints the fold first, and then sets the cursor to `next`. When the print fails, the cursor stays.
 

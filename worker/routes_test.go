@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/oversire/cli/server"
 	"github.com/oversire/cli/wire"
@@ -71,6 +72,37 @@ func TestRoutesReadAndCommit(t *testing.T) {
 	} {
 		if code, body := send(t, c.method, base+c.path, c.body); code != c.want {
 			t.Fatalf("%s %s: %d %s", c.method, c.path, code, body)
+		}
+	}
+}
+
+func TestRoutesWaitAndBrief(t *testing.T) {
+	r := newRig(t, turnsTo(3), live("s1", "work:OVERSIRE-12"))
+	r.e.Poll = 5 * time.Millisecond
+	r.book.setPhase("s1", wire.PhaseWaiting, wire.ReasonTurnEnd)
+	base := serve(t, r.e)
+
+	code, body := send(t, "GET", base+"/v1/workers/OVERSIRE-12/wait?max=1s", "")
+	var w Wake
+	if code != 200 || json.Unmarshal([]byte(body), &w) != nil || w.Reason != WakeInput {
+		t.Fatalf("%d %s", code, body)
+	}
+	code, body = send(t, "GET", base+"/v1/workers/s1/brief", "")
+	var b Brief
+	if code != 200 || json.Unmarshal([]byte(body), &b) != nil || b.Last != "text" {
+		t.Fatalf("%d %s", code, body)
+	}
+	for _, c := range []struct {
+		path string
+		want int
+	}{
+		{"/v1/workers/s1/wait?max=60s", 400},
+		{"/v1/workers/s1/wait?max=abc", 400},
+		{"/v1/workers/nope/wait", 404},
+		{"/v1/workers/nope/brief", 404},
+	} {
+		if code, body := send(t, "GET", base+c.path, ""); code != c.want {
+			t.Fatalf("%s: %d %s", c.path, code, body)
 		}
 	}
 }

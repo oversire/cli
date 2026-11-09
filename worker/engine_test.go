@@ -15,6 +15,7 @@ var t0 = time.Date(2026, 11, 9, 9, 0, 0, 0, time.UTC)
 
 // book is a fake session book. Live sessions have a key.
 type book struct {
+	mu    sync.Mutex
 	byID  map[string]wire.DaemonSession
 	tools map[string][2]string
 }
@@ -28,11 +29,15 @@ func newBook(ss ...wire.DaemonSession) *book {
 }
 
 func (b *book) Get(id string) (wire.DaemonSession, bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	s, ok := b.byID[id]
 	return s, ok
 }
 
 func (b *book) ByKey(rt, key string) (wire.DaemonSession, bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	for _, s := range b.byID {
 		if s.Key == key && s.Runtime == rt {
 			return s, true
