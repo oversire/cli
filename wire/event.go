@@ -162,4 +162,5 @@ const (
 	KindRunbookStepStarted = "runbook.step_started"
 	KindRunbookStepEnded   = "runbook.step_ended"
 	KindAutomationRan      = "automation.ran"
+	KindGroomApplied       = "groom.applied"
 )

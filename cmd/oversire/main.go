@@ -55,10 +55,13 @@ Usage:
   oversire review ls [--kind code|plan] [--json]       show the reviews of this machine
   oversire visor ls | session | workdir | project | harness | status
                                                        show and control the agent sessions of the daemon
-  oversire ticket skill [new|plan|work|done|spec] [--install|--refresh] [--harness claude,codex]
+  oversire ticket skill [new|plan|work|done|groom|spec] [--install|--refresh] [--harness claude,codex]
                                                        print the body of the oversire agent skill, or install it
   oversire ticket new|work <KEY> [--session ID]        bind this session to a ticket (the agent runs it)
   oversire ticket plan <KEY>... [--session ID]         bind this session to one ticket or a batch (the agent runs it)
+  oversire ticket groom <PROJECT> [--session ID]       check the Groom key of the project and list the busy items
+  oversire ticket applied groom|sweep --file F [--project P]
+                                                       write the event rows of the applied changes (the agent runs it)
   oversire ticket done [KEY] [--session ID] [--out DIR]  pack the session transcript for the ticket
   oversire update                                      install the latest release now
   oversire version                                     show the version

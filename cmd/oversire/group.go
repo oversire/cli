@@ -2,17 +2,14 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -33,59 +30,6 @@ const groupUsage = `Usage:
   oversire group home <machine>              move home to a member
   oversire group rotate                      make a new group secret
 `
-
-// daemonClient calls the loopback API of the local daemon.
-type daemonClient struct {
-	base string
-	http *http.Client
-}
-
-func (c *cli) daemonClient() (daemonClient, error) {
-	cfg, _, err := c.paths.LoadConfig()
-	if err != nil {
-		return daemonClient{}, err
-	}
-	port := cfg.ServeOrDefault().ListenPort()
-	return daemonClient{base: "http://" + net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), http: &http.Client{Timeout: 30 * time.Second}}, nil
-}
-
-// call sends body as JSON and decodes the answer into out.
-func (d daemonClient) call(ctx context.Context, method, path string, body, out any) error {
-	var rd io.Reader
-	if body != nil {
-		b, err := json.Marshal(body)
-		if err != nil {
-			return err
-		}
-		rd = bytes.NewReader(b)
-	}
-	req, err := http.NewRequestWithContext(ctx, method, d.base+path, rd)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := d.http.Do(req)
-	if err != nil {
-		return fmt.Errorf("The daemon does not answer on %s. Start it with: oversire daemon install", strings.TrimPrefix(d.base, "http://"))
-	}
-	defer resp.Body.Close()
-	data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if resp.StatusCode/100 != 2 {
-		var e struct {
-			Error string `json:"error"`
-		}
-		if json.Unmarshal(data, &e) == nil && e.Error != "" {
-			return errors.New(e.Error)
-		}
-		return fmt.Errorf("The daemon answered %s: %s", resp.Status, strings.TrimSpace(string(data)))
-	}
-	if out != nil {
-		if err := json.Unmarshal(data, out); err != nil {
-			return fmt.Errorf("The daemon answer is not valid: %w", err)
-		}
-	}
-	return nil
-}
 
 func (c *cli) group(ctx context.Context, args []string) error {
 	if len(args) == 0 {

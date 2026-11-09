@@ -9,6 +9,7 @@ The `oversire` skill makes, plans, works and closes tracker tickets. The user do
 | `new [text]` | Make a planned ticket from the work of this session. |
 | `plan [KEY...]` | Plan an existing ticket that has no full spec, or a batch of them (no key: choose by date). |
 | `work <KEY>` | Work a ticket, in this session or in a new session. |
+| `groom [PROJECT] [--backlog]` | Groom the intake of the project: merge, close and fold items, after your yes. |
 | `done [KEY]` | Close the ticket and attach the transcript of this session. |
 
 Find the command in the arguments of the skill. With no command:
@@ -16,6 +17,7 @@ Find the command in the arguments of the skill. With no command:
 - The user asks for a ticket in plain words ("create a ticket", "make a ticket for this"): use `new`.
 - The user names a ticket to work ("pick up OVERSIRE-12"): use `work`.
 - The user asks to plan more items ("plan the new items", "plan these"): use `plan`.
+- The user asks to "groom the intake", "clean up the intake" or "combine the intake items": use `groom`.
 - Else show the table above and stop.
 
 Then run `oversire ticket skill <command>` and do its steps.

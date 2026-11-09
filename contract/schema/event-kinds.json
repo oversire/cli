@@ -335,6 +335,58 @@
       }
     },
     {
+      "kind": "groom.applied",
+      "domain": "agent",
+      "actorTypes": [
+        "agent"
+      ],
+      "private": false,
+      "summary": "the change of Groom on the item, for example Merged into KEY",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "enum": [
+              "merge",
+              "done",
+              "obsolete",
+              "fold",
+              "relate"
+            ]
+          },
+          "keep": {
+            "type": "string"
+          },
+          "parent": {
+            "type": "string"
+          },
+          "relation": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string"
+              },
+              "key": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 6
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "kind"
+        ]
+      }
+    },
+    {
       "kind": "prompt.submitted",
       "domain": "human",
       "actorTypes": [

@@ -14,6 +14,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/oversire/cli/review"
+	"github.com/oversire/cli/ticket"
 	"github.com/oversire/cli/wire"
 )
 
@@ -62,7 +63,7 @@ func (c *cli) reviewReady(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	root, name, inGroup := groupOf(wd)
+	root, name, inGroup := ticket.GroupOf(wd)
 	if *key == "" && inGroup {
 		*key = name
 	}
@@ -154,7 +155,7 @@ func (c *cli) reviewReply(ctx context.Context, args []string) error {
 	}
 	if *key == "" {
 		if wd, err := c.workdir(); err == nil {
-			if _, name, ok := groupOf(wd); ok {
+			if _, name, ok := ticket.GroupOf(wd); ok {
 				*key = name
 			}
 		}
@@ -244,19 +245,6 @@ func (c *cli) workdir() (string, error) {
 		return c.wd, nil
 	}
 	return os.Getwd()
-}
-
-// groupOf finds the worktree group <root>/.wt/<name> that holds dir.
-func groupOf(dir string) (root, name string, ok bool) {
-	for d := filepath.Clean(dir); ; d = filepath.Dir(d) {
-		parent := filepath.Dir(d)
-		if filepath.Base(parent) == ".wt" {
-			return filepath.Dir(parent), filepath.Base(d), true
-		}
-		if parent == d {
-			return "", "", false
-		}
-	}
 }
 
 func isDir(p string) bool {

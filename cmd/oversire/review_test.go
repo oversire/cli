@@ -262,23 +262,6 @@ func TestReviewUsage(t *testing.T) {
 	}
 }
 
-func TestGroupOf(t *testing.T) {
-	for dir, want := range map[string][2]string{
-		"/w/.wt/app-1":           {"/w", "app-1"},
-		"/w/.wt/app-1/cli/cmd/x": {"/w", "app-1"},
-		"/w/cli":                 {"", ""},
-		"/":                      {"", ""},
-	} {
-		root, name, ok := groupOf(filepath.FromSlash(dir))
-		if want[0] != "" {
-			want[0] = filepath.FromSlash(want[0])
-		}
-		if root != want[0] || name != want[1] || ok != (want[1] != "") {
-			t.Errorf("%s: %s %s %v", dir, root, name, ok)
-		}
-	}
-}
-
 func TestParsePlan(t *testing.T) {
 	p := parsePlan("APP-1", "/w", "## Goal\nA\n## Goal\nB\n## ???\nC\n")
 	var ids []string

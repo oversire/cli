@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -18,13 +21,17 @@ import (
 )
 
 const ticketUsage = `Usage:
-  oversire ticket skill [new|plan|work|done|spec]          print the body of the oversire agent skill
+  oversire ticket skill [new|plan|work|done|groom|spec]    print the body of the oversire agent skill
   oversire ticket skill --install|--refresh [--harness claude,codex]
                                                           install the skill file, or update the installed files
   oversire ticket new|work <KEY> [--session ID] [--harness H]
                                                           bind this session to a ticket (work prints the earlier sessions)
   oversire ticket plan <KEY>... [--session ID] [--harness H]
                                                           bind this session to one ticket or a batch (at most 20)
+  oversire ticket groom <PROJECT> [--session ID]
+                                                          check the Groom key of the project and list the busy items
+  oversire ticket applied groom|sweep --file F [--project P] [--session ID]
+                                                          write the event rows of the applied changes
   oversire ticket done [KEY] [--session ID] [--harness H] [--out DIR]
                                                           pack the transcript of this session for the ticket
 `
@@ -64,6 +71,8 @@ func (c *cli) ticket(args []string) error {
 	install := fs.Bool("install", false, "install the skill file")
 	refresh := fs.Bool("refresh", false, "update the installed skill files")
 	out := fs.String("out", "", "the folder for the transcript files")
+	file := fs.String("file", "", "the JSON file of the applied lines")
+	project := fs.String("project", "", "the project identifier")
 	if err := fs.Parse(interleave(args[1:])); err != nil {
 		return &exitError{2, fmt.Errorf("%w\n\n%s", err, ticketUsage)}
 	}
@@ -95,6 +104,16 @@ func (c *cli) ticket(args []string) error {
 			return &exitError{2, fmt.Errorf("%s takes exactly one ticket key\n\n%s", sub, ticketUsage)}
 		}
 		return c.ticketBind(sub, fs.Args(), h, *session)
+	case "groom":
+		if fs.NArg() != 1 {
+			return &exitError{2, fmt.Errorf("a project identifier is missing\n\n%s", ticketUsage)}
+		}
+		return c.ticketGroom(context.Background(), fs.Arg(0), *session)
+	case "applied":
+		if fs.NArg() != 1 || *file == "" {
+			return &exitError{2, fmt.Errorf("give groom or sweep, and --file\n\n%s", ticketUsage)}
+		}
+		return c.ticketApplied(context.Background(), fs.Arg(0), *file, *project, h, *session)
 	case "done":
 		if fs.NArg() > 1 {
 			return &exitError{2, errors.New(ticketUsage)}
@@ -124,7 +143,7 @@ func interleave(args []string) []string {
 
 func takesValue(flag string) bool {
 	switch strings.TrimLeft(flag, "-") {
-	case "session", "harness", "out":
+	case "session", "harness", "out", "file", "project":
 		return true
 	}
 	return false
@@ -330,4 +349,80 @@ func (c *cli) ticketDone(key, harness, session, out string) error {
 		fmt.Fprintf(c.out, "%s\t%s\n", p, filepath.Base(p))
 	}
 	return l.Close(key, session)
+}
+
+func (c *cli) ticketGroom(ctx context.Context, project, session string) error {
+	p, err := ticket.NormalProject(project)
+	if err != nil {
+		return &exitError{2, err}
+	}
+	d, err := c.daemonClient()
+	if err != nil {
+		return err
+	}
+	g, err := ticket.CheckGroom(ctx, d, p, session)
+	if err != nil {
+		return err
+	}
+	if !g.Daemon {
+		fmt.Fprintln(c.out, "No daemon answers: the Groom check did not run.")
+		return nil
+	}
+	if h := g.Holder; h != nil {
+		return &exitError{1, fmt.Errorf("A Groom session of %s runs on %s: %s (%s, %s since %s). Finish it in OverSire, or stop it first.",
+			p, h.Machine, h.ID, h.Runtime, h.State, h.StateSince.Local().Format("2006-01-02 15:04"))}
+	}
+	fmt.Fprintf(c.out, "%s: no live Groom session (key %s is free).\n", p, g.Key)
+	if len(g.Busy) == 0 {
+		fmt.Fprintln(c.out, "Items with a live session: none.")
+		return nil
+	}
+	keys := slices.Sorted(maps.Keys(g.Busy))
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		s := g.Busy[k][0]
+		parts = append(parts, fmt.Sprintf("%s (%s, %s)", k, sessionRole(s), s.State))
+	}
+	fmt.Fprintf(c.out, "Items with a live session (skip them): %s\n", strings.Join(parts, ", "))
+	return nil
+}
+
+// sessionRole is the start key prefix of a session, else its runtime.
+func sessionRole(s wire.DaemonSession) string {
+	if r, _, ok := strings.Cut(s.Key, ":"); ok {
+		return r
+	}
+	return s.Runtime
+}
+
+func (c *cli) ticketApplied(ctx context.Context, verb, file, project, harness, session string) error {
+	if verb != "groom" && verb != "sweep" {
+		return &exitError{2, fmt.Errorf("%q: give groom or sweep", verb)}
+	}
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return &exitError{2, err}
+	}
+	var lines []ticket.AppliedLine
+	if err := json.Unmarshal(data, &lines); err != nil {
+		return &exitError{2, fmt.Errorf("%s: %w", file, err)}
+	}
+	rows, err := ticket.AppliedDrafts(verb+".applied", project, lines,
+		ticket.Actor{Harness: harness, Session: session, Machine: c.machine()}, time.Now())
+	if err != nil {
+		return &exitError{2, err}
+	}
+	d, err := c.daemonClient()
+	if err != nil {
+		return err
+	}
+	if _, err := d.AppendEvents(ctx, rows); err != nil {
+		if errors.Is(err, ticket.ErrNoDaemon) {
+			fmt.Fprintln(c.out, "No daemon answers: the event rows are not written.")
+			return nil
+		}
+		return err
+	}
+	fmt.Fprintf(c.out, "%d event rows written\n", len(rows))
+	return nil
 }

@@ -1,0 +1,22 @@
+{
+  "seq": 240,
+  "id": "cli:groom:8390f639:OVERSIRE-12:merge",
+  "at": "2026-11-09T11:20:00Z",
+  "seenAt": "2026-11-09T11:20:01Z",
+  "kind": "groom.applied",
+  "item": "OVERSIRE-12",
+  "project": "oversire",
+  "machine": "mbp",
+  "session": "8390f639",
+  "actorType": "agent",
+  "actor": "claude",
+  "via": "cli",
+  "summary": "Merged into OVERSIRE-10",
+  "payload": {
+    "kind": "merge",
+    "keep": "OVERSIRE-10",
+    "evidence": [
+      "OVERSIRE-10 and OVERSIRE-12 tell the same crash"
+    ]
+  }
+}

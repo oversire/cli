@@ -17,7 +17,7 @@ func TestBodyRendersEachVerb(t *testing.T) {
 			t.Errorf("main body has no %q", want)
 		}
 	}
-	if len(s.Verbs()) != 5 {
+	if len(s.Verbs()) != 6 {
 		t.Fatalf("verbs %v", s.Verbs())
 	}
 	for _, v := range s.Verbs() {
@@ -30,6 +30,12 @@ func TestBodyRendersEachVerb(t *testing.T) {
 	for _, want := range []string{"## Many tickets", "all but 3", "at most 5"} {
 		if !strings.Contains(pb, want) {
 			t.Errorf("plan body has no %q", want)
+		}
+	}
+	gb, _ := s.Body("groom", c)
+	for _, want := range []string{"merge, done, obsolete, fold, relate", "## Merged from"} {
+		if !strings.Contains(gb, want) {
+			t.Errorf("groom body has no %q", want)
 		}
 	}
 	nb, _ := s.Body("new", c)

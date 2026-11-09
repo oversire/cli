@@ -2,9 +2,13 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -13,7 +17,9 @@ import (
 	"testing"
 
 	"github.com/oversire/cli/config"
+	"github.com/oversire/cli/sessions"
 	"github.com/oversire/cli/ticket"
+	"github.com/oversire/cli/wire"
 )
 
 // TestSkillCommandsExist fails when the skill body names an oversire command that the CLI does not have.
@@ -206,5 +212,91 @@ func TestTicketWorkOneKey(t *testing.T) {
 		if err := c.ticket([]string{verb, "A-1", "B-2", "--session", "s1"}); !errors.As(err, &e) || e.code != 2 {
 			t.Fatalf("%s: %v", verb, err)
 		}
+	}
+}
+
+func TestTicketGroom(t *testing.T) {
+	c, out, _ := testCLI(t, "")
+	book, _ := reviewDaemon(t, c)
+	if err := c.ticket([]string{"groom", "trebi", "--session", "s9"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"key groom:TREBI is free", "Items with a live session: none."} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("no %q in\n%s", want, out)
+		}
+	}
+	rt, key, working := "oversire", "groom:TREBI", wire.PhaseWorking
+	book.Apply(sessions.Patch{ID: "g1", Source: sessions.SourceWire, Runtime: &rt, Key: &key, State: &working})
+	err := c.ticket([]string{"groom", "trebi", "--session", "s9"})
+	var e *exitError
+	if !errors.As(err, &e) || e.code != 1 || !strings.Contains(err.Error(), "A Groom session of TREBI runs") {
+		t.Fatal(err)
+	}
+}
+
+func TestTicketGroomNoDaemon(t *testing.T) {
+	c, out, _ := testCLI(t, "")
+	closedPort(t, c)
+	if err := c.ticket([]string{"groom", "TREBI"}); err != nil || !strings.Contains(out.String(), "No daemon answers") {
+		t.Fatal(err, out)
+	}
+}
+
+// closedPort points the config of c at a loopback port with no listener.
+func closedPort(t *testing.T, c *cli) {
+	t.Helper()
+	ln, _ := net.Listen("tcp", "127.0.0.1:0")
+	port := ln.Addr().(*net.TCPAddr).Port
+	ln.Close()
+	if err := c.paths.SaveConfig(config.Config{Serve: &config.ServeConfig{Port: port}}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// fakeDaemon serves h on a loopback port and points the config of c at it.
+func fakeDaemon(t *testing.T, c *cli, h http.Handler) {
+	t.Helper()
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+	port := srv.Listener.Addr().(*net.TCPAddr).Port
+	off := false
+	if err := c.paths.SaveConfig(config.Config{Serve: &config.ServeConfig{Port: port, Tailscale: &off}}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTicketAppliedPosts(t *testing.T) {
+	c, out, _ := testCLI(t, "")
+	var got []wire.EventDraft
+	fakeDaemon(t, c, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/events" {
+			http.NotFound(w, r)
+			return
+		}
+		var body wire.EventAppend
+		json.NewDecoder(r.Body).Decode(&body)
+		got = append(got, body.Events...)
+		json.NewEncoder(w).Encode(wire.EventAppendResult{Accepted: len(body.Events), Head: 9})
+	}))
+	f := filepath.Join(t.TempDir(), "applied.json")
+	os.WriteFile(f, []byte(`[{"item":"TREBI-12","summary":"Merged into TREBI-10","payload":{"kind":"merge"}},
+		{"item":"TREBI-14","summary":"Done: shipped","payload":{"kind":"done"}}]`), 0o600)
+	if err := c.ticket([]string{"applied", "groom", "--file", f, "--project", "TREBI", "--session", "s1"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].Kind != wire.KindGroomApplied || got[0].Session != "s1" || !strings.Contains(out.String(), "2 event rows written") {
+		t.Fatal(got, out)
+	}
+	bad := filepath.Join(t.TempDir(), "bad.json")
+	os.WriteFile(bad, []byte(`[{"item":"nokey","summary":"x"}]`), 0o600)
+	var e *exitError
+	if err := c.ticket([]string{"applied", "groom", "--file", bad}); !errors.As(err, &e) || e.code != 2 || len(got) != 2 {
+		t.Fatal(err, len(got))
+	}
+	closedPort(t, c)
+	out.Reset()
+	if err := c.ticket([]string{"applied", "groom", "--file", f, "--session", "s1"}); err != nil || !strings.Contains(out.String(), "No daemon answers") {
+		t.Fatal(err, out)
 	}
 }
