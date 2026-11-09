@@ -53,6 +53,16 @@ Usage:
                                                        hand off a group or a plan for review (the agent runs it)
   oversire review reply [--key K] <comment id> "<text>"  answer a review comment (the agent runs it)
   oversire review ls [--kind code|plan] [--json]       show the reviews of this machine
+  oversire worker start <KEY> --harness H [--model M] [--dir D] [--plan FILE] [--session ID] [--budget-time 3h]
+                                                       start the worker session of an item and oversee it (the overseer runs it)
+  oversire worker send <id|KEY> "<text>"              give a text to the worker
+  oversire worker answer <id|KEY> --permission P --allow|--deny | --question Q "<text>"
+                                                       answer the open permission or question of the worker
+  oversire worker interrupt <id|KEY>                  stop the current turn of the worker
+  oversire worker escalate <id|KEY> ["<question>"]    ask the user; with no question, show the open ask of the worker
+  oversire worker stop <id|KEY>                       end the worker session
+  oversire worker done --verdict done|blocked [--note <text>]
+                                                       report the end of the work (the worker runs it, in its group)
   oversire worker read <id|KEY> [--reader NAME] [--limit N] [--json]
                                                        show the new turns of a worker session since the last read
   oversire worker wait <id|KEY> [--reader NAME] [--timeout 8m]

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/oversire/cli/runtime"
 	"github.com/oversire/cli/server"
 	"github.com/oversire/cli/wire"
 )
@@ -104,5 +105,53 @@ func TestRoutesWaitAndBrief(t *testing.T) {
 		if code, body := send(t, "GET", base+c.path, ""); code != c.want {
 			t.Fatalf("%s: %d %s", c.path, code, body)
 		}
+	}
+}
+
+func TestRoutesLifecycle(t *testing.T) {
+	r := newRig(t, nil, overseen("s1", "work:OVERSIRE-12"))
+	base := serve(t, r.e)
+	r.watch.set("s1", runtime.Inspection{Session: wire.RunnerSession{State: wire.SessionWaitingInput,
+		Question: &wire.RunnerQuestion{ID: "q-1", Items: []wire.RunnerQuestionItem{{ID: "i1", Text: "Which?"}}}}})
+
+	code, body := send(t, "POST", base+"/v1/workers", `{"key":"oversire-12","harness":"codex","dir":"/w/.wt/oversire-12","overseer":"ov1","budget":7200000000000}`)
+	var st Started
+	if code != 200 || json.Unmarshal([]byte(body), &st) != nil || st.Reused || st.Record.Session != "s1" || st.Record.Budget != 2*time.Hour {
+		t.Fatalf("start %d %s", code, body)
+	}
+	code, body = send(t, "GET", base+"/v1/workers/OVERSIRE-12", "")
+	var rec Record
+	if code != 200 || json.Unmarshal([]byte(body), &rec) != nil || rec.Harness != "codex" || rec.State != StateWorking {
+		t.Fatalf("get %d %s", code, body)
+	}
+	for _, c := range []struct {
+		path, body string
+		want       int
+	}{
+		{"/send", `{"text":"Go on."}`, 204},
+		{"/answer", `{"question":"q-1","text":"Use sqlite."}`, 204},
+		{"/answer", `{"permission":"p-1","allow":false}`, 204},
+		{"/interrupt", ``, 204},
+		{"/escalate", `{"question":"Which db?"}`, 204},
+		{"/escalate", `{"question":"Again?"}`, 409},
+		{"/send", `{"text":""}`, 400},
+		{"/send", `{"text":"x","extra":1}`, 400},
+		{"/answer", `{"permission":"p-1"}`, 400},
+		{"/done", `{"verdict":"pass"}`, 400},
+		{"/done", `{"verdict":"done","note":"ok"}`, 200},
+		{"/stop", ``, 204},
+	} {
+		if code, body := send(t, "POST", base+"/v1/workers/s1"+c.path, c.body); code != c.want {
+			t.Fatalf("%s %s: %d %s", c.path, c.body, code, body)
+		}
+	}
+	if rec, _ := r.store.Load("s1"); rec.State != StateStopped || rec.Verdict != "done" {
+		t.Fatalf("record %+v", rec)
+	}
+	if code, _ := send(t, "POST", base+"/v1/workers/nope/stop", ""); code != 404 {
+		t.Fatalf("unknown %d", code)
+	}
+	if code, _ := send(t, "POST", base+"/v1/workers", `{"key":""}`); code != 400 {
+		t.Fatalf("bad start %d", code)
 	}
 }

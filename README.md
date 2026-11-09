@@ -167,6 +167,13 @@ The budget of the order has caps: 50 earlier turns, 10 last turns and 20000 char
 | `oversire review ready [--key K] [--kind code\|plan] [--note <text>] [--plan <file.md>]` | Hand off a worktree group or a plan for review. The agent runs it. See "Reviews". |
 | `oversire review reply [--key K] <comment id> "<text>"` | Answer a review comment. The agent runs it. |
 | `oversire review ls [--kind code\|plan] [--json]` | Show the reviews of this machine. |
+| `oversire worker start <KEY> --harness H [--model M] [--dir D] [--plan FILE] [--session ID] [--budget-time 3h]` | Start the worker session of an item on the `oversire` runtime, in place in the folder `--dir` (default `<workspace root>/.wt/<key>`), with the start key `work:<KEY>`. The prompt is the plan file and the worker contract. `--session` is the session id of the overseer (default `$CLAUDE_CODE_SESSION_ID`). A second start for a live worker only sets the new overseer. See "Workers". |
+| `oversire worker send <id or KEY> "<text>"` | Give a text to the worker. The turn has the origin `overseer`. |
+| `oversire worker answer <id or KEY> --permission P --allow\|--deny` or `--question Q "<text>"` | Answer the open permission or question of the worker. The text goes in the first item of the question as free text. |
+| `oversire worker interrupt <id or KEY>` | Stop the current turn of the worker. The session stays open. |
+| `oversire worker escalate <id or KEY> ["<question>"]` | Ask the user. The question shows in "Needs you", and the answer of the user goes to the worker. With no question, the open ask of the worker shows there. |
+| `oversire worker stop <id or KEY>` | End the worker session. |
+| `oversire worker done --verdict done\|blocked [--note <text>]` | The worker runs it in its group `.wt/<key>` to report the end of the work. The note has 300 characters at most. |
 | `oversire worker read <id or KEY> [--reader NAME] [--limit N] [--json]` | Show the turns of a worker session since the last read of the reader, as a short fold. `--json` prints the raw turns. See "Workers". |
 | `oversire worker wait <id or KEY> [--reader NAME] [--timeout 8m]` | Block until the worker needs an action, then print the new turns as `worker read` does and move the cursor. The timeout is at most 9m. Exit code 0 is a wake, 3 is the end of the timeout (it prints only the header), 2 is bad usage. After a stall wake, the output starts with a `Stalled:` line. |
 | `oversire worker brief <id or KEY>` | Print the summary of a run for a new overseer: the plan, the decisions, the last report, the failed tools, the open request and the diff. It moves no cursor. |
@@ -491,18 +498,34 @@ A user turn has the optional `origin`: `user`, `overseer` or `system`. A `sessio
 
 ### Workers
 
-A worker is a session of the `oversire` runtime that an overseer reads. The routes are for loopback only. The daemon keeps one record for each worker in `<data>/worker-sessions/<session>.json`, with the start key and the cursor of each reader.
+A worker is a session of the `oversire` runtime that an overseer reads. The routes are for loopback only. The daemon keeps one record for each worker in `<data>/worker-sessions/<session>.json`, with the start key, the state, the time budget, the open escalation and the cursor of each reader.
 
 | Route | What it does |
 |---|---|
 | `GET /v1/workers/{id}/read?reader=<name>&limit=<n>` | A `Read` `{header, turns, next}`: the turns after the cursor of the reader. `{id}` is a session id or an item key (`OVERSIRE-12` finds the session with the key `work:OVERSIRE-12`, also after the session stopped). 400: no reader, or a bad limit. 404: no such session. 409: the session is not on the `oversire` runtime, or has no chat view. |
 | `PUT /v1/workers/{id}/cursors/{reader}` | Body `{seq}`. Sets the cursor of the reader and answers 204. |
 | `GET /v1/workers/{id}/wait?max=25s` | A `Wake` `{reason, header}`. It holds the call until the worker needs an action, or until `max` (default and limit 25s, so the call ends before the 30 s client timeout). 400: `max` is not a duration, or is 0 or above 25s. |
+| `POST /v1/workers` | Body `StartRequest` `{key, harness, model, dir, plan, overseer, budget}`. `dir` is an absolute path. `budget` is a duration in nanoseconds; 0 is 3 h. It gives `{record, reused}`. `reused` is true when the live session of the start key took the call. 400: a bad field. |
+| `GET /v1/workers/{id}` | The `Record` of the worker. |
+| `POST /v1/workers/{id}/done` | Body `{verdict, note}`. The verdict is `done` (the state becomes `awaitingCheck`) or `blocked`. A wait on a worker in one of these states wakes with `done`. |
+| `POST /v1/workers/{id}/send` | Body `{text}`. Answers 204. |
+| `POST /v1/workers/{id}/answer` | Body `{permission, allow}` or `{question, text}`. Answers 204. 409: the worker has no such open question, or the question asks the user. |
+| `POST /v1/workers/{id}/interrupt` | Stops the current turn through the chat source. Answers 204. |
+| `POST /v1/workers/{id}/escalate` | Body `{question}`. Answers 204. 409: the worker has an open escalation, or an open question. |
+| `POST /v1/workers/{id}/stop` | Ends the session and sets the state `stopped`. Answers 204. |
 | `GET /v1/workers/{id}/brief` | A `Brief` `{header, plan, notes, last, failed}`, built from all the turns: `plan` is the first user turn, `notes` are the later user turns of the overseer and the user (clipped to 500 characters), `last` is the last agent text, `failed` are the last 5 failed tools. |
 
 The reasons of a wake: `input` (waiting, turn end or interrupted), `permission`, `question`, `done`, `failed`, `stall`, and `none` (the call reached `max` with no change). A worker is stalled when its phase is `working` and the last turn is older than 10 min. While the last turn is a tool with the status `running`, the limit is 30 min. A worker with no turn counts from the start of its state. `oversire worker wait` calls the route again until its own timeout.
 
 `next` never passes the first tool turn with the status `running`, because a tool turn changes in place with the same seq. `oversire worker read` prints the fold first, and then sets the cursor to `next`. When the print fails, the cursor stays.
+
+An overseen worker runs with the permission mode `auto`. The runtime hides its asks and its turn ends from "Needs you" until the overseer escalates, or the daemon does. The daemon keeps these limits (`worker.Engine.Run`, a check each 30 s):
+
+- **Fallback.** An open ask that gets no action of the overseer (send, answer, interrupt) for 10 min goes to the user. The row `worker.escalated` has the reason `fallback`.
+- **Time budget.** A worker has a time budget of 3 h from its start (`--budget-time`). At the limit, the daemon interrupts the worker and asks the user "Answer to give it 3 h more." Each answer adds 3 h. A worker that waits for a check (`awaitingCheck` or `blocked`) does not use this limit.
+- **After a restart.** The runtime keeps an escalation only in memory. The daemon posts each open escalation again.
+
+Each action writes a row in the events table: `worker.started`, `worker.answered`, `worker.nudged`, `worker.escalated` and `worker.done`. `oversire worker wait` waits at least 1 s between two calls that answer `none`.
 
 ### Orca pairing
 

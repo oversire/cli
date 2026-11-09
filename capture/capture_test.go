@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/oversire/cli/events"
 	"github.com/oversire/cli/wire"
+	"github.com/oversire/cli/worker"
 )
 
 type book map[string]wire.DaemonSession
@@ -174,5 +176,55 @@ func TestSessionStartedNamesTheAgentAndTheEnvKeys(t *testing.T) {
 	}
 	if err := json.Unmarshal(rows[0].Payload, &pl); err != nil || pl.Agent != "claude-glm" || pl.Profile != "claude-glm" || len(pl.EnvKeys) != 2 || pl.EnvKeys[0] != "ANTHROPIC_AUTH_TOKEN" {
 		t.Fatalf("payload %s, %v", rows[0].Payload, err)
+	}
+}
+
+func TestWorkerRowsWriteEachChangeOnce(t *testing.T) {
+	st, w := open(t)
+	r := NewWorkerRows(w)
+	at := time.Date(2026, 11, 9, 9, 0, 0, 0, time.UTC)
+	rec := worker.Record{Session: "w1", Key: "work:OVERSIRE-12", Harness: "codex", Model: "gpt-5", Overseer: "ov1"}
+	started := worker.Change{Kind: wire.KindWorkerStarted, Record: rec, Actor: worker.ActorOverseer, Session: "ov1", At: at,
+		Payload: map[string]any{"session": "w1", "harness": "codex", "model": "gpt-5", "reused": false}}
+	r.OnChange(started)
+	r.OnChange(started)
+	r.OnChange(worker.Change{Kind: wire.KindWorkerAnswered, Record: rec, Actor: worker.ActorOverseer, Session: "ov1", At: at.Add(time.Minute),
+		Payload: map[string]any{"request": "permission", "allow": true}})
+	r.OnChange(worker.Change{Kind: wire.KindWorkerNudged, Record: rec, Actor: worker.ActorOverseer, Session: "ov1", At: at.Add(2 * time.Minute),
+		Payload: map[string]any{"how": "interrupt"}})
+	r.OnChange(worker.Change{Kind: wire.KindWorkerEscalated, Record: rec, Actor: worker.ActorSystem, Session: "ov1", At: at.Add(3 * time.Minute),
+		Payload: map[string]any{"reason": "budget", "question": "Answer to give it 3 h more."}})
+	r.OnChange(worker.Change{Kind: wire.KindWorkerDone, Record: rec, Actor: worker.ActorWorker, Session: "w1", At: at.Add(4 * time.Minute),
+		Payload: map[string]any{"verdict": "done", "note": "Tests pass."}})
+	w.Flush(context.Background())
+
+	rows := item(t, st, "OVERSIRE-12")
+	want := []string{wire.KindWorkerStarted, wire.KindWorkerAnswered, wire.KindWorkerNudged, wire.KindWorkerEscalated, wire.KindWorkerDone}
+	if got := kinds(rows); len(got) != len(want) {
+		t.Fatalf("kinds %v, want %v", got, want)
+	}
+	for i, k := range want {
+		if rows[i].Kind != k {
+			t.Fatalf("kinds %v, want %v", kinds(rows), want)
+		}
+	}
+	checks := []struct {
+		actorType               wire.ActorType
+		actor, session, summary string
+	}{
+		{wire.ActorAgent, "claude", "ov1", "Worker started: codex"},
+		{wire.ActorAgent, "claude", "ov1", "Worker permission answered"},
+		{wire.ActorAgent, "claude", "ov1", "Worker interrupted"},
+		{wire.ActorSystem, "oversire", "ov1", "Worker escalated to you: time budget"},
+		{wire.ActorAgent, "codex/gpt-5", "w1", "Worker done"},
+	}
+	for i, c := range checks {
+		row := rows[i]
+		if row.ActorType != c.actorType || row.Actor != c.actor || row.Session != c.session || row.Summary != c.summary {
+			t.Errorf("row %d %s: %s %s %s %q", i, row.Kind, row.ActorType, row.Actor, row.Session, row.Summary)
+		}
+	}
+	if string(rows[4].Payload) == "" || !strings.Contains(string(rows[4].Payload), "Tests pass.") || strings.Contains(rows[4].Summary, "Tests") {
+		t.Errorf("done payload %s summary %q", rows[4].Payload, rows[4].Summary)
 	}
 }

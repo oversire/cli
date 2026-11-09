@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/oversire/cli/runtime"
 	"github.com/oversire/cli/term"
 	"github.com/oversire/cli/wire"
 )
@@ -55,8 +57,11 @@ func (b *book) unkey(id string) {
 	b.byID[id] = s
 }
 
-// fakeTurns is a term.TurnSource with a fixed history.
-type fakeTurns struct{ history []wire.SessionTurn }
+// fakeTurns is a term.TurnSource with a fixed history. ints counts the interrupts.
+type fakeTurns struct {
+	history []wire.SessionTurn
+	ints    *atomic.Int32
+}
 
 func (f fakeTurns) Turns(_ context.Context, after int) ([]wire.SessionTurn, <-chan wire.SessionTurn, error) {
 	var out []wire.SessionTurn
@@ -70,7 +75,12 @@ func (f fakeTurns) Turns(_ context.Context, after int) ([]wire.SessionTurn, <-ch
 	return out, live, nil
 }
 
-func (fakeTurns) Interrupt(context.Context) error    { return nil }
+func (f fakeTurns) Interrupt(context.Context) error {
+	if f.ints != nil {
+		f.ints.Add(1)
+	}
+	return nil
+}
 func (fakeTurns) Send(context.Context, string) error { return nil }
 
 type chats struct {
@@ -131,21 +141,140 @@ func equalInts(a, b []int) bool {
 	return true
 }
 
-type rig struct {
-	e     *Engine
-	store *Store
-	dir   string
-	book  *book
-	diff  *differ
+// clock is a fake clock.
+type clock struct {
+	mu sync.Mutex
+	t  time.Time
 }
 
-func newRig(t *testing.T, history []wire.SessionTurn, ss ...wire.DaemonSession) rig {
+func (c *clock) Now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.t
+}
+
+func (c *clock) Advance(d time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.t = c.t.Add(d)
+}
+
+type sendCall struct {
+	Order string
+	Rt    string
+	P     wire.SendPayload
+}
+
+// fakeOrders records the orders of the engine.
+type fakeOrders struct {
+	mu       sync.Mutex
+	launches []wire.LaunchRequest
+	ids      []string // the order id of each call
+	sends    []sendCall
+	stops    []wire.SessionRef
+	started  runtime.Started
+	err      error
+}
+
+func (o *fakeOrders) Launch(_ context.Context, _ string, ord runtime.Order, r wire.LaunchRequest) (runtime.Started, error) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.launches, o.ids = append(o.launches, r), append(o.ids, ord.ID)
+	return o.started, o.err
+}
+
+func (o *fakeOrders) Send(_ context.Context, rt string, ord runtime.Order, p wire.SendPayload) error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.sends, o.ids = append(o.sends, sendCall{ord.ID, rt, p}), append(o.ids, ord.ID)
+	return o.err
+}
+
+func (o *fakeOrders) Stop(_ context.Context, _ string, ord runtime.Order, s wire.SessionRef) error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.stops, o.ids = append(o.stops, s), append(o.ids, ord.ID)
+	return o.err
+}
+
+type escCall struct {
+	Session string
+	Q       *wire.RunnerQuestion
+}
+
+// fakeWatch is the Oversight of a runtime: it gives a fixed Inspection for each session.
+type fakeWatch struct {
+	mu    sync.Mutex
+	insp  map[string]runtime.Inspection
+	err   error // the error of Inspect
+	esc   []escCall
+	escEr error // the error of Escalate
+}
+
+func (w *fakeWatch) Inspect(_ context.Context, s wire.DaemonSession) (runtime.Inspection, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.insp[s.ID], w.err
+}
+
+func (w *fakeWatch) Escalate(_ context.Context, s wire.DaemonSession, q *wire.RunnerQuestion) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.esc = append(w.esc, escCall{s.ID, q})
+	return w.escEr
+}
+
+func (w *fakeWatch) set(id string, in runtime.Inspection) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.insp[id] = in
+}
+
+func (w *fakeWatch) calls() []escCall {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return append([]escCall(nil), w.esc...)
+}
+
+type rig struct {
+	e       *Engine
+	store   *Store
+	dir     string
+	book    *book
+	diff    *differ
+	orders  *fakeOrders
+	watch   *fakeWatch
+	clock   *clock
+	ints    *atomic.Int32
+	mu      sync.Mutex
+	changes []Change
+}
+
+func (r *rig) got() []Change {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]Change(nil), r.changes...)
+}
+
+func (r *rig) kinds() []string {
+	var out []string
+	for _, c := range r.got() {
+		out = append(out, c.Kind)
+	}
+	return out
+}
+
+func newRig(t *testing.T, history []wire.SessionTurn, ss ...wire.DaemonSession) *rig {
 	t.Helper()
 	dir := t.TempDir()
-	b, d := newBook(ss...), &differ{}
-	store := NewStore(dir)
-	e := NewEngine(store, b, chats{turns: fakeTurns{history: history}}, d, func() time.Time { return t0 })
-	return rig{e: e, store: store, dir: dir, book: b, diff: d}
+	r := &rig{dir: dir, book: newBook(ss...), diff: &differ{}, store: NewStore(dir), clock: &clock{t: t0}, ints: &atomic.Int32{},
+		orders: &fakeOrders{started: runtime.Started{Session: wire.SessionRef{ID: "s1"}}}, watch: &fakeWatch{insp: map[string]runtime.Inspection{}}}
+	r.e = NewEngine(r.store, r.book, chats{turns: fakeTurns{history: history, ints: r.ints}}, r.diff, r.orders, r.watch, func(c Change) {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		r.changes = append(r.changes, c)
+	}, r.clock.Now)
+	return r
 }
 
 func live(id, key string) wire.DaemonSession {
@@ -213,7 +342,7 @@ func TestCursorSurvivesANewStore(t *testing.T) {
 	if err := r.e.Commit("s1", "overseer", 4); err != nil {
 		t.Fatal(err)
 	}
-	again := NewEngine(NewStore(r.dir), r.book, chats{turns: fakeTurns{history: turnsTo(6)}}, r.diff, nil)
+	again := NewEngine(NewStore(r.dir), r.book, chats{turns: fakeTurns{history: turnsTo(6)}}, r.diff, r.orders, r.watch, nil, nil)
 	got, err := again.Read(context.Background(), "s1", "overseer", 0)
 	if err != nil || !equalInts(seqs(got.Turns), []int{5, 6}) {
 		t.Fatalf("%+v %v", got, err)

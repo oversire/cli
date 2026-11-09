@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/oversire/cli/runtime"
 	"github.com/oversire/cli/term"
 	"github.com/oversire/cli/ticket"
 	"github.com/oversire/cli/wire"
@@ -19,6 +20,9 @@ const (
 	DefaultLimit = 200
 	MaxLimit     = 1000
 )
+
+// escalationPrefix starts the id of a question that the daemon asks the user (runtime/oversire).
+const escalationPrefix = "esc-"
 
 // maxRequest is the length of the open request in the header, in characters.
 const maxRequest = 200
@@ -48,6 +52,19 @@ type Chats interface {
 // Differ reads the repos of a worktree group (review.Git).
 type Differ interface {
 	GroupRepos(ctx context.Context, root, key string) ([]wire.ReviewRepo, bool, error)
+}
+
+// Orders runs the start, send and stop orders of a runtime (orders.Runner).
+type Orders interface {
+	Launch(ctx context.Context, rt string, o runtime.Order, r wire.LaunchRequest) (runtime.Started, error)
+	Send(ctx context.Context, rt string, o runtime.Order, p wire.SendPayload) error
+	Stop(ctx context.Context, rt string, o runtime.Order, s wire.SessionRef) error
+}
+
+// Oversight reads and escalates the asks of an overseen session (runtime.Registry).
+type Oversight interface {
+	Inspect(ctx context.Context, s wire.DaemonSession) (runtime.Inspection, error)
+	Escalate(ctx context.Context, s wire.DaemonSession, q *wire.RunnerQuestion) error
 }
 
 // Kind is the kind of an Error. The routes give it as the HTTP status.
@@ -84,6 +101,8 @@ type Header struct {
 	Last    int                `json:"last"`
 	Tokens  int64              `json:"tokens,omitempty"`
 	Request string             `json:"request,omitempty"` // the open permission or question
+	Verdict string             `json:"verdict,omitempty"` // the done or blocked report of the worker
+	Note    string             `json:"note,omitempty"`
 	Repos   []wire.ReviewRepo  `json:"repos,omitempty"`
 }
 
@@ -105,21 +124,30 @@ type Engine struct {
 	Poll      time.Duration // the time between two checks in Wait
 	Stall     time.Duration // a working session with no turn for this time is stalled
 	StallTool time.Duration // a running tool keeps off a stall for this time
+	Tick      time.Duration // the time between two checks in Run
 
 	store    *Store
 	sessions Sessions
 	chats    Chats
 	diff     Differ
+	orders   Orders
+	watch    Oversight
+	notify   func(Change)
 	now      func() time.Time
 
-	mu sync.Mutex // the records
+	mu     sync.Mutex      // the records
+	posted map[string]bool // the sessions whose open escalation lives in the runtime
 }
 
-func NewEngine(store *Store, sessions Sessions, chats Chats, diff Differ, now func() time.Time) *Engine {
+func NewEngine(store *Store, sessions Sessions, chats Chats, diff Differ, orders Orders, watch Oversight, notify func(Change), now func() time.Time) *Engine {
 	if now == nil {
 		now = time.Now
 	}
-	return &Engine{Log: slog.Default(), Poll: DefaultPoll, Stall: DefaultStall, StallTool: DefaultStallTool, store: store, sessions: sessions, chats: chats, diff: diff, now: now}
+	if notify == nil {
+		notify = func(Change) {}
+	}
+	return &Engine{Log: slog.Default(), Poll: DefaultPoll, Stall: DefaultStall, StallTool: DefaultStallTool, Tick: DefaultTick,
+		store: store, sessions: sessions, chats: chats, diff: diff, orders: orders, watch: watch, notify: notify, now: now, posted: map[string]bool{}}
 }
 
 // Resolve finds the session of a ref: a session id, or an item key. A stopped session is found
@@ -267,12 +295,20 @@ func (e *Engine) header(ctx context.Context, ses wire.DaemonSession, rec Record,
 	if len(turns) > 0 {
 		h.First, h.Last = turns[0].Seq, turns[len(turns)-1].Seq
 	}
-	switch ses.Reason {
-	case wire.ReasonPermission:
-		tool, input := e.sessions.Tool(ses.ID)
-		h.Request = clip(strings.TrimSpace("permission "+tool+" "+input), maxRequest)
-	case wire.ReasonQuestion:
-		h.Request = strings.TrimSpace("question " + ses.Question)
+	h.Verdict, h.Note = rec.Verdict, rec.Note
+	insp, inspected := e.inspect(ctx, ses)
+	if inspected {
+		h.Tokens = insp.Tokens
+		h.Request = requestOf(insp.Session)
+	}
+	if h.Request == "" {
+		switch ses.Reason {
+		case wire.ReasonPermission:
+			tool, input := e.sessions.Tool(ses.ID)
+			h.Request = clip(strings.TrimSpace("permission "+tool+" "+input), maxRequest)
+		case wire.ReasonQuestion:
+			h.Request = strings.TrimSpace("question " + ses.Question)
+		}
 	}
 	if root, name, ok := ticket.GroupOf(ses.Repo); ok {
 		repos, found, err := e.diff.GroupRepos(ctx, root, name)
@@ -284,6 +320,34 @@ func (e *Engine) header(ctx context.Context, ses wire.DaemonSession, rec Record,
 		}
 	}
 	return h
+}
+
+// inspect reads the session from its runtime. It is false when the runtime cannot say.
+func (e *Engine) inspect(ctx context.Context, ses wire.DaemonSession) (runtime.Inspection, bool) {
+	if e.watch == nil {
+		return runtime.Inspection{}, false
+	}
+	insp, err := e.watch.Inspect(ctx, ses)
+	if err != nil {
+		if !errors.Is(err, runtime.ErrUnsupported) && !errors.Is(err, runtime.ErrNotFound) {
+			e.Log.Warn("worker inspect", "session", ses.ID, "err", err)
+		}
+		return runtime.Inspection{}, false
+	}
+	return insp, true
+}
+
+// requestOf names the open permission or question of a runner session.
+func requestOf(s wire.RunnerSession) string {
+	switch {
+	case s.Permission != nil:
+		return clip(strings.TrimSpace("permission "+s.Permission.Tool+" "+s.Permission.Text), maxRequest)
+	case s.Question != nil && len(s.Question.Items) > 0:
+		return clip(strings.TrimSpace("question "+s.Question.Items[0].Text), maxRequest)
+	case s.Question != nil:
+		return "question " + s.Question.ID
+	}
+	return ""
 }
 
 func clip(s string, n int) string {
@@ -349,7 +413,10 @@ func (e *Engine) Wait(ctx context.Context, ref string, max time.Duration) (Wake,
 	defer tick.Stop()
 	var tail lastTurn
 	for {
-		reason := wakeFor(ses)
+		reason, err := e.wakeOf(ctx, ses)
+		if err != nil {
+			return Wake{}, err
+		}
 		if reason == WakeNone && ses.State == wire.PhaseWorking {
 			if err := tail.update(ctx, e.chats, ses); err != nil {
 				return Wake{}, err
@@ -372,6 +439,45 @@ func (e *Engine) Wait(ctx context.Context, ref string, max time.Duration) (Wake,
 			return Wake{}, err
 		}
 	}
+}
+
+// wakeOf tells what the worker needs now. A worker that reported done or blocked needs a check.
+// An overseen session takes its state from the runtime, because the book does not show the hidden asks.
+func (e *Engine) wakeOf(ctx context.Context, ses wire.DaemonSession) (WakeReason, error) {
+	e.mu.Lock()
+	rec, err := e.store.Load(ses.ID)
+	e.mu.Unlock()
+	if err != nil {
+		return WakeNone, err
+	}
+	if rec.State == StateAwaitingCheck || rec.State == StateBlocked {
+		return WakeDone, nil
+	}
+	if ses.Overseer != "" {
+		if insp, ok := e.inspect(ctx, ses); ok {
+			return wakeOverseen(insp.Session), nil
+		}
+	}
+	return wakeFor(ses), nil
+}
+
+// wakeOverseen maps a runner session to a wake reason. An open escalation waits for the user, so it gives no wake.
+func wakeOverseen(s wire.RunnerSession) WakeReason {
+	switch {
+	case s.State == wire.SessionDone:
+		return WakeDone
+	case s.State == wire.SessionFailed:
+		return WakeFailed
+	case s.Permission != nil || s.State == wire.SessionWaitingPermission:
+		return WakePermission
+	case s.Question != nil && strings.HasPrefix(s.Question.ID, escalationPrefix):
+		return WakeNone
+	case s.Question != nil:
+		return WakeQuestion
+	case s.State == wire.SessionWaitingInput:
+		return WakeInput
+	}
+	return WakeNone
 }
 
 func (e *Engine) wake(ctx context.Context, ses wire.DaemonSession, r WakeReason) (Wake, error) {

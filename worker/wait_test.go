@@ -19,7 +19,7 @@ func (b *book) setPhase(id string, state wire.SessionPhase, reason wire.SessionR
 	b.byID[id] = s
 }
 
-func waitRig(t *testing.T, history []wire.SessionTurn) rig {
+func waitRig(t *testing.T, history []wire.SessionTurn) *rig {
 	t.Helper()
 	r := newRig(t, history, live("s1", "work:OVERSIRE-12"))
 	r.e.Poll = 5 * time.Millisecond
