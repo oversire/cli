@@ -70,7 +70,7 @@ Usage:
   oversire worker brief <id|KEY>                       show the plan, decisions, last report, failed tools and diff of a worker
   oversire visor ls | session | workdir | project | harness | status
                                                        show and control the agent sessions of the daemon
-  oversire ticket skill [new|plan|work|done|groom|sweep|spec] [--install|--refresh] [--harness claude,codex]
+  oversire ticket skill [new|plan|work|delegate|done|groom|sweep|spec] [--install|--refresh] [--harness claude,codex]
                                                        print the body of the oversire agent skill, or install it
   oversire ticket new|work <KEY> [--session ID]        bind this session to a ticket (the agent runs it)
   oversire ticket plan <KEY>... [--session ID]         bind this session to one ticket or a batch (the agent runs it)

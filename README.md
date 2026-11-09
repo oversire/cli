@@ -517,6 +517,8 @@ A worker is a session of the `oversire` runtime that an overseer reads. The rout
 
 The reasons of a wake: `input` (waiting, turn end or interrupted), `permission`, `question`, `done`, `failed`, `stall`, and `none` (the call reached `max` with no change). A worker is stalled when its phase is `working` and the last turn is older than 10 min. While the last turn is a tool with the status `running`, the limit is 30 min. A worker with no turn counts from the start of its state. `oversire worker wait` calls the route again until its own timeout.
 
+The header of a read shows `Open request: permission <id> <tool> <text>` or `Open request: question <id> <text>`. The id is the argument of `worker answer`. While the worker waits for a check (`awaitingCheck` or `blocked`), the header also shows `Worker report: <verdict>: <note>`.
+
 `next` never passes the first tool turn with the status `running`, because a tool turn changes in place with the same seq. `oversire worker read` prints the fold first, and then sets the cursor to `next`. When the print fails, the cursor stays.
 
 An overseen worker runs with the permission mode `auto`. The runtime hides its asks and its turn ends from "Needs you" until the overseer escalates, or the daemon does. The daemon keeps these limits (`worker.Engine.Run`, a check each 30 s):
@@ -626,7 +628,7 @@ The layout:
 
 ## Ticket skill
 
-The `oversire` agent skill (OVERSIRE-434) makes, plans, works and closes tracker tickets in the agent session: `/oversire new|plan|work|done`. Plain words ("create a ticket") also start it.
+The `oversire` agent skill (OVERSIRE-434) makes, plans, works and closes tracker tickets in the agent session: `/oversire new|plan|work|delegate|done`. Plain words ("create a ticket") also start it.
 
 - `oversire ticket skill --install` writes `~/.claude/skills/oversire/SKILL.md` (`--harness codex` writes `~/.codex/skills/oversire/SKILL.md`). The file is thin: it loads the body with `` !`oversire ticket skill` ``.
 - The body is in `ticket/skill/*.md`, embedded in the binary. Thus `oversire update` makes the skill fresh. Each run of `oversire ticket skill` also rewrites an old installed file that has the OverSire mark.
@@ -635,6 +637,7 @@ The `oversire` agent skill (OVERSIRE-434) makes, plans, works and closes tracker
 - `plan` with no key or many keys plans a batch: one group brief, at most 5 planners at one time, and one round of questions.
 - `groom` does the Groom of the app in the chat: the same kinds and the same Plane writes, after a yes. `oversire ticket groom` checks the key `groom:<PROJECT>` on the local daemon and lists the busy items. It sets no key, because the app adopts each live `groom:` session.
 - `sweep` reads the facts from the daemon, the ledger and git. The agent adds the Plane state, sorts the items into buckets and asks one time for each bucket. It does not merge. `stop` ends only the sessions of the `orca` and `oversire` runtimes.
+- `delegate` starts a background Overseer (model sonnet) with a fixed prompt. The Overseer drives a worker through `oversire worker` (see "Workers"): `worker start`, then `worker wait --timeout 8m` in a loop, then one action for each wake. It gives back `READY: ...` or `BLOCKED: ...`. `done` runs `oversire worker stop`, and `oversire ticket done` packs the turns of the worker as `<KEY>-worker-turns` beside the transcript.
 - The skill calls Plane with `plane-cli`. The CLI makes no Plane calls.
 - `TestSkillCommandsExist` fails when the body names an `oversire` command that is not in the usage.
 

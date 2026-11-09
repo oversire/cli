@@ -295,7 +295,9 @@ func (e *Engine) header(ctx context.Context, ses wire.DaemonSession, rec Record,
 	if len(turns) > 0 {
 		h.First, h.Last = turns[0].Seq, turns[len(turns)-1].Seq
 	}
-	h.Verdict, h.Note = rec.Verdict, rec.Note
+	if rec.State == StateAwaitingCheck || rec.State == StateBlocked {
+		h.Verdict, h.Note = rec.Verdict, rec.Note
+	}
 	insp, inspected := e.inspect(ctx, ses)
 	if inspected {
 		h.Tokens = insp.Tokens
@@ -337,13 +339,13 @@ func (e *Engine) inspect(ctx context.Context, ses wire.DaemonSession) (runtime.I
 	return insp, true
 }
 
-// requestOf names the open permission or question of a runner session.
+// requestOf names the open permission or question of a runner session. The id is the argument of worker answer.
 func requestOf(s wire.RunnerSession) string {
 	switch {
 	case s.Permission != nil:
-		return clip(strings.TrimSpace("permission "+s.Permission.Tool+" "+s.Permission.Text), maxRequest)
+		return strings.TrimSpace("permission " + s.Permission.ID + " " + clip(strings.TrimSpace(s.Permission.Tool+" "+s.Permission.Text), maxRequest))
 	case s.Question != nil && len(s.Question.Items) > 0:
-		return clip(strings.TrimSpace("question "+s.Question.Items[0].Text), maxRequest)
+		return strings.TrimSpace("question " + s.Question.ID + " " + clip(s.Question.Items[0].Text, maxRequest))
 	case s.Question != nil:
 		return "question " + s.Question.ID
 	}

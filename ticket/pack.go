@@ -45,13 +45,18 @@ func (p *part) close() error {
 	return p.f.Close()
 }
 
-// Pack writes src into dir and gives the paths: <name>.jsonl.gz, or <name>.partN.jsonl.gz when it needs more parts.
+// Pack writes the file src into dir and gives the paths: <name>.jsonl.gz, or <name>.partN.jsonl.gz when it needs more parts.
 func (p Packer) Pack(src, dir, name string) ([]string, error) {
 	in, err := os.Open(src)
 	if err != nil {
 		return nil, err
 	}
 	defer in.Close()
+	return p.PackFrom(in, dir, name)
+}
+
+// PackFrom packs the JSONL lines of r as Pack does.
+func (p Packer) PackFrom(r io.Reader, dir, name string) ([]string, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
@@ -76,9 +81,9 @@ func (p Packer) Pack(src, dir, name string) ([]string, error) {
 	if err != nil {
 		return fail(err)
 	}
-	r := bufio.NewReaderSize(in, 1<<20)
+	br := bufio.NewReaderSize(r, 1<<20)
 	for {
-		line, rerr := r.ReadBytes('\n')
+		line, rerr := br.ReadBytes('\n')
 		if len(line) > 0 {
 			if cur.any && cur.c.n >= limit {
 				if err := cur.close(); err != nil {

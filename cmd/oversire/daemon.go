@@ -18,6 +18,7 @@ import (
 	"github.com/oversire/cli/orders"
 	"github.com/oversire/cli/ticket"
 	"github.com/oversire/cli/wire"
+	"github.com/oversire/cli/worker"
 )
 
 // daemonClient calls the loopback API of the local daemon.
@@ -95,6 +96,21 @@ func (d daemonClient) Sessions(ctx context.Context) ([]wire.DaemonSession, error
 		return nil, err
 	}
 	return p.Sessions, nil
+}
+
+// Turns reads GET /v1/sessions/{id}/turns: one page of the turns after seq `after`.
+func (d daemonClient) Turns(ctx context.Context, id string, after, limit int) (wire.SessionTurnsPage, error) {
+	var p wire.SessionTurnsPage
+	q := url.Values{"after": {strconv.Itoa(after)}, "limit": {strconv.Itoa(limit)}}
+	err := d.call(ctx, http.MethodGet, "/v1/sessions/"+url.PathEscape(id)+"/turns?"+q.Encode(), nil, &p)
+	return p, err
+}
+
+// Worker reads GET /v1/workers/{key}. The record stays after the worker stops.
+func (d daemonClient) Worker(ctx context.Context, key string) (worker.Record, error) {
+	var r worker.Record
+	err := d.call(ctx, http.MethodGet, "/v1/workers/"+url.PathEscape(key), nil, &r)
+	return r, err
 }
 
 // AppendEvents posts rows to POST /v1/events, at most events.MaxAppend in one call.

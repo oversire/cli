@@ -104,7 +104,13 @@ func TestFoldWritesTheHeader(t *testing.T) {
 	if b.String() != want {
 		t.Fatalf("%q", b.String())
 	}
-	h.Tokens, h.Request, h.Repos, h.First, h.Key = 0, "", nil, 0, ""
+	h.Verdict, h.Note, h.Request = "done", "Tests pass.", ""
+	b.Reset()
+	f.WriteHeader(&b, h)
+	if !strings.Contains(b.String(), "turns 4-9 | 1200 tokens\nWorker report: done: Tests pass.\ncli +10") {
+		t.Fatalf("%q", b.String())
+	}
+	h.Tokens, h.Request, h.Repos, h.First, h.Key, h.Verdict = 0, "", nil, 0, "", ""
 	b.Reset()
 	f.WriteHeader(&b, h)
 	if b.String() != "s1 | codex gpt-5 | waiting (permission) for 3m | no new turns\n" {

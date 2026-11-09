@@ -94,3 +94,25 @@ func TestPackSplitsAtLineEnds(t *testing.T) {
 		t.Fatal(left)
 	}
 }
+
+func TestPackFromSplitsLargeInput(t *testing.T) {
+	_, want := writeTranscript(t, 6000)
+	dir := t.TempDir()
+	got, err := Packer{Max: 1 << 20}.PackFrom(bytes.NewReader(want), dir, "k-worker-turns")
+	if err != nil || len(got) < 2 {
+		t.Fatal(len(got), err)
+	}
+	var all []byte
+	for _, p := range got {
+		b := gunzip(t, p)
+		for _, l := range bytes.Split(bytes.TrimSuffix(b, []byte("\n")), []byte("\n")) {
+			if !json.Valid(l) {
+				t.Fatalf("%s: a bad line", p)
+			}
+		}
+		all = append(all, b...)
+	}
+	if !bytes.Equal(all, want) {
+		t.Fatal("the parts do not join to the input")
+	}
+}

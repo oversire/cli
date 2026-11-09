@@ -17,7 +17,7 @@ func TestBodyRendersEachVerb(t *testing.T) {
 			t.Errorf("main body has no %q", want)
 		}
 	}
-	if len(s.Verbs()) != 7 {
+	if len(s.Verbs()) != 8 {
 		t.Fatalf("verbs %v", s.Verbs())
 	}
 	for _, v := range s.Verbs() {
@@ -90,5 +90,27 @@ func TestPlannedTicketGoesToTodo(t *testing.T) {
 	pb, _ := s.Body("plan", c)
 	if !strings.Contains(pb, "wi update") {
 		t.Error("plan does not move the ticket")
+	}
+}
+
+func TestDelegateBodyHasTheRulesAndReports(t *testing.T) {
+	b, err := NewSkill().Body("delegate", Context{Session: "main-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"sonnet", "round", "3", "READY", "BLOCKED", "worker wait", "--timeout 8m", "worker brief", "[you]", "[overseer]", "[daemon]", "main-1", "worker escalate", "oversire review reply"} {
+		if !strings.Contains(b, want) {
+			t.Errorf("delegate body has no %q", want)
+		}
+	}
+}
+
+func TestDoneBodyStopsTheWorker(t *testing.T) {
+	b, err := NewSkill().Body("done", Context{})
+	if err != nil || !strings.Contains(b, "oversire worker stop") {
+		t.Fatal(err, b)
+	}
+	if strings.Index(b, "oversire worker stop") > strings.Index(b, "oversire ticket done") {
+		t.Fatal("the stop comes after ticket done")
 	}
 }

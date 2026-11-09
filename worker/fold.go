@@ -108,6 +108,9 @@ func (f Fold) header(b *strings.Builder, h Header) {
 	if h.Request != "" {
 		fmt.Fprintf(b, "Open request: %s\n", h.Request)
 	}
+	if h.Verdict != "" {
+		fmt.Fprintf(b, "Worker report: %s\n", strings.TrimSpace(h.Verdict+": "+h.Note))
+	}
 	for _, r := range h.Repos {
 		fmt.Fprintf(b, "%s\n", repoLine(r))
 	}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
@@ -25,7 +27,7 @@ import (
 )
 
 const ticketUsage = `Usage:
-  oversire ticket skill [new|plan|work|done|groom|sweep|spec]
+  oversire ticket skill [new|plan|work|delegate|done|groom|sweep|spec]
                                                           print the body of the oversire agent skill
   oversire ticket skill --install|--refresh [--harness claude,codex]
                                                           install the skill file, or update the installed files
@@ -367,7 +369,60 @@ func (c *cli) ticketDone(key, harness, session, out string) error {
 	for _, p := range paths {
 		fmt.Fprintf(c.out, "%s\t%s\n", p, filepath.Base(p))
 	}
+	if err := c.packWorkerTurns(context.Background(), key, out); err != nil {
+		return err
+	}
 	return l.Close(key, session)
+}
+
+// turnsPage is the page size of the worker turns. A page stays below the 1 MiB answer limit of daemonClient.
+const turnsPage = 200
+
+// packWorkerTurns packs the turns of the worker of key as <key>-worker-turns. Without a daemon or a worker,
+// it prints one line and goes on: the key of a stopped worker stays in the worker record.
+func (c *cli) packWorkerTurns(ctx context.Context, key, out string) error {
+	d, err := c.daemonClient()
+	if err != nil {
+		return err
+	}
+	rec, err := d.Worker(ctx, key)
+	if err != nil {
+		return c.noWorker(key, err)
+	}
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	for after := 0; ; {
+		page, err := d.Turns(ctx, rec.Session, after, turnsPage)
+		if err != nil {
+			return c.noWorker(key, err)
+		}
+		for _, t := range page.Turns {
+			if err := enc.Encode(t); err != nil {
+				return err
+			}
+			after = max(after, t.Seq)
+		}
+		if !page.More || len(page.Turns) == 0 {
+			break
+		}
+	}
+	paths, err := ticket.Packer{Max: ticket.MaxAttachment}.PackFrom(&buf, out, key+"-worker-turns")
+	if err != nil {
+		return err
+	}
+	for _, p := range paths {
+		fmt.Fprintf(c.out, "%s\t%s\n", p, filepath.Base(p))
+	}
+	return nil
+}
+
+// noWorker turns a missing daemon or a missing worker into one line. Another error stays an error.
+func (c *cli) noWorker(key string, err error) error {
+	if de, ok := errors.AsType[*daemonError](err); ok && (de.Status == 0 || de.Status == http.StatusNotFound) {
+		fmt.Fprintf(c.out, "No worker turns for %s: %s\n", key, de.Msg)
+		return nil
+	}
+	return err
 }
 
 func (c *cli) ticketGroom(ctx context.Context, project, session string) error {

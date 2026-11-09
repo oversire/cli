@@ -64,3 +64,16 @@ func TestInstallKeepsForeignFile(t *testing.T) {
 		t.Fatal("changed a foreign file")
 	}
 }
+
+func TestInstallListsDelegate(t *testing.T) {
+	home := t.TempDir()
+	if _, err := NewInstaller(home).Install("claude"); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(filepath.Join(home, ".claude", "skills", "oversire", "SKILL.md"))
+	for _, want := range []string{"argument-hint: new|plan|work|delegate|", "Bash(oversire worker:*)", "Bash(oversire ticket:*)"} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("no %q in\n%s", want, b)
+		}
+	}
+}

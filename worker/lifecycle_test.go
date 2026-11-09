@@ -140,6 +140,12 @@ func TestDoneSetsAwaitingCheck(t *testing.T) {
 	if err != nil || w.Reason != WakeDone || w.Header.Verdict != "done" || w.Header.Note != "Tests pass." {
 		t.Fatalf("%+v %v", w, err)
 	}
+	if err := r.e.Send(context.Background(), "s1", "Fix the gaps."); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := r.e.Read(context.Background(), "s1", "overseer", 0); err != nil || got.Header.Verdict != "" {
+		t.Fatalf("a stale report: %+v %v", got.Header, err)
+	}
 	blocked, err := r.e.Done(context.Background(), "s1", "blocked", strings.Repeat("x", 400))
 	if err != nil || blocked.State != StateBlocked || len([]rune(blocked.Note)) != maxDoneNote {
 		t.Fatalf("%+v %v", blocked, err)
@@ -254,7 +260,7 @@ func TestWaitUsesInspectForAnOverseenSession(t *testing.T) {
 	ctx := context.Background()
 	r.watch.set("s1", q("q-1"))
 	w, err := r.e.Wait(ctx, "s1", time.Second)
-	if err != nil || w.Reason != WakeQuestion || w.Header.Request != "question Which store?" {
+	if err != nil || w.Reason != WakeQuestion || w.Header.Request != "question q-1 Which store?" {
 		t.Fatalf("%+v %v", w, err)
 	}
 	r.watch.set("s1", q("esc-5"))
@@ -266,7 +272,7 @@ func TestWaitUsesInspectForAnOverseenSession(t *testing.T) {
 		t.Fatalf("turn end: %+v", w)
 	}
 	r.watch.set("s1", runtime.Inspection{Session: wire.RunnerSession{State: wire.SessionWaitingPermission, Permission: &wire.PermissionPrompt{ID: "p", Tool: "Bash", Text: "rm x"}}})
-	if w, _ = r.e.Wait(ctx, "s1", time.Second); w.Reason != WakePermission || w.Header.Request != "permission Bash rm x" {
+	if w, _ = r.e.Wait(ctx, "s1", time.Second); w.Reason != WakePermission || w.Header.Request != "permission p Bash rm x" {
 		t.Fatalf("permission: %+v", w)
 	}
 	r.watch.set("s1", runtime.Inspection{Session: wire.RunnerSession{State: wire.SessionFailed}})
@@ -284,7 +290,7 @@ func TestHeaderTakesTokensAndTheRequestFromInspect(t *testing.T) {
 	r.watch.set("s1", runtime.Inspection{Tokens: 4200, Session: wire.RunnerSession{State: wire.SessionWaitingPermission,
 		Permission: &wire.PermissionPrompt{ID: "p", Tool: "Bash", Text: "npm test"}}})
 	got, err := r.e.Read(context.Background(), "s1", "overseer", 0)
-	if err != nil || got.Header.Tokens != 4200 || got.Header.Request != "permission Bash npm test" {
+	if err != nil || got.Header.Tokens != 4200 || got.Header.Request != "permission p Bash npm test" {
 		t.Fatalf("%+v %v", got.Header, err)
 	}
 	r.watch.err = runtime.ErrUnsupported

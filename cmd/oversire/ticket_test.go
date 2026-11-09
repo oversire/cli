@@ -2,10 +2,12 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net"
 	"net/http"
@@ -14,6 +16,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -22,6 +25,7 @@ import (
 	"github.com/oversire/cli/sessions"
 	"github.com/oversire/cli/ticket"
 	"github.com/oversire/cli/wire"
+	"github.com/oversire/cli/worker"
 )
 
 // TestSkillCommandsExist fails when the skill body names an oversire command that the CLI does not have.
@@ -119,6 +123,7 @@ func TestTicketWorkTranscriptElsewhere(t *testing.T) {
 
 func TestTicketDoneUsesBoundKey(t *testing.T) {
 	c, out := ticketTest(t)
+	closedPort(t, c)
 	putTranscript(t, c.home, "s1")
 	c.ticket([]string{"new", "A-1", "--session", "s1"})
 	out.Reset()
@@ -127,7 +132,7 @@ func TestTicketDoneUsesBoundKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := filepath.Join(dir, "claude-session-s1.jsonl.gz") + "\tclaude-session-s1.jsonl.gz\n"
-	if out.String() != want {
+	if !strings.HasPrefix(out.String(), want) {
 		t.Fatalf("%q", out)
 	}
 	if items, _ := c.ledger().Items("s1"); len(items) != 0 {
@@ -372,5 +377,109 @@ func TestTicketStop(t *testing.T) {
 	}
 	if len(posted) != 1 {
 		t.Fatal(len(posted))
+	}
+}
+
+// turnsDaemon serves the worker A-1 and n turns for its session ws1, in pages of the requested limit.
+func turnsDaemon(t *testing.T, c *cli, n int) {
+	t.Helper()
+	fakeDaemon(t, c, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/v1/workers/A-1":
+			json.NewEncoder(w).Encode(worker.Record{Session: "ws1", Key: "work:A-1"})
+		case r.URL.Path == "/v1/sessions/ws1/turns":
+			after, _ := strconv.Atoi(r.URL.Query().Get("after"))
+			limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+			p := wire.SessionTurnsPage{Turns: []wire.SessionTurn{}}
+			for seq := after + 1; seq <= n && len(p.Turns) < limit; seq++ {
+				p.Turns = append(p.Turns, wire.SessionTurn{Seq: seq, Role: wire.RoleAssistant, Text: "turn"})
+			}
+			p.More = len(p.Turns) > 0 && p.Turns[len(p.Turns)-1].Seq < n
+			json.NewEncoder(w).Encode(p)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+}
+
+func doneWithWorker(t *testing.T, n int) (string, string) {
+	t.Helper()
+	c, out := ticketTest(t)
+	turnsDaemon(t, c, n)
+	putTranscript(t, c.home, "s1")
+	c.ticket([]string{"new", "A-1", "--session", "s1"})
+	out.Reset()
+	dir := t.TempDir()
+	if err := c.ticket([]string{"done", "--session", "s1", "--out", dir}); err != nil {
+		t.Fatal(err)
+	}
+	return dir, out.String()
+}
+
+func gzipLines(t *testing.T, p string) int {
+	t.Helper()
+	f, err := os.Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	z, err := gzip.NewReader(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := io.ReadAll(z)
+	return bytes.Count(b, []byte("\n"))
+}
+
+func TestTicketDonePacksTheWorkerTurns(t *testing.T) {
+	dir, out := doneWithWorker(t, 3)
+	p := filepath.Join(dir, "A-1-worker-turns.jsonl.gz")
+	if !strings.Contains(out, p+"\tA-1-worker-turns.jsonl.gz\n") || gzipLines(t, p) != 3 {
+		t.Fatal(out)
+	}
+}
+
+func TestTicketDoneReadsAllPages(t *testing.T) {
+	dir, _ := doneWithWorker(t, 250)
+	if n := gzipLines(t, filepath.Join(dir, "A-1-worker-turns.jsonl.gz")); n != 250 {
+		t.Fatal(n)
+	}
+}
+
+func TestTicketDoneWithoutAWorkerPacksOnlyTheTranscript(t *testing.T) {
+	c, out := ticketTest(t)
+	fakeDaemon(t, c, http.NotFoundHandler())
+	putTranscript(t, c.home, "s1")
+	c.ticket([]string{"new", "A-1", "--session", "s1"})
+	out.Reset()
+	dir := t.TempDir()
+	if err := c.ticket([]string{"done", "--session", "s1", "--out", dir}); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if len(lines) != 2 || !strings.Contains(lines[1], "No worker turns for A-1") {
+		t.Fatal(out)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "A-1-worker-turns.jsonl.gz")); err == nil {
+		t.Fatal("a worker file")
+	}
+}
+
+func TestTicketDoneWithoutADaemonContinues(t *testing.T) {
+	c, out := ticketTest(t)
+	closedPort(t, c)
+	putTranscript(t, c.home, "s1")
+	c.ticket([]string{"new", "A-1", "--session", "s1"})
+	out.Reset()
+	dir := t.TempDir()
+	if err := c.ticket([]string{"done", "--session", "s1", "--out", dir}); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if len(lines) != 2 || !strings.Contains(lines[1], "No worker turns for A-1") {
+		t.Fatal(out)
+	}
+	if items, _ := c.ledger().Items("s1"); len(items) != 0 {
+		t.Fatal("the ticket stays open", items)
 	}
 }
