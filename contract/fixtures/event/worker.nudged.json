@@ -1,0 +1,19 @@
+{
+  "seq": 312,
+  "id": "worker:s-4f2a:worker.nudged:1",
+  "at": "2026-11-09T12:20:00Z",
+  "seenAt": "2026-11-09T12:20:01Z",
+  "kind": "worker.nudged",
+  "item": "OVERSIRE-451",
+  "parentItem": "OVERSIRE-450",
+  "project": "oversire",
+  "machine": "mbp",
+  "session": "8390f639",
+  "actorType": "agent",
+  "actor": "claude",
+  "via": "cli",
+  "summary": "Worker sent a message",
+  "payload": {
+    "how": "send"
+  }
+}

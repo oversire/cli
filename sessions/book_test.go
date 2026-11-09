@@ -233,6 +233,24 @@ func TestPersistence(t *testing.T) {
 	}
 }
 
+func TestOverseerSurvivesARestart(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sessions.json")
+	b, _ := newBook(path)
+	b.Apply(orca("s", 0, wire.PhaseWorking))
+	b.Apply(Patch{ID: "s", Source: SourceWire, At: at(time.Second), Overseer: ptr("claude-1")})
+	b.Apply(Patch{ID: "s", Source: SourceOrca, At: at(2 * time.Second), Repo: ptr("app")})
+	if s, _ := b.Get("s"); s.Overseer != "claude-1" {
+		t.Fatalf("overseer = %q", s.Overseer)
+	}
+	if err := b.Save(true); err != nil {
+		t.Fatal(err)
+	}
+	c, _ := newBook(path)
+	if s, _ := c.Get("s"); s.Overseer != "claude-1" {
+		t.Fatalf("after the restart: %q", s.Overseer)
+	}
+}
+
 func TestRun(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "sessions.json")
 	l := &memLog{}

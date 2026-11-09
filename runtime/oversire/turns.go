@@ -52,6 +52,16 @@ func (l *turnLog) add(t wire.SessionTurn) {
 	l.put(t)
 }
 
+// lastAt is the time of the last turn, or zero.
+func (l *turnLog) lastAt() time.Time {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if len(l.turns) == 0 {
+		return time.Time{}
+	}
+	return l.turns[len(l.turns)-1].At
+}
+
 // tool adds a turn when a tool starts. The end of the tool changes that turn.
 func (l *turnLog) tool(ev *agentwire.ToolEvent, at time.Time) {
 	l.mu.Lock()

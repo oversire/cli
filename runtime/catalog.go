@@ -99,6 +99,37 @@ func (r *Registry) Handover(ctx context.Context, id string, view wire.SessionVie
 	return fmt.Errorf("%w: no runtime that can move a session has %s", ErrNotFound, id)
 }
 
+// Inspect reads the asks, tokens and times of session s from its runtime.
+func (r *Registry) Inspect(ctx context.Context, s wire.DaemonSession) (Inspection, error) {
+	o, ref, err := r.oversight(s)
+	if err != nil {
+		return Inspection{}, err
+	}
+	return o.Inspect(ctx, ref)
+}
+
+// Escalate shows the open ask of session s (q nil), or sets q as its open question.
+func (r *Registry) Escalate(ctx context.Context, s wire.DaemonSession, q *wire.RunnerQuestion) error {
+	o, ref, err := r.oversight(s)
+	if err != nil {
+		return err
+	}
+	return o.Escalate(ctx, ref, q)
+}
+
+func (r *Registry) oversight(s wire.DaemonSession) (Oversight, wire.SessionRef, error) {
+	rt, ok := r.byID[s.Runtime]
+	if !ok {
+		return nil, wire.SessionRef{}, fmt.Errorf("%w: %s", ErrNoRuntime, s.Runtime)
+	}
+	o, ok := rt.(Oversight)
+	if !ok {
+		return nil, wire.SessionRef{}, ErrUnsupported
+	}
+	ref := wire.SessionRef{Workspace: wire.WorkspaceRef{Account: wire.AccountID{Provider: s.Runtime, ID: "local"}, ID: s.Workspace}, ID: s.ID}
+	return o, ref, nil
+}
+
 // Retry connects the live view of runtime id again, when it can, and gives its new state.
 func (r *Registry) Retry(ctx context.Context, id string) (wire.DaemonRuntime, error) {
 	rt, ok := r.byID[id]

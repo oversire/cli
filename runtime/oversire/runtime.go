@@ -36,6 +36,8 @@ const (
 	ID                       = "oversire"
 	DefaultSlots             = 2
 	DefaultPermissionTimeout = 10 * time.Minute
+	// DefaultOverseenTimeout is the time to answer a prompt of an overseen session. The overseer answers late.
+	DefaultOverseenTimeout = 40 * time.Minute
 	// Local is the workspace account id: the sessions run on this machine.
 	Local = "local"
 
@@ -56,7 +58,12 @@ const (
 	labelItem    = "oversire.item"
 	labelRunner  = "oversire.runner"
 	labelKey     = "oversire.key"
+	// labelOverseer holds the session id of the overseer. A session that the daemon adopts after a restart reads it back.
+	labelOverseer = "oversire.overseer"
 )
+
+// escPrefix starts the id of a question that the daemon sets to escalate to the user. It is not a request of the visor.
+const escPrefix = "esc-"
 
 // restartPrompt is the first turn of a session that the visor resumes after a lost process.
 const restartPrompt = "The machine or the session host restarted during your turn. Go on with the task."
@@ -105,6 +112,8 @@ type Options struct {
 	Slots int
 	// PermissionTimeout is the time to answer a permission prompt. Zero is DefaultPermissionTimeout.
 	PermissionTimeout time.Duration
+	// OverseenTimeout is the time to answer a prompt of an overseen session. Zero is DefaultOverseenTimeout.
+	OverseenTimeout time.Duration
 	// Fake permits the agent "fake", for tests.
 	Fake bool
 	Log  *slog.Logger
@@ -136,6 +145,9 @@ func New(opts Options, host Host, git Runner, report Reporter) *Runtime {
 	}
 	if opts.PermissionTimeout <= 0 {
 		opts.PermissionTimeout = DefaultPermissionTimeout
+	}
+	if opts.OverseenTimeout <= 0 {
+		opts.OverseenTimeout = DefaultOverseenTimeout
 	}
 	if opts.Log == nil {
 		opts.Log = slog.Default()
@@ -365,7 +377,7 @@ func (rt *Runtime) Start(ctx context.Context, o runtime.Order, r wire.LaunchRequ
 	now := rt.now().UTC()
 	s := newSession(rt, wire.RunnerSession{ID: id, Runner: rt.opts.Runner, Session: ref, Order: o.ID, Agent: r.Agent, Repo: r.Repo, Branch: w.Branch, Item: r.Item,
 		State: wire.SessionQueued, StartedAt: now, UpdatedAt: now}, dir)
-	s.req, s.workdir, s.live = r, w.ID, true
+	s.req, s.workdir, s.live, s.overseer = r, w.ID, true, r.Overseer
 	rt.mu.Lock()
 	rt.prune()
 	rt.sessions[id] = s
@@ -515,9 +527,69 @@ func (rt *Runtime) session(ref wire.SessionRef) (*session, error) {
 	defer rt.mu.Unlock()
 	s, ok := rt.sessions[ref.ID]
 	if !ok {
-		return nil, fmt.Errorf("The oversire runtime has no session %s.", ref.ID)
+		return nil, fmt.Errorf("The oversire runtime has no session %s: %w.", ref.ID, runtime.ErrNotFound)
 	}
 	return s, nil
+}
+
+// Inspect gives the asks of the session, also the hidden ones of an overseen session, with its tokens and times.
+func (rt *Runtime) Inspect(_ context.Context, ref wire.SessionRef) (runtime.Inspection, error) {
+	s, err := rt.session(ref)
+	if err != nil {
+		return runtime.Inspection{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	in := runtime.Inspection{Session: s.info, Tokens: s.tokens, LastTurn: s.turns.lastAt()}
+	oldest := func(at time.Time) {
+		if !at.IsZero() && (in.AskedAt.IsZero() || at.Before(in.AskedAt)) {
+			in.AskedAt = at
+		}
+	}
+	for _, p := range s.permissions {
+		oldest(p.at)
+	}
+	// A question of the daemon (esc-) is not an ask of the worker.
+	if q := s.question; q != nil && !strings.HasPrefix(q.question.ID, escPrefix) {
+		oldest(q.question.AskedAt)
+	}
+	return in, nil
+}
+
+// Escalate shows the open ask of an overseen session to the user (q nil), or sets q as its open question.
+// The id of q starts with escPrefix. Only the daemon keeps q: a restart drops it.
+func (rt *Runtime) Escalate(_ context.Context, ref wire.SessionRef, q *wire.RunnerQuestion) error {
+	s, err := rt.session(ref)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.info.State.Ended() {
+		return fmt.Errorf("The session %s has ended: %w.", s.id, runtime.ErrConflict)
+	}
+	if q != nil {
+		switch {
+		case !strings.HasPrefix(q.ID, escPrefix):
+			return fmt.Errorf("The id %q of an escalation must start with %s.", q.ID, escPrefix)
+		case s.question != nil:
+			return fmt.Errorf("The session %s has an open question: %w.", s.id, runtime.ErrConflict)
+		}
+		s.question = &openQuestion{question: *q}
+		s.info.Question = &s.question.question
+		s.log.add("? " + firstText(q))
+	}
+	s.escalated = true
+	s.show()
+	s.publish()
+	return nil
+}
+
+func firstText(q *wire.RunnerQuestion) string {
+	if len(q.Items) == 0 {
+		return ""
+	}
+	return q.Items[0].Text
 }
 
 // The files of a session from before agent-visor.

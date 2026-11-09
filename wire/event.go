@@ -164,4 +164,9 @@ const (
 	KindAutomationRan      = "automation.ran"
 	KindGroomApplied       = "groom.applied"
 	KindSweepApplied       = "sweep.applied"
+	KindWorkerStarted      = "worker.started"
+	KindWorkerAnswered     = "worker.answered"
+	KindWorkerNudged       = "worker.nudged"
+	KindWorkerEscalated    = "worker.escalated"
+	KindWorkerDone         = "worker.done"
 )

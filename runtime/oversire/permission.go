@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	agentvisor "github.com/trebi-ai/agent-visor"
@@ -20,6 +21,7 @@ const expiredReason = "No answer came before the expiry time."
 type openPermission struct {
 	prompt wire.PermissionPrompt
 	timer  *time.Timer
+	at     time.Time // when the agent asked
 }
 
 // ask shows a permission request. With no answer before the expiry time, the runner denies it.
@@ -33,7 +35,11 @@ func (s *session) ask(p *agentwire.Permission, at time.Time) {
 	if text == "" {
 		text = p.Input
 	}
-	op := &openPermission{prompt: wire.PermissionPrompt{ID: p.ID, Tool: tool, Text: clip(text, maxText), ExpiresAt: at.Add(s.rt.opts.PermissionTimeout).UTC()}}
+	timeout := s.rt.opts.PermissionTimeout
+	if s.overseer != "" {
+		timeout = s.rt.opts.OverseenTimeout
+	}
+	op := &openPermission{at: at.UTC(), prompt: wire.PermissionPrompt{ID: p.ID, Tool: tool, Text: clip(text, maxText), ExpiresAt: at.Add(timeout).UTC()}}
 	s.permissions = append(s.permissions, op)
 	s.log.add("? " + tool + ": " + op.prompt.Text)
 	if s.live {
@@ -109,6 +115,10 @@ func (s *session) dropRequests() {
 		s.removePermission(0)
 	}
 	s.info.Permission = nil
+	// An escalation is not a request of the visor. It stays until the user answers.
+	if s.question != nil && strings.HasPrefix(s.question.question.ID, escPrefix) {
+		return
+	}
 	s.question = nil
 	s.info.Question = nil
 }

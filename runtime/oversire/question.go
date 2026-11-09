@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -104,6 +105,9 @@ func (s *session) answerQuestion(ctx context.Context, a wire.QuestionAnswer) err
 		s.mu.Unlock()
 		return fmt.Errorf("The session %s has no open question %s: %w.", s.id, a.ID, ErrAnswered)
 	}
+	if strings.HasPrefix(oq.question.ID, escPrefix) {
+		return s.answerEscalation(ctx, a)
+	}
 	answers := map[string]any{}
 	for i, it := range oq.question.Items {
 		for _, x := range a.Items {
@@ -138,9 +142,32 @@ func (s *session) answerQuestion(ctx context.Context, a wire.QuestionAnswer) err
 	return s.rt.host.Answer(ctx, vid, a.ID, agentvisor.Answer{Allow: true, UpdatedInput: updated})
 }
 
-// clearQuestion drops the open question and goes on working. Call it with s.mu held.
+// answerEscalation gives the answer of the user to the worker as a user message. Call it with s.mu held:
+// it unlocks s.mu, as say needs the lock.
+func (s *session) answerEscalation(ctx context.Context, a wire.QuestionAnswer) error {
+	var parts []string
+	if len(a.Items) > 0 {
+		parts = append(parts, strings.TrimSpace(a.Items[0].Other))
+	}
+	parts = append(parts, strings.TrimSpace(a.Note))
+	text := strings.Join(slices.DeleteFunc(parts, func(p string) bool { return p == "" }), "\n\n")
+	if text == "" {
+		s.mu.Unlock()
+		return errors.New("The answer to the escalation has no text.")
+	}
+	s.question = nil
+	s.info.Question = nil
+	s.escalated = false
+	s.log.add("= " + a.ID + " answered")
+	s.show()
+	s.publish()
+	s.mu.Unlock()
+	return s.say(ctx, text, wire.OriginUser)
+}
+
+// clearQuestion drops the open question and goes on working. An escalation stays. Call it with s.mu held.
 func (s *session) clearQuestion() {
-	if s.question == nil {
+	if s.question == nil || strings.HasPrefix(s.question.question.ID, escPrefix) {
 		return
 	}
 	s.question = nil

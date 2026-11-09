@@ -31,8 +31,10 @@ type session struct {
 	// workdir is the visor workdir id of a session that this daemon started.
 	workdir string
 	// req is the launch request. It is empty for a session from before a restart of the daemon.
-	req    wire.LaunchRequest
-	cancel context.CancelFunc
+	req wire.LaunchRequest
+	// overseer is the session id of the overseer. An overseen session hides its asks until the overseer escalates.
+	overseer string
+	cancel   context.CancelFunc
 	// ended closes when the session is done or failed.
 	ended chan struct{}
 
@@ -63,6 +65,10 @@ type session struct {
 	// question is the open AskUserQuestion request. rounds counts the questions of the session.
 	question *openQuestion
 	rounds   int
+	// tokens counts Result.Usage of each turn.
+	tokens int64
+	// escalated shows the open asks to the user, also when the session is overseen.
+	escalated bool
 
 	// scan keeps one paths scan at a time. lastPaths is the set of the last report.
 	scan      sync.Mutex
@@ -95,6 +101,7 @@ func sessionOf(rt *Runtime, vs agentvisor.Session) *session {
 	}
 	s := newSession(rt, info, vs.WorkingDir)
 	s.vstate, s.vendorID = vs.State, vs.VendorID
+	s.overseer = l[labelOverseer]
 	return s
 }
 
@@ -150,6 +157,12 @@ func (s *session) spec() agentvisor.StartSpec {
 		LabelRuntime: ID, LabelSession: s.id, labelOrder: s.info.Order, labelRepo: s.info.Repo, labelBranch: s.info.Branch,
 		labelKey: s.key(), labelRunner: s.info.Runner,
 	}
+	mode := agentwire.PermissionAsk
+	promptKind := ""
+	if s.overseer != "" {
+		// Mode auto: the library allows each request, so the worker does not stop at each edit.
+		labels[labelOverseer], mode, promptKind = s.overseer, agentwire.PermissionAuto, string(wire.OriginOverseer)
+	}
 	if s.info.Item != nil {
 		if data, err := json.Marshal(s.info.Item); err == nil {
 			labels[labelItem] = string(data)
@@ -158,7 +171,8 @@ func (s *session) spec() agentvisor.StartSpec {
 	return agentvisor.StartSpec{
 		Kind: agentvisor.KindWire, Title: s.key(), Harness: s.req.Agent, Model: s.req.Model, Effort: s.req.Effort,
 		Workdir: s.workdir, WorkingDir: s.dir, Instructions: s.instructions(), Prompt: s.req.Prompt,
-		Permissions: agentvisor.Permissions{Mode: agentwire.PermissionAsk},
+		PromptKind:  promptKind,
+		Permissions: agentvisor.Permissions{Mode: mode},
 		Labels:      labels,
 		Env:         s.env(),
 		Restart:     agentvisor.RestartPolicy{Mode: agentvisor.RestartResume, Prompt: restartPrompt},
@@ -295,8 +309,12 @@ func (s *session) handle(ev agentwire.Event, at time.Time) {
 		}
 		s.info.Summary = tail(strings.TrimSpace(text), maxText)
 		s.info.Error = ""
-		if ev.Result != nil && ev.Result.IsError {
-			s.info.Error = ev.Result.Text
+		if ev.Result != nil {
+			// EventUsage of Codex has the total of the thread, so only the usage of the turn counts.
+			s.tokens += ev.Result.Usage.Input + ev.Result.Usage.Output
+			if ev.Result.IsError {
+				s.info.Error = ev.Result.Text
+			}
 		}
 		// The visor closes the open requests at the end of a turn.
 		s.dropRequests()
@@ -557,8 +575,16 @@ func (s *session) publish() {
 	if !s.live {
 		return
 	}
-	s.info.UpdatedAt = s.rt.now().UTC()
-	if s.rt.report != nil {
-		s.rt.report.Report(s.info)
+	if s.info.Permission == nil && s.info.Question == nil {
+		s.escalated = false
 	}
+	s.info.UpdatedAt = s.rt.now().UTC()
+	if s.rt.report == nil {
+		return
+	}
+	out := s.info
+	if s.overseer != "" && !s.escalated {
+		out.Permission, out.Question = nil, nil
+	}
+	s.rt.report.Report(out)
 }

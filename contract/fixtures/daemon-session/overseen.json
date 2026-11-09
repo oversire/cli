@@ -1,0 +1,17 @@
+{
+  "id": "s-4f2a",
+  "machine": "mbp",
+  "runtime": "oversire",
+  "harness": "codex",
+  "cwd": "/Users/dev/code/oversire-workspace/.wt/oversire-451",
+  "state": "working",
+  "stateSince": "2026-11-09T12:00:05Z",
+  "startedAt": "2026-11-09T12:00:00Z",
+  "updatedAt": "2026-11-09T12:00:05Z",
+  "sources": [
+    "wire"
+  ],
+  "key": "work:OVERSIRE-451",
+  "model": "gpt-5.5",
+  "overseer": "8390f639-71c4-4b6e-9a2d-0e5f1c7a3b88"
+}

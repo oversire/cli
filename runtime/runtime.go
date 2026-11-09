@@ -45,6 +45,7 @@ type Started struct {
 	Session     wire.SessionRef
 	PaneKey     string // the DaemonSession id, when the runtime knows it
 	TurnStarted bool
+	Reused      bool // the live session of the start key, not a new one
 }
 
 // The optional parts of a runtime. Registry.Status gives a capability only when the runtime has the part.
@@ -88,6 +89,21 @@ type Revealer interface {
 // Handoverer moves a session between the chat and the terminal. It gives ErrNotFound for a session of another runtime.
 type Handoverer interface {
 	Handover(ctx context.Context, id string, view wire.SessionView) error
+}
+
+// Inspection is what an overseer reads from a session: the open asks (also the hidden ones), the tokens and the times.
+type Inspection struct {
+	Session  wire.RunnerSession // has the open Permission and Question, also when the runtime hides them
+	Tokens   int64
+	LastTurn time.Time
+	AskedAt  time.Time // the oldest open ask; zero when none is open
+}
+
+// Oversight lets the daemon read and escalate the asks of an overseen session.
+type Oversight interface {
+	Inspect(ctx context.Context, s wire.SessionRef) (Inspection, error)
+	// Escalate shows the open ask of the session (q nil), or sets q as its open question.
+	Escalate(ctx context.Context, s wire.SessionRef, q *wire.RunnerQuestion) error
 }
 
 // ErrNoRuntime is the error of a call for a runtime that the registry does not have.

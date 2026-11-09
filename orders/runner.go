@@ -178,7 +178,7 @@ func (r *Runner) start(ctx context.Context, o wire.WorkOrder) (*wire.WorkOrderRe
 	if !ok {
 		return r.runtimes.Do(ctx, o)
 	}
-	tagged := p.Model != "" || p.Effort != "" || p.Profile != "" || len(p.Env) > 0 || len(p.EnvSecrets) > 0
+	tagged := p.Model != "" || p.Effort != "" || p.Profile != "" || len(p.Env) > 0 || len(p.EnvSecrets) > 0 || p.Overseer != ""
 	keyed := r.keys != nil && (p.Key != "" || tagged)
 	if keyed && p.Key != "" {
 		if !startKey.MatchString(p.Key) || len(p.Key) > 200 {
@@ -190,6 +190,9 @@ func (r *Runner) start(ctx context.Context, o wire.WorkOrder) (*wire.WorkOrderRe
 			ref := wire.SessionRef{Workspace: wire.WorkspaceRef{Account: wire.AccountID{Provider: s.Runtime, ID: "local"}, ID: s.Workspace}, ID: s.ID}
 			if s.Terminal != "" {
 				ref.ID = s.Terminal
+			}
+			if p.Overseer != "" {
+				r.keys.Apply(sessions.Patch{ID: s.ID, Overseer: &p.Overseer})
 			}
 			return &wire.WorkOrderResult{Session: &ref, PaneKey: s.ID, Reused: true}, nil
 		}
@@ -205,7 +208,8 @@ func (r *Runner) start(ctx context.Context, o wire.WorkOrder) (*wire.WorkOrderRe
 	}
 	// The session ref names the terminal when its id is not the session id.
 	patch := sessions.Patch{ID: out.PaneKey, Runtime: &o.Runtime, Workspace: &out.Session.Workspace.ID,
-		Key: nonEmpty(p.Key), Model: nonEmpty(p.Model), Effort: nonEmpty(p.Effort), Profile: nonEmpty(p.Profile)}
+		Key: nonEmpty(p.Key), Model: nonEmpty(p.Model), Effort: nonEmpty(p.Effort), Profile: nonEmpty(p.Profile),
+		Overseer: nonEmpty(p.Overseer)}
 	if keys := p.EnvKeys(); len(keys) > 0 {
 		patch.EnvKeys = &keys
 	}
@@ -270,7 +274,13 @@ func (r *Runner) Launch(ctx context.Context, rt string, o runtime.Order, req wir
 	if res.Session == nil {
 		return runtime.Started{}, errors.New("The runtime started no session.")
 	}
-	return runtime.Started{Session: *res.Session, PaneKey: res.PaneKey, TurnStarted: res.TurnStarted}, nil
+	return runtime.Started{Session: *res.Session, PaneKey: res.PaneKey, TurnStarted: res.TurnStarted, Reused: res.Reused}, nil
+}
+
+// Send runs a sessionSend order of the daemon itself on the runtime rt.
+func (r *Runner) Send(ctx context.Context, rt string, o runtime.Order, p wire.SendPayload) error {
+	_, err := r.own(ctx, wire.WorkOrder{ID: o.ID, Runtime: rt, Payload: p, ExpiresAt: o.ExpiresAt, CreatedAt: r.now()})
+	return err
 }
 
 // Stop runs a sessionStop order of the daemon itself, and frees the start key of the session.

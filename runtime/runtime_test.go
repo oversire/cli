@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"testing"
 	"time"
@@ -68,5 +69,52 @@ func TestRegistry(t *testing.T) {
 	}
 	if _, err := r.Do(ctx, wire.WorkOrder{Runtime: "orca", Payload: wire.StopPayload{}}); err == nil {
 		t.Fatal("an unknown runtime passed")
+	}
+}
+
+// watcher is a fake runtime with Oversight.
+type watcher struct {
+	fake
+	ref wire.SessionRef
+	q   *wire.RunnerQuestion
+}
+
+func (w *watcher) ID() string { return "watcher" }
+func (w *watcher) Inspect(_ context.Context, s wire.SessionRef) (Inspection, error) {
+	if s.ID != "s1" {
+		return Inspection{}, ErrNotFound
+	}
+	w.ref = s
+	return Inspection{Tokens: 7}, nil
+}
+func (w *watcher) Escalate(_ context.Context, s wire.SessionRef, q *wire.RunnerQuestion) error {
+	w.ref, w.q = s, q
+	return nil
+}
+
+func TestRegistryInspectAndEscalate(t *testing.T) {
+	w := &watcher{}
+	r := NewRegistry(&fake{}, w)
+	ctx := context.Background()
+	ses := wire.DaemonSession{ID: "s1", Runtime: "watcher", Workspace: "app/work"}
+	in, err := r.Inspect(ctx, ses)
+	if err != nil || in.Tokens != 7 || w.ref.ID != "s1" || w.ref.Workspace.ID != "app/work" || w.ref.Workspace.Account.Provider != "watcher" {
+		t.Fatalf("inspect = %+v %v, ref %+v", in, err, w.ref)
+	}
+	q := &wire.RunnerQuestion{ID: "esc-1"}
+	if err := r.Escalate(ctx, ses, q); err != nil || w.q != q {
+		t.Fatalf("escalate = %v, q %v", err, w.q)
+	}
+	if _, err := r.Inspect(ctx, wire.DaemonSession{ID: "s9", Runtime: "watcher"}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("unknown session: %v", err)
+	}
+	if _, err := r.Inspect(ctx, wire.DaemonSession{ID: "s1", Runtime: "fake"}); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("a runtime with no Oversight: %v", err)
+	}
+	if err := r.Escalate(ctx, wire.DaemonSession{ID: "s1", Runtime: "fake"}, nil); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("a runtime with no Oversight: %v", err)
+	}
+	if _, err := r.Inspect(ctx, wire.DaemonSession{ID: "s1", Runtime: "none"}); !errors.Is(err, ErrNoRuntime) {
+		t.Fatalf("unknown runtime: %v", err)
 	}
 }

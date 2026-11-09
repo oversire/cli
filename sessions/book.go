@@ -60,6 +60,8 @@ type Patch struct {
 	Model, Effort, Profile *string
 	EnvKeys                *[]string // the env keys of the start, never a value
 	View                   *wire.SessionView
+	// Overseer is the session id of the overseer of the start.
+	Overseer *string
 }
 
 type Appender interface{ Append(e wire.ProviderEvent) }
@@ -176,6 +178,7 @@ func (e *entry) merge(p Patch) {
 	set(&e.s.Model, p.Model)
 	set(&e.s.Effort, p.Effort)
 	set(&e.s.Profile, p.Profile)
+	set(&e.s.Overseer, p.Overseer)
 	if p.EnvKeys != nil {
 		e.s.EnvKeys = slices.Clone(*p.EnvKeys)
 	}

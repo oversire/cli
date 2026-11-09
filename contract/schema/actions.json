@@ -55,7 +55,8 @@
         "effort": { "description": "The reasoning effort. Open set: low, medium, high, max. Missing: the CLI default.", "type": "string", "minLength": 1, "maxLength": 40 },
         "profile": { "description": "The OverSire agent name, for example claude-max. Display only: agent stays the base CLI.", "type": "string", "minLength": 1, "maxLength": 200 },
         "env": { "$ref": "#/$defs/LaunchEnv" },
-        "envSecrets": { "$ref": "#/$defs/LaunchEnvSecrets" }
+        "envSecrets": { "$ref": "#/$defs/LaunchEnvSecrets" },
+        "overseer": { "description": "The session id of the Claude session that oversees this agent. The daemon hides the asks of an overseen session until the overseer escalates.", "type": "string", "minLength": 1, "maxLength": 200 }
       },
       "required": ["repo", "agent", "prompt"],
       "additionalProperties": false

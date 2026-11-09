@@ -44,6 +44,7 @@ Enhance needs only a start and `History`: it starts one keyed session and reads 
 | `WorkspaceRemover` | `removeWorkspace` | `DELETE /v1/workspaces/{id}` |
 | `Revealer` | `reveal` | `POST /v1/reveal` (loopback only) |
 | `Launcher`, `Submitter`, `ScrollbackReader` | none; better results for start, send and read | direct orders |
+| `Oversight` | none; the worker engine of the daemon uses it | none; `Registry.Inspect` and `Registry.Escalate` |
 
 A runtime that is not reachable gives no capabilities. The app then hides the features of that machine.
 

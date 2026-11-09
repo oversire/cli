@@ -50,6 +50,8 @@ type LaunchRequest struct {
 	// Env is the plain env of the agent process. EnvSecrets names the secrets on home; the order never holds their values.
 	Env        map[string]string         `json:"env,omitempty"`
 	EnvSecrets map[string]AgentSecretRef `json:"envSecrets,omitempty"`
+	// Overseer is the session id of the Claude session that oversees the agent.
+	Overseer string `json:"overseer,omitempty"`
 }
 
 // AgentSecretRef is one secret value on the home daemon. Agent "*" is the env for all agents.

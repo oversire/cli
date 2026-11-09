@@ -1,0 +1,22 @@
+{
+  "repo": "/Users/ada/Projects/oversire-workspace/.wt/oversire-451",
+  "item": {
+    "project": {
+      "account": {
+        "provider": "plane",
+        "id": "ocral"
+      },
+      "id": "c3a1e5f7",
+      "key": "OVERSIRE"
+    },
+    "id": "7d2b",
+    "key": "OVERSIRE-451",
+    "url": "https://app.plane.so/ocral/browse/OVERSIRE-451/"
+  },
+  "agent": "codex",
+  "model": "gpt-5.5",
+  "prompt": "Do the plan.",
+  "inPlace": true,
+  "key": "work:OVERSIRE-451",
+  "overseer": "8390f639-71c4-4b6e-9a2d-0e5f1c7a3b88"
+}

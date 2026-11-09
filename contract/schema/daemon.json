@@ -51,7 +51,8 @@
         "model": { "description": "LaunchRequest.model of the start. Absent for a session that OverSire did not start.", "type": "string", "minLength": 1, "maxLength": 200 },
         "effort": { "description": "LaunchRequest.effort of the start.", "type": "string", "minLength": 1, "maxLength": 40 },
         "profile": { "description": "LaunchRequest.profile of the start: the OverSire agent name.", "type": "string", "minLength": 1, "maxLength": 200 },
-        "view": { "description": "The view of the session now. Absent: chat for the oversire runtime, terminal for the other runtimes. POST /v1/sessions/{id}/handover changes it.", "$ref": "#/$defs/SessionView" }
+        "view": { "description": "The view of the session now. Absent: chat for the oversire runtime, terminal for the other runtimes. POST /v1/sessions/{id}/handover changes it.", "$ref": "#/$defs/SessionView" },
+        "overseer": { "description": "LaunchRequest.overseer of the start: the session id of the Claude session that oversees this session.", "type": "string", "minLength": 1, "maxLength": 200 }
       },
       "required": ["id", "machine", "runtime", "harness", "cwd", "state", "stateSince", "updatedAt", "sources"],
       "additionalProperties": false

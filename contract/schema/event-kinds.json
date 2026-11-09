@@ -435,6 +435,144 @@
       }
     },
     {
+      "kind": "worker.started",
+      "domain": "agent",
+      "actorTypes": [
+        "agent"
+      ],
+      "private": false,
+      "summary": "the worker harness, for example Worker started: codex",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "session": {
+            "type": "string"
+          },
+          "harness": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "reused": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "session",
+          "harness"
+        ]
+      }
+    },
+    {
+      "kind": "worker.answered",
+      "domain": "agent",
+      "actorTypes": [
+        "agent"
+      ],
+      "private": false,
+      "summary": "what the overseer answered, for example Worker permission answered",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "request": {
+            "enum": [
+              "permission",
+              "question"
+            ]
+          },
+          "allow": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "request"
+        ]
+      }
+    },
+    {
+      "kind": "worker.nudged",
+      "domain": "agent",
+      "actorTypes": [
+        "agent"
+      ],
+      "private": false,
+      "summary": "how the overseer nudged the worker, for example Worker interrupted",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "how": {
+            "enum": [
+              "send",
+              "interrupt"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "how"
+        ]
+      }
+    },
+    {
+      "kind": "worker.escalated",
+      "domain": "agent",
+      "actorTypes": [
+        "agent",
+        "system"
+      ],
+      "private": false,
+      "summary": "the reason, for example Worker escalated to you: time budget",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "enum": [
+              "overseer",
+              "fallback",
+              "budget"
+            ]
+          },
+          "question": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "reason"
+        ]
+      }
+    },
+    {
+      "kind": "worker.done",
+      "domain": "agent",
+      "actorTypes": [
+        "agent"
+      ],
+      "private": false,
+      "summary": "the verdict, for example Worker done",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "verdict": {
+            "enum": [
+              "done",
+              "blocked"
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "verdict"
+        ]
+      }
+    },
+    {
       "kind": "prompt.submitted",
       "domain": "human",
       "actorTypes": [

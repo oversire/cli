@@ -17,10 +17,14 @@ import (
 type slowRuntimes struct {
 	mu    sync.Mutex
 	calls int
+	last  wire.WorkOrder
 }
 
 func (f *slowRuntimes) Has(id string) bool { return id == "oversire" || id == wire.RuntimeOrca }
 func (f *slowRuntimes) Do(_ context.Context, o wire.WorkOrder) (*wire.WorkOrderResult, error) {
+	f.mu.Lock()
+	f.last = o
+	f.mu.Unlock()
 	if _, ok := o.Payload.(wire.StopPayload); ok {
 		return &wire.WorkOrderResult{}, nil
 	}
@@ -222,5 +226,69 @@ func TestLaunchAndStopOfTheDaemon(t *testing.T) {
 	}
 	if _, err := r.Launch(context.Background(), "nope", runtime.Order{ID: "y", ExpiresAt: now.Add(time.Hour)}, req); err == nil {
 		t.Fatal("an unknown runtime launched")
+	}
+}
+
+func TestKeyedStartKeepsTheOverseer(t *testing.T) {
+	r, _, book := keyRig()
+	o := keyed("wo-1", "work:OVERSIRE-12")
+	p := o.Payload.(wire.LaunchRequest)
+	p.Overseer = "claude-1"
+	o.Payload = p
+	if res, _ := r.Run(trusted(), o, Hooks{}); res.State != wire.ResultDone {
+		t.Fatalf("result = %+v", res.Result)
+	}
+	if s, ok := book.Get("s-1"); !ok || s.Overseer != "claude-1" {
+		t.Fatalf("book = %+v %v", s, ok)
+	}
+}
+
+func TestReusedStartSetsTheNewOverseer(t *testing.T) {
+	r, rts, book := keyRig()
+	req := wire.LaunchRequest{Repo: "/r", Agent: "codex", Key: "work:OVERSIRE-12", Prompt: "go", Overseer: "claude-1"}
+	if _, err := r.Launch(context.Background(), "oversire", runtime.Order{ID: "a", ExpiresAt: now.Add(time.Hour)}, req); err != nil {
+		t.Fatal(err)
+	}
+	req.Overseer = "claude-2"
+	st, err := r.Launch(context.Background(), "oversire", runtime.Order{ID: "b", ExpiresAt: now.Add(time.Hour)}, req)
+	if err != nil || !st.Reused || rts.count() != 1 {
+		t.Fatalf("second start = %+v %v, launches %d", st, err, rts.count())
+	}
+	if s, _ := book.Get("s-1"); s.Overseer != "claude-2" {
+		t.Fatalf("overseer = %q", s.Overseer)
+	}
+}
+
+func TestLaunchGivesReused(t *testing.T) {
+	r, _, _ := keyRig()
+	req := wire.LaunchRequest{Repo: "/r", Agent: "codex", Key: "work:OVERSIRE-12", Prompt: "go"}
+	first, err := r.Launch(context.Background(), "oversire", runtime.Order{ID: "a", ExpiresAt: now.Add(time.Hour)}, req)
+	if err != nil || first.Reused {
+		t.Fatalf("first = %+v %v", first, err)
+	}
+	second, err := r.Launch(context.Background(), "oversire", runtime.Order{ID: "b", ExpiresAt: now.Add(time.Hour)}, req)
+	if err != nil || !second.Reused || second.Session.ID != first.Session.ID {
+		t.Fatalf("second = %+v %v", second, err)
+	}
+}
+
+func TestRunnerSendRunsASessionSendOrder(t *testing.T) {
+	r, rts, _ := keyRig()
+	ref := wire.SessionRef{Workspace: wire.WorkspaceRef{Account: wire.AccountID{Provider: "oversire", ID: "local"}, ID: "app/work"}, ID: "s-1"}
+	p := wire.SendPayload{Session: ref, Text: "go on", Origin: wire.OriginOverseer}
+	if err := r.Send(context.Background(), "oversire", runtime.Order{ID: "send-1", ExpiresAt: now.Add(time.Hour)}, p); err != nil {
+		t.Fatal(err)
+	}
+	rts.mu.Lock()
+	got, ok := rts.last.Payload.(wire.SendPayload)
+	rts.mu.Unlock()
+	if !ok || got.Text != "go on" || got.Origin != wire.OriginOverseer || rts.last.Runtime != "oversire" {
+		t.Fatalf("last order = %+v", rts.last)
+	}
+	if !r.journal.(*memJournal).sent["send-1"] {
+		t.Fatal("the hub gets the result")
+	}
+	if err := r.Send(context.Background(), "oversire", runtime.Order{ID: "send-2", ExpiresAt: now.Add(-time.Hour)}, p); err == nil {
+		t.Fatal("an expired order sent")
 	}
 }

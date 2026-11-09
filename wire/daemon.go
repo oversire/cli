@@ -73,11 +73,12 @@ type DaemonSession struct {
 	StartedAt      *time.Time    `json:"startedAt,omitempty"` // when the daemon first saw the session; a restart keeps it
 	UpdatedAt      time.Time     `json:"updatedAt"`
 	Sources        []string      `json:"sources"`
-	Key            string        `json:"key,omitempty"`     // the start key of the order that made the session
-	Model          string        `json:"model,omitempty"`   // LaunchRequest.Model of the start
-	Effort         string        `json:"effort,omitempty"`  // LaunchRequest.Effort of the start
-	Profile        string        `json:"profile,omitempty"` // LaunchRequest.Profile: the OverSire agent name
-	View           SessionView   `json:"view,omitempty"`    // empty: chat for the oversire runtime, terminal for the others
+	Key            string        `json:"key,omitempty"`      // the start key of the order that made the session
+	Model          string        `json:"model,omitempty"`    // LaunchRequest.Model of the start
+	Effort         string        `json:"effort,omitempty"`   // LaunchRequest.Effort of the start
+	Profile        string        `json:"profile,omitempty"`  // LaunchRequest.Profile: the OverSire agent name
+	View           SessionView   `json:"view,omitempty"`     // empty: chat for the oversire runtime, terminal for the others
+	Overseer       string        `json:"overseer,omitempty"` // LaunchRequest.Overseer of the start
 	// EnvKeys are the env keys of the start, for the session.started row. Not in the contract: the book keeps it in memory.
 	EnvKeys []string `json:"-"`
 }
