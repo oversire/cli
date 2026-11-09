@@ -55,6 +55,7 @@ type SendPayload struct {
 	Text       string            `json:"text"`
 	Permission *PermissionAnswer `json:"permission,omitempty"`
 	Answer     *QuestionAnswer   `json:"answer,omitempty"`
+	Origin     TurnOrigin        `json:"origin,omitempty"` // user or overseer; empty means user
 }
 
 // QuestionAnswer answers the RunnerQuestion with the same id.

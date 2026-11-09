@@ -217,7 +217,7 @@ func (s *session) apply(e agentvisor.Event) {
 			s.lastInput, s.output = e.Text, false
 			s.flushPartial()
 			s.log.add("> " + e.Text)
-			s.addTurn(wire.RoleUser, e.Text, e.At)
+			s.addTurn(wire.RoleUser, e.Text, e.At, originOf(e.Kind))
 		}
 	case agentvisor.EventRequestClosed:
 		s.closeRequest(e.RequestID)
@@ -307,7 +307,7 @@ func (s *session) handle(ev agentwire.Event, at time.Time) {
 	case agentwire.EventError:
 		s.lastErr = cmp.Or(ev.Error, ev.Code)
 		s.log.add("! " + s.lastErr)
-		s.addTurn(wire.RoleSystem, s.lastErr, at)
+		s.addTurn(wire.RoleSystem, s.lastErr, at, "")
 	case agentwire.EventExit:
 		// The last classified error tells more than the exit status.
 		if ev.Error != "" {
@@ -377,12 +377,23 @@ func (s *session) addText(text string, at time.Time) {
 	}
 	s.last = text
 	s.log.add(text)
-	s.addTurn(wire.RoleAssistant, text, at)
+	s.addTurn(wire.RoleAssistant, text, at, "")
 }
 
 // addTurn adds a turn to the chat view. Call it with s.mu held.
-func (s *session) addTurn(role wire.TurnRole, text string, at time.Time) {
-	s.turns.add(wire.SessionTurn{Role: role, At: at.UTC(), Text: text})
+func (s *session) addTurn(role wire.TurnRole, text string, at time.Time, origin wire.TurnOrigin) {
+	s.turns.add(wire.SessionTurn{Role: role, At: at.UTC(), Text: text, Origin: origin})
+}
+
+// originOf maps the kind of a visor input to the origin of a user turn.
+func originOf(kind string) wire.TurnOrigin {
+	switch kind {
+	case string(wire.OriginOverseer):
+		return wire.OriginOverseer
+	case agentvisor.InputKindRestart:
+		return wire.OriginSystem
+	}
+	return wire.OriginUser
 }
 
 func (s *session) flushPartial() {
@@ -406,15 +417,15 @@ func (s *session) started() (string, error) {
 }
 
 // say sends a user message. A message during a turn joins the turn or waits for its end.
-// The visor resumes a suspended session first.
-func (s *session) say(ctx context.Context, text string) error {
+// The visor resumes a suspended session first. An empty origin means user.
+func (s *session) say(ctx context.Context, text string, origin wire.TurnOrigin) error {
 	vid, err := s.started()
 	if err != nil {
 		return err
 	}
 	// A send at the end of the holder can see the old state (agent-visor 0.2.1). It goes again.
 	for range 5 {
-		if _, err = s.rt.host.Send(ctx, vid, agentvisor.Input{Text: text}); !errors.Is(err, agentvisor.ErrState) {
+		if _, err = s.rt.host.Send(ctx, vid, agentvisor.Input{Text: text, Kind: string(cmp.Or(origin, wire.OriginUser))}); !errors.Is(err, agentvisor.ErrState) {
 			return err
 		}
 		select {
@@ -489,7 +500,7 @@ func (s *session) finish(reason string) {
 		s.info.Error = reason
 		s.log.add("! " + reason)
 		if reason != s.lastErr {
-			s.addTurn(wire.RoleSystem, reason, s.rt.now())
+			s.addTurn(wire.RoleSystem, reason, s.rt.now(), "")
 		}
 	}
 	s.change(state)

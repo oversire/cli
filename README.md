@@ -167,6 +167,7 @@ The budget of the order has caps: 50 earlier turns, 10 last turns and 20000 char
 | `oversire review ready [--key K] [--kind code\|plan] [--note <text>] [--plan <file.md>]` | Hand off a worktree group or a plan for review. The agent runs it. See "Reviews". |
 | `oversire review reply [--key K] <comment id> "<text>"` | Answer a review comment. The agent runs it. |
 | `oversire review ls [--kind code\|plan] [--json]` | Show the reviews of this machine. |
+| `oversire worker read <id or KEY> [--reader NAME] [--limit N] [--json]` | Show the turns of a worker session since the last read of the reader, as a short fold. `--json` prints the raw turns. See "Workers". |
 | `oversire visor ls\|session\|workdir\|project\|harness\|status` | Show and control the agent sessions of the `oversire` runtime. See "runtime:oversire". |
 | `oversire ticket skill [new\|plan\|work\|done\|groom\|sweep\|spec]` | Print the body of the `oversire` agent skill. See "Ticket skill". |
 | `oversire ticket skill --install\|--refresh [--harness claude,codex]` | Install the skill file, or update the installed files. |
@@ -479,6 +480,23 @@ The chat view:
 `ended` `{reason}` (`exited`, `removed` or `closed`) comes before the daemon closes the socket. The app does not connect again after it.
 
 The `oversire` runtime makes the turns of each session from the events of the visor. A tool input is clipped to 200 characters, and a tool result to 2000. A session from before the visor reads `<data>/sessions/<id>.turns.jsonl`. An old session with no turn log gets its turns from the transcript of the harness.
+
+### Session turns
+
+`GET /v1/sessions/{id}/turns?after=<seq>&limit=<n>` (member access) gives the turns of a session as one page, with no WebSocket. `after` is 0 by default. `limit` is 200 by default and 1000 at most. The answer is a `SessionTurnsPage` `{turns, more}` with the first `limit` turns after `after`. `more` is true when the daemon cut the page. 400: a bad `after` or `limit`. 403: the request has an `Origin` header. 404: no such session. 409: the session has no chat view.
+
+A user turn has the optional `origin`: `user`, `overseer` or `system`. A `sessionSend` order takes `origin` `user` or `overseer`, and no `origin` means `user`. The `oversire` runtime sends it to the visor as the kind of the input, so a replay after a restart gives the same origins. The restart text of the visor gives `system`.
+
+### Workers
+
+A worker is a session of the `oversire` runtime that an overseer reads. The routes are for loopback only. The daemon keeps one record for each worker in `<data>/worker-sessions/<session>.json`, with the start key and the cursor of each reader.
+
+| Route | What it does |
+|---|---|
+| `GET /v1/workers/{id}/read?reader=<name>&limit=<n>` | A `Read` `{header, turns, next}`: the turns after the cursor of the reader. `{id}` is a session id or an item key (`OVERSIRE-12` finds the session with the key `work:OVERSIRE-12`, also after the session stopped). 400: no reader, or a bad limit. 404: no such session. 409: the session is not on the `oversire` runtime, or has no chat view. |
+| `PUT /v1/workers/{id}/cursors/{reader}` | Body `{seq}`. Sets the cursor of the reader and answers 204. |
+
+`next` never passes the first tool turn with the status `running`, because a tool turn changes in place with the same seq. `oversire worker read` prints the fold first, and then sets the cursor to `next`. When the print fails, the cursor stays.
 
 ### Orca pairing
 

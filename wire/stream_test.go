@@ -27,6 +27,7 @@ func TestStreamFixtures(t *testing.T) {
 	frameRoundTrip(t, "stream-client-frame", DecodeClientFrame)
 	frameRoundTrip(t, "stream-daemon-frame", DecodeDaemonFrame)
 	roundTrip[SessionTurn](t, "session-turn")
+	roundTrip[SessionTurnsPage](t, "session-turns-page")
 }
 
 func TestClientFrameIsStrict(t *testing.T) {

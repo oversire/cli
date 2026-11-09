@@ -68,7 +68,8 @@
         "session": { "$ref": "refs.json#/$defs/SessionRef" },
         "text": { "description": "A user message. Empty with a permission answer or a question answer.", "type": "string" },
         "permission": { "$ref": "#/$defs/PermissionAnswer" },
-        "answer": { "$ref": "#/$defs/RunnerAnswer" }
+        "answer": { "$ref": "#/$defs/RunnerAnswer" },
+        "origin": { "description": "Who sends the text. No origin means user. A sender cannot send system.", "enum": ["user", "overseer"] }
       },
       "required": ["session", "text"],
       "additionalProperties": false

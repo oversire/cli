@@ -35,6 +35,7 @@ import (
 	"github.com/oversire/cli/term"
 	"github.com/oversire/cli/update"
 	"github.com/oversire/cli/wire"
+	"github.com/oversire/cli/worker"
 )
 
 // spoolInterval is how often the daemon reads the hook spool.
@@ -200,6 +201,9 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	}, time.Now)
 	runbooks.Log = c.log
 	srv.Handle(runbook.NewRoutes(runbooks).Routes()...)
+	workers := worker.NewEngine(worker.NewStore(filepath.Join(data, "worker-sessions")), book, reg, review.NewGit(c.cmds), time.Now)
+	workers.Log = c.log
+	srv.Handle(worker.NewRoutes(workers).Routes()...)
 	var order review.Order
 	if cfg.Review != nil {
 		order = cfg.Review.Order

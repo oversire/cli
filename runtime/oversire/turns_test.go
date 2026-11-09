@@ -7,9 +7,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	agentvisor "github.com/trebi-ai/agent-visor"
 	agentwire "github.com/trebi-ai/agent-wire"
 
 	"github.com/oversire/cli/runtime"
@@ -259,5 +261,133 @@ func TestChatInterrupt(t *testing.T) {
 	}
 	if err := src.Interrupt(context.Background()); err == nil {
 		t.Fatal("interrupt of an ended session")
+	}
+}
+
+// userTurns gives the user turns of a session.
+func userTurns(t *testing.T, id string, rt *Runtime) []wire.SessionTurn {
+	t.Helper()
+	src, err := rt.Chat(context.Background(), wire.DaemonSession{ID: id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	all, _, err := src.Turns(context.Background(), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []wire.SessionTurn
+	for _, tu := range all {
+		if tu.Role == wire.RoleUser {
+			out = append(out, tu)
+		}
+	}
+	return out
+}
+
+// recordingHost keeps the inputs that the runtime sends.
+type recordingHost struct {
+	Host
+	mu     sync.Mutex
+	inputs []agentvisor.Input
+}
+
+func (h *recordingHost) Send(ctx context.Context, id string, in agentvisor.Input) (agentvisor.Delivery, error) {
+	h.mu.Lock()
+	h.inputs = append(h.inputs, in)
+	h.mu.Unlock()
+	return h.Host.Send(ctx, id, in)
+}
+
+func (h *recordingHost) last() agentvisor.Input {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.inputs[len(h.inputs)-1]
+}
+
+func TestSayMarksTheUserTurnWithTheOrigin(t *testing.T) {
+	var host *recordingHost
+	f := setupWith(t, chat, Options{}, func(v *agentvisor.Visor) Host { host = &recordingHost{Host: v}; return host })
+	ref := f.launch(t, "APP-11", runtime.Order{ID: "o1"})
+	f.rec.wait(t, ref.ID, wire.SessionWaitingInput)
+
+	s, err := f.rt.session(ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.say(context.Background(), "check the tests", wire.OriginOverseer); err != nil {
+		t.Fatal(err)
+	}
+	if got := host.last(); got.Text != "check the tests" || got.Kind != "overseer" {
+		t.Fatalf("input %+v", got)
+	}
+	waitFor(t, func() bool { return len(userTurns(t, ref.ID, f.rt)) == 2 })
+	if u := userTurns(t, ref.ID, f.rt); u[0].Origin != wire.OriginUser || u[1].Origin != wire.OriginOverseer || u[1].Text != "check the tests" {
+		t.Fatalf("user turns %+v", u)
+	}
+}
+
+func TestOriginSurvivesTheReplay(t *testing.T) {
+	f := setup(t, chat, Options{})
+	ref := f.launch(t, "APP-12", runtime.Order{ID: "o1"})
+	f.rec.wait(t, ref.ID, wire.SessionWaitingInput)
+	if err := f.rt.Send(context.Background(), wire.SendPayload{Session: ref, Text: "more", Origin: wire.OriginOverseer}); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { return len(userTurns(t, ref.ID, f.rt)) == 2 })
+	if err := f.rt.Stop(context.Background(), ref); err != nil {
+		t.Fatal(err)
+	}
+
+	again := f.again(t, nil)
+	u := userTurns(t, ref.ID, again)
+	if len(u) != 2 || u[0].Origin != wire.OriginUser || u[1].Origin != wire.OriginOverseer || u[1].Text != "more" {
+		t.Fatalf("user turns after the replay %+v", u)
+	}
+}
+
+func TestRestartPromptGivesOriginSystem(t *testing.T) {
+	f := setup(t, chat, Options{})
+	ref := f.launch(t, "APP-13", runtime.Order{ID: "o1"})
+	f.rec.wait(t, ref.ID, wire.SessionWaitingInput)
+	s, err := f.rt.session(ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.apply(agentvisor.Event{Type: agentvisor.EventUser, Input: true, Text: restartPrompt, Kind: agentvisor.InputKindRestart, At: time.Now()})
+	u := userTurns(t, ref.ID, f.rt)
+	if last := u[len(u)-1]; last.Text != restartPrompt || last.Origin != wire.OriginSystem {
+		t.Fatalf("user turns %+v", u)
+	}
+}
+
+func TestUserTurnWithNoKindIsUser(t *testing.T) {
+	f := setup(t, chat, Options{})
+	ref := f.launch(t, "APP-14", runtime.Order{ID: "o1"})
+	f.rec.wait(t, ref.ID, wire.SessionWaitingInput)
+	s, err := f.rt.session(ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.apply(agentvisor.Event{Type: agentvisor.EventUser, Input: true, Text: "old input", At: time.Now()})
+	u := userTurns(t, ref.ID, f.rt)
+	if last := u[len(u)-1]; last.Text != "old input" || last.Origin != wire.OriginUser {
+		t.Fatalf("user turns %+v", u)
+	}
+}
+
+func TestChatSendGivesOriginUser(t *testing.T) {
+	f := setup(t, chat, Options{})
+	ref := f.launch(t, "APP-15", runtime.Order{ID: "o1"})
+	f.rec.wait(t, ref.ID, wire.SessionWaitingInput)
+	src, err := f.rt.Chat(context.Background(), wire.DaemonSession{ID: ref.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := src.Send(context.Background(), "from the app"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { return len(userTurns(t, ref.ID, f.rt)) == 2 })
+	if u := userTurns(t, ref.ID, f.rt); u[1].Text != "from the app" || u[1].Origin != wire.OriginUser {
+		t.Fatalf("user turns %+v", u)
 	}
 }

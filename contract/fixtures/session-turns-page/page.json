@@ -1,0 +1,18 @@
+{
+  "turns": [
+    {
+      "seq": 3,
+      "role": "assistant",
+      "at": "2026-10-23T18:01:30Z",
+      "text": "I change the schema first."
+    },
+    {
+      "seq": 4,
+      "role": "user",
+      "at": "2026-10-23T18:02:00Z",
+      "text": "Run the tests before you go on.",
+      "origin": "overseer"
+    }
+  ],
+  "more": true
+}

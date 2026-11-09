@@ -40,9 +40,23 @@
         "role": { "$ref": "#/$defs/TurnRole" },
         "at": { "type": "string", "format": "date-time" },
         "text": { "description": "Markdown. Empty for a tool turn.", "type": "string" },
-        "tool": { "$ref": "#/$defs/TurnTool" }
+        "tool": { "$ref": "#/$defs/TurnTool" },
+        "origin": {
+          "description": "Who wrote a user turn. user: a person (the default). overseer: an overseer agent. system: the restart text of the daemon.",
+          "enum": ["user", "overseer", "system"]
+        }
       },
       "required": ["seq", "role", "at", "text"],
+      "additionalProperties": false
+    },
+    "SessionTurnsPage": {
+      "description": "The answer of GET /v1/sessions/{id}/turns?after=&limit= on the daemon, with Member access. The turns after seq, oldest first. more: true when the daemon cut the page at limit.",
+      "type": "object",
+      "properties": {
+        "turns": { "type": "array", "items": { "$ref": "#/$defs/SessionTurn" } },
+        "more": { "type": "boolean" }
+      },
+      "required": ["turns", "more"],
       "additionalProperties": false
     },
     "StreamClientFrame": {

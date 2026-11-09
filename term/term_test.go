@@ -2,9 +2,11 @@ package term
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -481,8 +483,13 @@ func TestTurnFrames(t *testing.T) {
 func TestRouteIsMember(t *testing.T) {
 	// The server checks the access: loopback with no token, the tailnet with the group credential.
 	r := NewAPI(book{}, fakeOpener{}, time.Now).Routes()
-	if len(r) != 1 || r[0].Pattern != "GET /v1/sessions/{id}/stream" || r[0].Access != server.Member {
+	if len(r) != 2 || r[0].Pattern != "GET /v1/sessions/{id}/stream" || r[1].Pattern != "GET /v1/sessions/{id}/turns" {
 		t.Fatalf("%+v", r)
+	}
+	for _, rt := range r {
+		if rt.Access != server.Member {
+			t.Fatalf("%+v", rt)
+		}
 	}
 }
 
@@ -525,4 +532,79 @@ func waitFor(t *testing.T, ok func() bool) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatal("timeout")
+}
+
+func fiveTurns() *fakeTurns {
+	f := &fakeTurns{live: make(chan wire.SessionTurn)}
+	for i := 1; i <= 5; i++ {
+		f.history = append(f.history, wire.SessionTurn{Seq: i, Role: wire.RoleAssistant, Text: "t"})
+	}
+	return f
+}
+
+func getTurns(t *testing.T, srv *httptest.Server, query string) (int, wire.SessionTurnsPage) {
+	t.Helper()
+	res, err := http.Get(srv.URL + "/v1/sessions/s-1/turns" + query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	var page wire.SessionTurnsPage
+	if res.StatusCode == http.StatusOK {
+		if err := json.NewDecoder(res.Body).Decode(&page); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return res.StatusCode, page
+}
+
+func seqs(ts []wire.SessionTurn) []int {
+	out := make([]int, len(ts))
+	for i, tu := range ts {
+		out[i] = tu.Seq
+	}
+	return out
+}
+
+func TestTurnsRouteGivesTheTurnsAfterSeq(t *testing.T) {
+	srv := newServer(t, fakeOpener{chat: fiveTurns()}, time.Now)
+	code, page := getTurns(t, srv, "?after=2")
+	if code != http.StatusOK || !slices.Equal(seqs(page.Turns), []int{3, 4, 5}) || page.More {
+		t.Fatalf("%d %+v", code, page)
+	}
+	if code, page = getTurns(t, srv, "?after=5"); code != http.StatusOK || page.Turns == nil || len(page.Turns) != 0 || page.More {
+		t.Fatalf("empty page %d %+v", code, page)
+	}
+}
+
+func TestTurnsRouteClipsToLimit(t *testing.T) {
+	srv := newServer(t, fakeOpener{chat: fiveTurns()}, time.Now)
+	code, page := getTurns(t, srv, "?limit=2")
+	if code != http.StatusOK || !slices.Equal(seqs(page.Turns), []int{1, 2}) || !page.More {
+		t.Fatalf("%d %+v", code, page)
+	}
+	if code, page = getTurns(t, srv, "?after=3&limit=2"); code != http.StatusOK || !slices.Equal(seqs(page.Turns), []int{4, 5}) || page.More {
+		t.Fatalf("exact fit %d %+v", code, page)
+	}
+}
+
+func TestTurnsRouteRefusals(t *testing.T) {
+	srv := newServer(t, fakeOpener{}, time.Now)
+	req, _ := http.NewRequest("GET", srv.URL+"/v1/sessions/s-1/turns", nil)
+	req.Header.Set("Origin", "https://evil.example")
+	if res, err := http.DefaultClient.Do(req); err != nil || res.StatusCode != http.StatusForbidden {
+		t.Fatalf("origin: %v %v", res.StatusCode, err)
+	}
+	if res, err := http.Get(srv.URL + "/v1/sessions/nope/turns"); err != nil || res.StatusCode != http.StatusNotFound {
+		t.Fatalf("unknown: %v %v", res.StatusCode, err)
+	}
+	if code, _ := getTurns(t, srv, ""); code != http.StatusConflict {
+		t.Fatalf("no view: %d", code)
+	}
+	srv = newServer(t, fakeOpener{chat: fiveTurns()}, time.Now)
+	for _, q := range []string{"?after=x", "?after=-1", "?limit=0", "?limit=1001", "?limit=x"} {
+		if code, _ := getTurns(t, srv, q); code != http.StatusBadRequest {
+			t.Fatalf("%s: %d", q, code)
+		}
+	}
 }

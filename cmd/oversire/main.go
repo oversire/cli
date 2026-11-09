@@ -53,6 +53,8 @@ Usage:
                                                        hand off a group or a plan for review (the agent runs it)
   oversire review reply [--key K] <comment id> "<text>"  answer a review comment (the agent runs it)
   oversire review ls [--kind code|plan] [--json]       show the reviews of this machine
+  oversire worker read <id|KEY> [--reader NAME] [--limit N] [--json]
+                                                       show the new turns of a worker session since the last read
   oversire visor ls | session | workdir | project | harness | status
                                                        show and control the agent sessions of the daemon
   oversire ticket skill [new|plan|work|done|groom|sweep|spec] [--install|--refresh] [--harness claude,codex]
@@ -168,6 +170,8 @@ func (c *cli) dispatch(ctx context.Context, args []string) error {
 		return c.step(ctx, rest)
 	case cmd == "review":
 		return c.review(ctx, rest)
+	case cmd == "worker":
+		return c.worker(ctx, rest)
 	case cmd == "update":
 		return c.update(ctx)
 	case cmd == "version" || cmd == "--version" || cmd == "-v":

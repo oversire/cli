@@ -438,7 +438,7 @@ func (rt *Runtime) Send(ctx context.Context, p wire.SendPayload) error {
 	if p.Answer != nil {
 		return s.answerQuestion(ctx, *p.Answer)
 	}
-	return s.say(ctx, p.Text)
+	return s.say(ctx, p.Text, p.Origin)
 }
 
 // History reads the transcript of the harness session. A session from before agent-visor reads its session file.

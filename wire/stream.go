@@ -59,13 +59,29 @@ type TurnTool struct {
 	Summary string     `json:"summary,omitempty"` // at most 2000 characters
 }
 
+// TurnOrigin tells who wrote a user turn. Empty means user.
+type TurnOrigin string
+
+const (
+	OriginUser     TurnOrigin = "user"
+	OriginOverseer TurnOrigin = "overseer"
+	OriginSystem   TurnOrigin = "system" // the restart text of the daemon
+)
+
 // SessionTurn is one turn of the chat view. A tool turn that changes state comes again with the same Seq.
 type SessionTurn struct {
-	Seq  int       `json:"seq"`
-	Role TurnRole  `json:"role"`
-	At   time.Time `json:"at"`
-	Text string    `json:"text"`
-	Tool *TurnTool `json:"tool,omitempty"`
+	Seq    int        `json:"seq"`
+	Role   TurnRole   `json:"role"`
+	At     time.Time  `json:"at"`
+	Text   string     `json:"text"`
+	Tool   *TurnTool  `json:"tool,omitempty"`
+	Origin TurnOrigin `json:"origin,omitempty"`
+}
+
+// SessionTurnsPage is the answer of GET /v1/sessions/{id}/turns. More is true when the daemon cut the page.
+type SessionTurnsPage struct {
+	Turns []SessionTurn `json:"turns"`
+	More  bool          `json:"more"`
 }
 
 // Client frames.
