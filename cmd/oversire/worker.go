@@ -115,16 +115,10 @@ func (c *cli) workerRead(ctx context.Context, args []string) error {
 
 // showRead reads the new turns, prints them and moves the cursor.
 func (c *cli) showRead(ctx context.Context, d daemonClient, ref, reader string, limit int, asJSON bool) error {
-	base := workerPath(ref)
-	q := url.Values{"reader": {reader}}
-	if limit > 0 {
-		q.Set("limit", strconv.Itoa(limit))
-	}
-	var r worker.Read
-	if err := d.call(ctx, "GET", base+"/read?"+q.Encode(), nil, &r); err != nil {
+	r, err := fetchRead(ctx, d, ref, reader, limit)
+	if err != nil {
 		return err
 	}
-	var err error
 	if asJSON {
 		err = json.NewEncoder(c.out).Encode(r.Turns)
 	} else {
@@ -133,12 +127,23 @@ func (c *cli) showRead(ctx context.Context, d daemonClient, ref, reader string, 
 	if err != nil {
 		return err
 	}
-	return d.call(ctx, "PUT", base+"/cursors/"+url.PathEscape(reader), worker.Cursor{Seq: r.Next}, nil)
+	return d.call(ctx, "PUT", workerPath(ref)+"/cursors/"+url.PathEscape(reader), worker.Cursor{Seq: r.Next}, nil)
+}
+
+// fetchRead gets the new turns of the reader. It does not move the cursor.
+func fetchRead(ctx context.Context, d daemonClient, ref, reader string, limit int) (worker.Read, error) {
+	q := url.Values{"reader": {reader}}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	var r worker.Read
+	err := d.call(ctx, "GET", workerPath(ref)+"/read?"+q.Encode(), nil, &r)
+	return r, err
 }
 
 // workerWait blocks until the worker needs an action, then prints the new turns as worker read
 // does. The daemon holds each call for at most 25 s, so the loop calls it again. At the timeout
-// it prints the header and exits with 3.
+// it prints the header of the unread turns and exits with 3.
 func (c *cli) workerWait(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("worker wait", flag.ContinueOnError)
 	fs.SetOutput(c.out)
@@ -160,7 +165,12 @@ func (c *cli) workerWait(ctx context.Context, args []string) error {
 	for {
 		left := time.Until(deadline).Round(time.Millisecond)
 		if left <= 0 {
-			if err := (worker.Fold{}).WriteHeader(c.out, last.Header); err != nil {
+			// The header of a read shows the unread turns. The wake header has no reader.
+			r, err := fetchRead(ctx, d, ref, *reader, worker.MaxLimit)
+			if err != nil {
+				return err
+			}
+			if err := (worker.Fold{}).WriteHeader(c.out, r.Header); err != nil {
 				return err
 			}
 			return &exitError{exitWaitTimeout, errSilent}

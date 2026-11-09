@@ -189,7 +189,9 @@ func TestWorkerWaitSaysAStall(t *testing.T) {
 func TestWorkerWaitExits3OnTimeout(t *testing.T) {
 	c, out, _ := testCLI(t, "")
 	hdr := worker.Header{Session: "s1", Key: "work:OVERSIRE-12", Harness: "codex", State: wire.PhaseWorking}
-	d := &waitDaemon{waits: []worker.WakeReason{worker.WakeNone}, header: hdr}
+	read := worker.Read{Header: hdr, Turns: []wire.SessionTurn{{Seq: 4}, {Seq: 9}}, Next: 9}
+	read.Header.First, read.Header.Last = 4, 9
+	d := &waitDaemon{workerDaemon: workerDaemon{read: read}, waits: []worker.WakeReason{worker.WakeNone}, header: hdr}
 	fakeDaemon(t, c, d)
 	err := c.worker(context.Background(), []string{"wait", "OVERSIRE-12", "--timeout", "1s"})
 	var e *exitError
@@ -197,7 +199,7 @@ func TestWorkerWaitExits3OnTimeout(t *testing.T) {
 		t.Fatalf("err %v", err)
 	}
 	got := out.String()
-	if got != "work:OVERSIRE-12 | codex | working | no new turns\n" || len(d.puts) != 0 {
+	if got != "work:OVERSIRE-12 | codex | working | turns 4-9\n" || len(d.puts) != 0 {
 		t.Fatalf("output %q puts %v", got, d.puts)
 	}
 }
