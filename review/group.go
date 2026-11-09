@@ -2,7 +2,10 @@ package review
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -42,6 +45,25 @@ func (g group) Rel() string { return ".wt/" + g.Name }
 // worktree is the folder of the repo name in the group. primary is the main checkout of it in the root.
 func (g group) worktree(name string) string { return filepath.Join(g.Dir(), name) }
 func (g group) primary(name string) string  { return filepath.Join(g.Root, name) }
+
+// print is the content hash of the file path of the repo name in the group. A missing file gives "gone".
+func (g group) print(name, path string) string {
+	wt := g.worktree(name)
+	p := filepath.Join(wt, path)
+	if !strings.HasPrefix(p, wt+string(filepath.Separator)) {
+		return "outside"
+	}
+	f, err := os.Open(p)
+	if err != nil {
+		return "gone"
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "gone"
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
 
 // readGroup reads <root>/.wt/<name>. ok is false when it is not a folder.
 func readGroup(root, name string) (group, bool) {

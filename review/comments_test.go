@@ -198,7 +198,7 @@ func TestStoreKeepsReviews(t *testing.T) {
 	if !strings.HasPrefix(c.ID, "c_") || len(c.ID) != 10 || c.Excerpt != "func N() {}" || c.Round != 1 {
 		t.Fatalf("%+v", c)
 	}
-	if err := r.MarkViewed("APP-1", wire.ViewedMark{Repo: "app", Path: "n.go", Viewed: true}); err != nil {
+	if err := r.MarkViewed(ctx, "APP-1", wire.ViewedMark{Repo: "app", Path: "n.go", Viewed: true}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -212,5 +212,43 @@ func TestStoreKeepsReviews(t *testing.T) {
 	}
 	if roots := r2.allRoots(ctx); !slices.Equal(roots, slices.Sorted(slices.Values([]string{other, w.root}))) {
 		t.Fatal(roots)
+	}
+}
+
+func TestAChangeClearsTheViewedMark(t *testing.T) {
+	w := newWS(t)
+	w.repo("app")
+	g := w.group("app-2", "app")
+	w.commit(filepath.Join(g, "app"), "Work", map[string]string{"n.go": "package lib\n"})
+	r := newRig(t, w.root)
+	ctx := context.Background()
+	if err := r.MarkViewed(ctx, "APP-2", wire.ViewedMark{Repo: "app", Path: "n.go", Viewed: true}); err != nil {
+		t.Fatal(err)
+	}
+	if d, err := r.Get(ctx, "APP-2", ""); err != nil || !d.Files[0].Viewed || d.Files[0].ViewedStale {
+		t.Fatalf("%+v %v", d.Files, err)
+	}
+	if _, ok := r.row(wire.KindReviewViewed); !ok {
+		t.Fatal("no review.viewed row")
+	}
+
+	w.write(filepath.Join(g, "app", "n.go"), "package lib\n\nfunc M() {}\n")
+	d, err := r.Get(ctx, "APP-2", "")
+	if err != nil || d.Files[0].Viewed || !d.Files[0].ViewedStale {
+		t.Fatalf("%+v %v", d.Files, err)
+	}
+	if row, ok := r.row(wire.KindReviewUnviewed); !ok || row.ActorType != wire.ActorSystem {
+		t.Fatalf("%+v", row)
+	}
+
+	// The tag stays until the user marks the file again.
+	if d, _ = r.Get(ctx, "APP-2", ""); !d.Files[0].ViewedStale {
+		t.Fatalf("%+v", d.Files)
+	}
+	if err := r.MarkViewed(ctx, "APP-2", wire.ViewedMark{Repo: "app", Path: "n.go", Viewed: true}); err != nil {
+		t.Fatal(err)
+	}
+	if d, _ = r.Get(ctx, "APP-2", ""); !d.Files[0].Viewed || d.Files[0].ViewedStale {
+		t.Fatalf("%+v", d.Files)
 	}
 }

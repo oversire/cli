@@ -180,26 +180,74 @@ func (e *Engine) comment(key, cid string) (*record, int, error) {
 }
 
 // MarkViewed sets or clears the viewed mark of a file of the code review of key.
-func (e *Engine) MarkViewed(key string, m wire.ViewedMark) error {
+// The mark keeps the content hash of the file. Get clears the mark when the file changes.
+func (e *Engine) MarkViewed(ctx context.Context, key string, m wire.ViewedMark) error {
 	if !validKey(key) {
 		return refuse(Invalid, "The key %q is not valid.", key)
 	}
 	if m.Repo == "" || m.Path == "" {
 		return refuse(Invalid, "A viewed mark needs a repo and a path.")
 	}
+	var print string
+	if m.Viewed {
+		if g, ok := findGroup(e.allRoots(ctx), key); ok {
+			print = g.print(m.Repo, m.Path)
+		}
+	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	r := e.rec(wire.ReviewCode, key)
-	if r.Viewed == nil {
-		r.Viewed = map[string]bool{}
-	}
+	f := m.Repo + "/" + m.Path
+	delete(r.Stale, f)
+	kind, summary := wire.KindReviewUnviewed, "Not viewed: "+f+"."
 	if m.Viewed {
-		r.Viewed[m.Repo+"/"+m.Path] = true
+		r.Viewed = setKey(r.Viewed, f, true)
+		r.Prints = setKey(r.Prints, f, print)
+		kind, summary = wire.KindReviewViewed, "Viewed "+f+"."
 	} else {
-		delete(r.Viewed, m.Repo+"/"+m.Path)
+		delete(r.Viewed, f)
+		delete(r.Prints, f)
 	}
 	e.changed(r, wire.EventReviewChanged)
+	e.viewedEvent(key, kind, wire.ActorHuman, f, summary)
 	return nil
+}
+
+// unview clears the marks of the files that changed after the mark, and keeps a hash for an old mark with none.
+// prints holds the hash of each viewed file now. Call it with e.mu held.
+func (e *Engine) unview(r *record, prints map[string]string) {
+	dirty := false
+	for f, p := range prints {
+		switch old, ok := r.Prints[f]; {
+		case !ok || old == "":
+			r.Prints = setKey(r.Prints, f, p)
+		case old != p:
+			delete(r.Viewed, f)
+			delete(r.Prints, f)
+			r.Stale = setKey(r.Stale, f, true)
+			e.viewedEvent(r.Key, wire.KindReviewUnviewed, wire.ActorSystem, f, f+" changed after it was viewed.")
+		default:
+			continue
+		}
+		dirty = true
+	}
+	if dirty {
+		e.changed(r, wire.EventReviewChanged)
+	}
+}
+
+func (e *Engine) viewedEvent(key, kind string, actor wire.ActorType, f, summary string) {
+	repo, path, _ := strings.Cut(f, "/")
+	e.event(key, fmt.Sprintf("review:code:%s:%s:%s:%d", key, kind, f, e.d.Clock().UnixMilli()), kind, actor, summary,
+		map[string]any{"kind": wire.ReviewCode, "repo": repo, "path": path})
+}
+
+func setKey[V any](m map[string]V, k string, v V) map[string]V {
+	if m == nil {
+		m = map[string]V{}
+	}
+	m[k] = v
+	return m
 }
 
 // Ready is the hand-off of the agent: the review is the turn of the user again. It gives the summary.

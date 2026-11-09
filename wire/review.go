@@ -124,6 +124,8 @@ type ReviewFile struct {
 	Binary    bool       `json:"binary"`
 	Untracked bool       `json:"untracked,omitempty"`
 	Viewed    bool       `json:"viewed"`
+	// ViewedStale is true when the file changed after the mark.
+	ViewedStale bool `json:"viewedStale,omitempty"`
 }
 
 type DiffLineKind string

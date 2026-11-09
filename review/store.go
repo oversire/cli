@@ -20,7 +20,11 @@ type record struct {
 	// Prompts holds the prompt of each round that requests changes, by round number.
 	Prompts map[int]string `json:"prompts,omitempty"`
 	// Viewed holds the files that the user marked, as repo + "/" + path.
-	Viewed  map[string]bool `json:"viewed,omitempty"`
+	Viewed map[string]bool `json:"viewed,omitempty"`
+	// Prints holds the content hash of each viewed file at the mark. A new hash clears the mark.
+	Prints map[string]string `json:"viewedPrints,omitempty"`
+	// Stale holds the files that lost the mark by a change, until the user marks them again.
+	Stale   map[string]bool `json:"viewedStale,omitempty"`
 	Note    string          `json:"note,omitempty"`
 	ReadyAt *time.Time      `json:"readyAt,omitempty"`
 	Plan    *wire.PlanDoc   `json:"plan,omitempty"`

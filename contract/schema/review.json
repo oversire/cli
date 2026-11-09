@@ -125,7 +125,8 @@
         "removed": { "type": "integer", "minimum": 0 },
         "binary": { "type": "boolean" },
         "untracked": { "description": "The file is not committed. The merge does not take it.", "type": "boolean" },
-        "viewed": { "type": "boolean" }
+        "viewed": { "type": "boolean" },
+        "viewedStale": { "description": "The file changed after the reviewer marked it viewed. Then viewed is false.", "type": "boolean" }
       },
       "required": ["repo", "path", "status", "added", "removed", "binary", "viewed"],
       "additionalProperties": false

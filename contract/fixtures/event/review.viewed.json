@@ -1,0 +1,20 @@
+{
+  "seq": 113,
+  "id": "review:OVERSIRE-374:code:viewed:sling-cli/core/dbio/database/database.go:1",
+  "at": "2026-10-29T15:10:02Z",
+  "seenAt": "2026-10-29T15:10:02Z",
+  "kind": "review.viewed",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "machine": "mba",
+  "actorType": "human",
+  "actor": "flarco@gmail.com",
+  "via": "app@mba",
+  "summary": "Viewed sling-cli/core/dbio/database/database.go.",
+  "payload": {
+    "kind": "code",
+    "repo": "sling-cli",
+    "path": "core/dbio/database/database.go"
+  }
+}

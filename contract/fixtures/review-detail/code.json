@@ -35,7 +35,7 @@
   "files": [
     { "repo": "sling-cli", "path": "core/dbio/database/database_clickhouse.go", "status": "M", "added": 25, "removed": 0, "binary": false, "viewed": false },
     { "repo": "sling-cli", "path": "core/dbio/database/database.go", "status": "M", "added": 2, "removed": 0, "binary": false, "viewed": true },
-    { "repo": "sling-cli", "path": "core/dbio/database/tls_new.go", "oldPath": "core/dbio/database/tls.go", "status": "R", "added": 44, "removed": 0, "binary": false, "viewed": false },
+    { "repo": "sling-cli", "path": "core/dbio/database/tls_new.go", "oldPath": "core/dbio/database/tls.go", "status": "R", "added": 44, "removed": 0, "binary": false, "viewed": false, "viewedStale": true },
     { "repo": "sling-cli", "path": "notes.txt", "status": "A", "added": 3, "removed": 0, "binary": false, "untracked": true, "viewed": false }
   ],
   "comments": [

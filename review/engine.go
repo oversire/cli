@@ -223,16 +223,29 @@ func (e *Engine) Get(ctx context.Context, key string, kind wire.ReviewKind) (wir
 		} else if d.Summary, ok = e.goneSummary(key); !ok {
 			return d, refuse(NotFound, "There is no group .wt/%s in the roots of this daemon.", strings.ToLower(key))
 		}
-		viewed := e.viewed(kind, key)
+		viewed, stale := e.viewed(key)
+		prints := map[string]string{}
 		for _, r := range repos {
 			files, err := e.d.Git.files(ctx, g, r)
 			if err != nil {
 				return d, err
 			}
 			for _, f := range files {
-				f.Viewed = viewed[f.Repo+"/"+f.Path]
+				if viewed[f.Repo+"/"+f.Path] {
+					prints[f.Repo+"/"+f.Path] = g.print(f.Repo, f.Path)
+				}
 				d.Files = append(d.Files, f)
 			}
+		}
+		if len(prints) > 0 {
+			e.mu.Lock()
+			e.unview(e.rec(kind, key), prints)
+			viewed, stale = maps.Clone(e.recs[id(kind, key)].Viewed), maps.Clone(e.recs[id(kind, key)].Stale)
+			e.mu.Unlock()
+		}
+		for i, f := range d.Files {
+			d.Files[i].Viewed = viewed[f.Repo+"/"+f.Path]
+			d.Files[i].ViewedStale = stale[f.Repo+"/"+f.Path]
 		}
 	}
 	e.mu.Lock()
@@ -549,13 +562,14 @@ func (e *Engine) notPushed(ctx context.Context, roots []string) []wire.NotPushed
 	return out
 }
 
-func (e *Engine) viewed(kind wire.ReviewKind, key string) map[string]bool {
+// viewed gives the viewed and the stale files of the code review of key.
+func (e *Engine) viewed(key string) (viewed, stale map[string]bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if r := e.recs[id(kind, key)]; r != nil {
-		return maps.Clone(r.Viewed)
+	if r := e.recs[id(wire.ReviewCode, key)]; r != nil {
+		return maps.Clone(r.Viewed), maps.Clone(r.Stale)
 	}
-	return nil
+	return nil, nil
 }
 
 // rec gives the record of kind and key, and makes it when it is missing. Call it with e.mu held.

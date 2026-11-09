@@ -415,7 +415,7 @@ A code review is a worktree group: `<root>/.wt/<name>`, and the key is the name 
 | `POST /v1/reviews/{key}/comments` | app | Body `CommentDraft`. Answers 201 with the pending `ReviewComment`. |
 | `PATCH /v1/reviews/{key}/comments/{id}` | app | Body `CommentEdit`. 409: the comment is not pending. |
 | `DELETE /v1/reviews/{key}/comments/{id}?kind=` | app | 204. 409: the comment is not pending. |
-| `PUT /v1/reviews/{key}/viewed` | app | Body `ViewedMark`. 204. |
+| `PUT /v1/reviews/{key}/viewed` | app | Body `ViewedMark`. 204. The mark keeps a hash of the file. When the file changes, the mark goes and the file gets `viewedStale`. |
 | `POST /v1/reviews/{key}/submit` | app | Body `SubmitReview`. Answers the new `ReviewRound`. |
 | `POST /v1/reviews/{key}/merge` | app | Body `MergeRequest`. Answers `MergeResult`. A conflict is 200 with `merged: false`. 409: a check failed. |
 | `POST /v1/reviews/{key}/fix?kind=code` | app | Sends the fixed prompt "rebase and fix the conflicts". Answers the `ReviewRound`. |

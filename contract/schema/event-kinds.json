@@ -468,6 +468,71 @@
       }
     },
     {
+      "kind": "review.viewed",
+      "domain": "human",
+      "actorTypes": [
+        "human"
+      ],
+      "private": false,
+      "summary": "the file that the reviewer marked viewed",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "enum": [
+              "code",
+              "plan"
+            ]
+          },
+          "repo": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "repo",
+          "path"
+        ]
+      }
+    },
+    {
+      "kind": "review.unviewed",
+      "domain": "human",
+      "actorTypes": [
+        "human",
+        "system"
+      ],
+      "private": false,
+      "summary": "the file that lost its viewed mark: the reviewer removed it, or the file changed",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "enum": [
+              "code",
+              "plan"
+            ]
+          },
+          "repo": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "repo",
+          "path"
+        ]
+      }
+    },
+    {
       "kind": "item.shipped",
       "domain": "human",
       "actorTypes": [

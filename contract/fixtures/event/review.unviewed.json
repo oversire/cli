@@ -1,0 +1,20 @@
+{
+  "seq": 114,
+  "id": "review:OVERSIRE-374:code:unviewed:sling-cli/core/dbio/database/database.go:1",
+  "at": "2026-10-29T15:10:02Z",
+  "seenAt": "2026-10-29T15:10:02Z",
+  "kind": "review.unviewed",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "machine": "mba",
+  "actorType": "system",
+  "actor": "review",
+  "via": "daemon",
+  "summary": "sling-cli/core/dbio/database/database.go changed after it was viewed.",
+  "payload": {
+    "kind": "code",
+    "repo": "sling-cli",
+    "path": "core/dbio/database/database.go"
+  }
+}

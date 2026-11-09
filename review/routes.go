@@ -114,7 +114,7 @@ func (rt *Routes) viewed(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &m) {
 		return
 	}
-	none(w, rt.engine.MarkViewed(pathKey(r), m))
+	none(w, rt.engine.MarkViewed(r.Context(), pathKey(r), m))
 }
 
 func (rt *Routes) submit(w http.ResponseWriter, r *http.Request) {
