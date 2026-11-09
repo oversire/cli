@@ -21,10 +21,11 @@ If the session has no investigation (the user only gave an idea), the brief is t
 
 - Title: short, in the imperative, says the change.
 - Description: the context from the brief, then the spec.
-- State: "In Progress" if the user said to work it now, else the default state of the project.
+- State: the Todo state (see below). Use "In Progress" only if the user said to work it now.
 - Follow the rules of the user for the lead and the assignee.
-- Sub-items: make one for each part that the spec proposes, with `--parent <KEY>`. Each sub-item holds its own Changes and Tests.
+- Sub-items: make one for each part that the spec proposes, with `--parent <KEY> --state "<Todo>"`. Each sub-item holds its own Changes and Tests.
 
+{{template "todo" .}}
 Then run `oversire ticket new <KEY>`. It binds this session to the ticket.
 
 ## 4. Report

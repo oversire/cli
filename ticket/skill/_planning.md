@@ -28,3 +28,11 @@ Apply the corrections to the spec.
 
 If open questions remain, ask the user in one prompt (use AskUserQuestion when it exists). Put each answer into the spec. Do not ask about a point that the code or the brief settles. If no question remains, write "None." under "Open questions".
 {{end}}
+
+{{define "todo"}}### Set the plan to Todo
+
+A plan that the user asked for is approved. The planned ticket and its sub-items go to Todo, so that OverSire ships them with no "Plan first" question.
+
+- Get the name of the Todo state: `plane-cli -p <PROJECT> state list --group unstarted -c name`. Use the first state.
+- Move only items in the state groups `backlog` or `triage`. Do not move an item that is in progress or closed.
+{{end}}

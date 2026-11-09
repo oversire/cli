@@ -46,3 +46,31 @@ func TestBodyUnknownVerb(t *testing.T) {
 		}
 	}
 }
+
+// A planned ticket goes to Todo, so that OverSire ships it with no "Plan first" question (OVERSIRE-450).
+func TestPlannedTicketGoesToTodo(t *testing.T) {
+	s := NewSkill()
+	c := Context{Version: "v1", Machine: "mba", Cwd: "/w", Session: "s1", Harness: "claude"}
+	for _, v := range []string{"new", "plan"} {
+		b, err := s.Body(v, c)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, want := range []string{"state list --group unstarted", "Todo", "backlog"} {
+			if !strings.Contains(b, want) {
+				t.Errorf("%s has no %q", v, want)
+			}
+		}
+		if strings.Contains(b, "default state of the project") {
+			t.Errorf("%s still uses the default state", v)
+		}
+	}
+	nb, _ := s.Body("new", c)
+	if !strings.Contains(nb, "In Progress") {
+		t.Error("new lost the In Progress rule")
+	}
+	pb, _ := s.Body("plan", c)
+	if !strings.Contains(pb, "wi update") {
+		t.Error("plan does not move the ticket")
+	}
+}
