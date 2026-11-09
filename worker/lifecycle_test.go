@@ -3,6 +3,8 @@ package worker
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -18,8 +20,14 @@ func overseen(id, key string) wire.DaemonSession {
 	return s
 }
 
+// wsRoot and groupDir are absolute on each OS.
+var (
+	wsRoot   = filepath.Join(os.TempDir(), "ws")
+	groupDir = filepath.Join(wsRoot, ".wt", "oversire-12")
+)
+
 func startReq() StartRequest {
-	return StartRequest{Key: "oversire-12", Harness: "codex", Model: "gpt-5", Dir: "/work/ws/.wt/oversire-12", Plan: "Build it.", Overseer: "ov1"}
+	return StartRequest{Key: "oversire-12", Harness: "codex", Model: "gpt-5", Dir: groupDir, Plan: "Build it.", Overseer: "ov1"}
 }
 
 func wantKind(t *testing.T, err error, k Kind) {
@@ -40,7 +48,7 @@ func TestStartLaunchesAKeyedInPlaceSession(t *testing.T) {
 		t.Fatalf("launches %v", r.orders.launches)
 	}
 	l := r.orders.launches[0]
-	if l.Key != "work:OVERSIRE-12" || l.Item == nil || l.Item.Key != "OVERSIRE-12" || !l.InPlace || l.Repo != "/work/ws/.wt/oversire-12" ||
+	if l.Key != "work:OVERSIRE-12" || l.Item == nil || l.Item.Key != "OVERSIRE-12" || !l.InPlace || l.Repo != groupDir ||
 		l.Overseer != "ov1" || l.Agent != "codex" || l.Model != "gpt-5" {
 		t.Fatalf("request %+v", l)
 	}
@@ -50,7 +58,7 @@ func TestStartLaunchesAKeyedInPlaceSession(t *testing.T) {
 	if rec.Session != "s1" || rec.Key != "work:OVERSIRE-12" || rec.State != StateWorking || rec.Budget != DefaultBudget || !rec.StartedAt.Equal(t0) || rec.Overseer != "ov1" {
 		t.Fatalf("record %+v", rec)
 	}
-	if saved, _ := r.store.Load("s1"); saved.Plan != "Build it." || saved.Dir != "/work/ws/.wt/oversire-12" {
+	if saved, _ := r.store.Load("s1"); saved.Plan != "Build it." || saved.Dir != groupDir {
 		t.Fatalf("saved %+v", saved)
 	}
 	got := r.got()

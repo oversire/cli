@@ -357,12 +357,13 @@ func TestWorkerStartReadsThePlanFile(t *testing.T) {
 	}
 	rec := &recorder{reply: worker.Started{Record: worker.Record{Session: "s1"}, Reused: true}}
 	fakeDaemon(t, c, rec)
-	args := []string{"start", "OVERSIRE-12", "--harness", "codex", "--session", "ov1", "--plan", "plan.md", "--dir", "/abs/dir"}
+	dir := filepath.Join(c.wd, "abs", "dir")
+	args := []string{"start", "OVERSIRE-12", "--harness", "codex", "--session", "ov1", "--plan", "plan.md", "--dir", dir}
 	if err := c.worker(context.Background(), args); err != nil {
 		t.Fatal(err)
 	}
 	got := rec.only(t)
-	if got.Body["plan"] != "# Plan\nBuild it.\n" || got.Body["dir"] != "/abs/dir" || got.Body["budget"] != float64(worker.DefaultBudget) {
+	if got.Body["plan"] != "# Plan\nBuild it.\n" || got.Body["dir"] != dir || got.Body["budget"] != float64(worker.DefaultBudget) {
 		t.Fatalf("%+v", got)
 	}
 	if !strings.Contains(out.String(), "is live. You oversee it now.") {

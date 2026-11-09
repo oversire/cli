@@ -420,7 +420,7 @@ func TestReadRefusesBadInput(t *testing.T) {
 
 func TestHeaderTakesTheGroupFromTheRepo(t *testing.T) {
 	s := live("s1", "work:OVERSIRE-12")
-	s.Repo = "/work/ws/.wt/oversire-12"
+	s.Repo = groupDir
 	s.Model = "gpt-5"
 	s.Reason = wire.ReasonPermission
 	r := newRig(t, turnsTo(2), s)
@@ -430,7 +430,7 @@ func TestHeaderTakesTheGroupFromTheRepo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(r.diff.calls) != 1 || r.diff.calls[0] != [2]string{"/work/ws", "oversire-12"} {
+	if len(r.diff.calls) != 1 || r.diff.calls[0] != [2]string{wsRoot, "oversire-12"} {
 		t.Fatalf("calls %v", r.diff.calls)
 	}
 	h := got.Header
