@@ -159,9 +159,12 @@ func (s *session) spec() agentvisor.StartSpec {
 	}
 	mode := agentwire.PermissionAsk
 	promptKind := ""
+	var raw map[string]any
 	if s.overseer != "" {
 		// Mode auto: the library allows each request, so the worker does not stop at each edit.
 		labels[labelOverseer], mode, promptKind = s.overseer, agentwire.PermissionAuto, string(wire.OriginOverseer)
+		// The git data of a worktree is outside the folder, so the Codex sandbox workspace-write refuses a commit.
+		raw = map[string]any{"sandbox": "danger-full-access"}
 	}
 	if s.info.Item != nil {
 		if data, err := json.Marshal(s.info.Item); err == nil {
@@ -176,6 +179,7 @@ func (s *session) spec() agentvisor.StartSpec {
 		Labels:      labels,
 		Env:         s.env(),
 		Restart:     agentvisor.RestartPolicy{Mode: agentvisor.RestartResume, Prompt: restartPrompt},
+		Raw:         raw,
 	}
 }
 

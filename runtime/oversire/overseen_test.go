@@ -52,7 +52,7 @@ func TestSpecAddsTheOverseerLabelAndAuto(t *testing.T) {
 	spy.mu.Lock()
 	sp := spy.spec
 	spy.mu.Unlock()
-	if sp.Labels[labelOverseer] != "claude-1" || sp.Permissions.Mode != agentwire.PermissionAuto || sp.PromptKind != string(wire.OriginOverseer) {
+	if sp.Labels[labelOverseer] != "claude-1" || sp.Permissions.Mode != agentwire.PermissionAuto || sp.PromptKind != string(wire.OriginOverseer) || sp.Raw["sandbox"] != "danger-full-access" {
 		t.Fatalf("overseen spec %#v", sp)
 	}
 	plain := f.launch(t, "APP-21", runtime.Order{ID: "o2"})
@@ -60,7 +60,7 @@ func TestSpecAddsTheOverseerLabelAndAuto(t *testing.T) {
 	spy.mu.Lock()
 	sp = spy.spec
 	spy.mu.Unlock()
-	if _, ok := sp.Labels[labelOverseer]; ok || sp.Permissions.Mode != agentwire.PermissionAsk || sp.PromptKind != "" {
+	if _, ok := sp.Labels[labelOverseer]; ok || sp.Permissions.Mode != agentwire.PermissionAsk || sp.PromptKind != "" || sp.Raw != nil {
 		t.Fatalf("plain spec %#v", sp)
 	}
 }
