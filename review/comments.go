@@ -93,7 +93,7 @@ func (e *Engine) excerpt(ctx context.Context, key string, a wire.Anchor) (string
 		from = a.Line
 	}
 	from = max(from, a.Line-maxExcerpt+1)
-	d, err := e.Diff(ctx, key, a.Repo, a.Path)
+	d, err := e.Diff(ctx, key, a.Repo, a.Path, false)
 	if err != nil {
 		return "", err
 	}

@@ -288,8 +288,9 @@ func parseNameStatus(repo, out string) []wire.ReviewFile {
 	return files
 }
 
-// diff gives the diff of the file f of the repo r.
-func (gt Git) diff(ctx context.Context, g group, r wire.ReviewRepo, f wire.ReviewFile) (wire.FileDiff, error) {
+// diff gives the diff of the file f of the repo r. With full, it gives the whole file as one hunk and sets Full.
+// A file over MaxFullDiffLines falls back to the -U3 diff.
+func (gt Git) diff(ctx context.Context, g group, r wire.ReviewRepo, f wire.ReviewFile, full bool) (wire.FileDiff, error) {
 	d := wire.FileDiff{Repo: r.Name, Path: f.Path, OldPath: f.OldPath, Status: f.Status, Binary: f.Binary, Hunks: []wire.DiffHunk{}}
 	wt := g.worktree(r.Name)
 	if f.Untracked {
@@ -297,25 +298,46 @@ func (gt Git) diff(ctx context.Context, g group, r wire.ReviewRepo, f wire.Revie
 		if err != nil {
 			return d, err
 		}
-		fileDiff(data, &d)
+		if full {
+			fileDiff(data, &d, MaxFullDiffLines)
+			if !d.Truncated {
+				d.Full = true
+				return d, nil
+			}
+			d.Truncated = false
+		}
+		fileDiff(data, &d, MaxDiffLines)
 		return d, nil
 	}
 	mb, err := gt.mergeBase(ctx, g, r)
 	if err != nil {
 		return d, err
 	}
-	args := []string{"diff", "--no-color", "--unified=3", "-M", mb, "--"}
-	if f.OldPath != "" {
-		args = append(args, f.OldPath)
+	run := func(unified, limit int) error {
+		args := []string{"diff", "--no-color", "--unified=" + strconv.Itoa(unified), "-M", mb, "--"}
+		if f.OldPath != "" {
+			args = append(args, f.OldPath)
+		}
+		out, err := gt.Run(ctx, wt, append(args, f.Path)...)
+		if err != nil {
+			return err
+		}
+		status, old := d.Status, d.OldPath
+		d.Truncated = false
+		parseDiff(out, &d, limit)
+		d.Status, d.OldPath = status, old // the file list is the source of the status
+		return nil
 	}
-	out, err := gt.Run(ctx, wt, append(args, f.Path)...)
-	if err != nil {
-		return d, err
+	if full {
+		if err := run(MaxFullDiffLines, MaxFullDiffLines); err != nil {
+			return d, err
+		}
+		if !d.Truncated {
+			d.Full = true
+			return d, nil
+		}
 	}
-	status, old := d.Status, d.OldPath
-	parseDiff(out, &d)
-	d.Status, d.OldPath = status, old // the file list is the source of the status
-	return d, nil
+	return d, run(3, MaxDiffLines)
 }
 
 // baseState gives the current branch of the primary checkout root/name and, when it has commits that its upstream

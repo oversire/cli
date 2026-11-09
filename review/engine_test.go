@@ -2,9 +2,11 @@ package review
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/oversire/cli/wire"
@@ -49,14 +51,14 @@ func TestOneRepo(t *testing.T) {
 	if len(d.Files) != 2 || d.Files[0].Path != "lib.go" || d.Files[0].Status != wire.FileModified || d.Files[1].Status != wire.FileAdded {
 		t.Fatalf("%+v", d.Files)
 	}
-	fd, err := r.Diff(ctx, "APP-1", "app", "lib.go")
+	fd, err := r.Diff(ctx, "APP-1", "app", "lib.go", false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if fd.Status != wire.FileModified || len(fd.Hunks) != 1 || fd.Hunks[0].Lines[3].Text != "func A() { Store() }" {
 		t.Fatalf("%+v", fd)
 	}
-	if _, err := r.Diff(ctx, "APP-1", "app", "none.go"); !kindIs(err, NotFound) {
+	if _, err := r.Diff(ctx, "APP-1", "app", "none.go", false); !kindIs(err, NotFound) {
 		t.Fatal(err)
 	}
 	if _, err := r.Get(ctx, "APP-9", ""); !kindIs(err, NotFound) {
@@ -152,7 +154,7 @@ func TestUntrackedAndDirty(t *testing.T) {
 	if len(d.Files) != 2 || d.Files[0].Path != "lib.go" || d.Files[0].Untracked || !d.Files[1].Untracked || d.Files[1].Added != 2 {
 		t.Fatalf("%+v", d.Files)
 	}
-	fd, err := r.Diff(context.Background(), "APP-1", "app", "notes.txt")
+	fd, err := r.Diff(context.Background(), "APP-1", "app", "notes.txt", false)
 	if err != nil || fd.Status != wire.FileAdded || len(fd.Hunks) != 1 || len(fd.Hunks[0].Lines) != 2 {
 		t.Fatalf("%v %+v", err, fd)
 	}
@@ -185,11 +187,11 @@ func TestRenameAndBinary(t *testing.T) {
 	if !bin.Binary || bin.Status != wire.FileAdded {
 		t.Fatalf("%+v", bin)
 	}
-	fd, err := r.Diff(context.Background(), "APP-1", "app", "core.go")
+	fd, err := r.Diff(context.Background(), "APP-1", "app", "core.go", false)
 	if err != nil || fd.Status != wire.FileRenamed || fd.OldPath != "lib.go" {
 		t.Fatalf("%v %+v", err, fd)
 	}
-	fd, err = r.Diff(context.Background(), "APP-1", "app", "i.png")
+	fd, err = r.Diff(context.Background(), "APP-1", "app", "i.png", false)
 	if err != nil || !fd.Binary || len(fd.Hunks) != 0 {
 		t.Fatalf("%v %+v", err, fd)
 	}
@@ -264,4 +266,75 @@ func list(t *testing.T, r *rig) []wire.ReviewSummary {
 		t.Fatal(err)
 	}
 	return page.Reviews
+}
+
+// numbered gives n lines "line 1".."line n", with text in place of the lines in change.
+func numbered(n int, change map[int]string) string {
+	var b strings.Builder
+	for i := 1; i <= n; i++ {
+		if t, ok := change[i]; ok {
+			b.WriteString(t + "\n")
+			continue
+		}
+		fmt.Fprintf(&b, "line %d\n", i)
+	}
+	return b.String()
+}
+
+func TestFullDiff(t *testing.T) {
+	w := newWS(t)
+	w.commit(w.repo("app"), "Add the file", map[string]string{"big.txt": numbered(100, nil)})
+	g := w.group("app-1", "app")
+	w.commit(filepath.Join(g, "app"), "Change two lines", map[string]string{"big.txt": numbered(100, map[int]string{10: "ten", 90: "ninety"})})
+	r := newRig(t, w.root)
+	ctx := context.Background()
+
+	fd, err := r.Diff(ctx, "APP-1", "app", "big.txt", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !fd.Full || len(fd.Hunks) != 1 || fd.Hunks[0].OldStart != 1 || len(fd.Hunks[0].Lines) != 102 {
+		t.Fatalf("full %v, %d hunks, %+v", fd.Full, len(fd.Hunks), fd.Hunks[0].OldStart)
+	}
+	fd, err = r.Diff(ctx, "APP-1", "app", "big.txt", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fd.Full || len(fd.Hunks) != 2 {
+		t.Fatalf("full %v, %d hunks", fd.Full, len(fd.Hunks))
+	}
+}
+
+func TestFullDiffOfAnUntrackedFile(t *testing.T) {
+	w := newWS(t)
+	w.repo("app")
+	g := w.group("app-1", "app")
+	w.commit(filepath.Join(g, "app"), "Touch", map[string]string{"lib.go": "package lib\n\nfunc B() {}\n"})
+	w.write(filepath.Join(g, "app", "new.txt"), numbered(50, nil))
+	r := newRig(t, w.root)
+
+	fd, err := r.Diff(context.Background(), "APP-1", "app", "new.txt", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !fd.Full || len(fd.Hunks) != 1 || len(fd.Hunks[0].Lines) != 50 {
+		t.Fatalf("%+v", fd)
+	}
+}
+
+func TestFullDiffOfALongFileFallsBack(t *testing.T) {
+	w := newWS(t)
+	n := MaxFullDiffLines + 1
+	w.commit(w.repo("app"), "Add the file", map[string]string{"long.txt": numbered(n, nil)})
+	g := w.group("app-1", "app")
+	w.commit(filepath.Join(g, "app"), "Change two lines", map[string]string{"long.txt": numbered(n, map[int]string{10: "ten", 20000: "end"})})
+	r := newRig(t, w.root)
+
+	fd, err := r.Diff(context.Background(), "APP-1", "app", "long.txt", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fd.Full || fd.Truncated || len(fd.Hunks) != 2 || len(fd.Hunks[0].Lines) != 8 {
+		t.Fatalf("full %v, truncated %v, %d hunks", fd.Full, fd.Truncated, len(fd.Hunks))
+	}
 }

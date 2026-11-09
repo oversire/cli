@@ -155,7 +155,7 @@
       "additionalProperties": false
     },
     "FileDiff": {
-      "description": "The answer of GET /v1/reviews/{key}/diff?repo=&path=. git diff --unified=3 base...branch, or the full text of an untracked file.",
+      "description": "The answer of GET /v1/reviews/{key}/diff?repo=&path=. git diff --unified=3 base...branch, or the full text of an untracked file. With `context=full`: the whole file, and `full` is true.",
       "type": "object",
       "properties": {
         "repo": { "type": "string", "minLength": 1 },
@@ -163,7 +163,8 @@
         "oldPath": { "type": "string", "minLength": 1 },
         "status": { "$ref": "#/$defs/FileStatus" },
         "binary": { "type": "boolean" },
-        "truncated": { "description": "The diff has more than 3000 lines. hunks holds the first 3000.", "type": "boolean" },
+        "truncated": { "description": "The diff has more than 3000 lines, or more than 20000 lines when `full` is true. hunks holds the first lines up to that limit.", "type": "boolean" },
+        "full": { "description": "The daemon sent the whole file as one hunk (context=full). Absent from an older daemon.", "type": "boolean" },
         "hunks": { "type": "array", "items": { "$ref": "#/$defs/DiffHunk" } }
       },
       "required": ["repo", "path", "status", "binary", "truncated", "hunks"],

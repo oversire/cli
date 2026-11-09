@@ -78,7 +78,12 @@ func (rt *Routes) diff(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, errorBody{Error: "Give the repo and the path of the file."})
 		return
 	}
-	d, err := rt.engine.Diff(r.Context(), pathKey(r), q.Get("repo"), q.Get("path"))
+	c := q.Get("context")
+	if c != "" && c != "full" {
+		writeJSON(w, http.StatusBadRequest, errorBody{Error: "The context can only be full."})
+		return
+	}
+	d, err := rt.engine.Diff(r.Context(), pathKey(r), q.Get("repo"), q.Get("path"), c == "full")
 	reply(w, http.StatusOK, d, err)
 }
 

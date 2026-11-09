@@ -12,10 +12,14 @@ import (
 // MaxDiffLines is the number of diff lines in a FileDiff. A longer diff is cut and has truncated set.
 const MaxDiffLines = 3000
 
+// MaxFullDiffLines is the limit for context=full. A longer file gets the -U3 diff.
+const MaxFullDiffLines = 20000
+
 var hunkHead = regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@ ?(.*)$`)
 
 // parseDiff reads the output of git diff for one file into d: the hunks, binary, and the status from the file header.
-func parseDiff(out string, d *wire.FileDiff) {
+// It cuts the diff at limit lines.
+func parseDiff(out string, d *wire.FileDiff, limit int) {
 	d.Hunks = []wire.DiffHunk{}
 	var h *wire.DiffHunk
 	oldLine, newLine, n := 0, 0, 0
@@ -58,7 +62,7 @@ func parseDiff(out string, d *wire.FileDiff) {
 			// "\ No newline at end of file", or the empty last line.
 			continue
 		}
-		if n == MaxDiffLines {
+		if n == limit {
 			d.Truncated = true
 			break
 		}
@@ -70,8 +74,8 @@ func parseDiff(out string, d *wire.FileDiff) {
 	}
 }
 
-// fileDiff is the diff of a new file with the content data: one hunk of added lines.
-func fileDiff(data []byte, d *wire.FileDiff) {
+// fileDiff is the diff of a new file with the content data: one hunk of added lines, cut at limit.
+func fileDiff(data []byte, d *wire.FileDiff, limit int) {
 	d.Hunks = []wire.DiffHunk{}
 	if isBinary(data) {
 		d.Binary = true
@@ -84,7 +88,7 @@ func fileDiff(data []byte, d *wire.FileDiff) {
 	all := strings.Split(text, "\n")
 	h := wire.DiffHunk{OldStart: 0, OldLines: 0, NewStart: 1, NewLines: len(all), Lines: []wire.DiffLine{}}
 	for i, l := range all {
-		if i == MaxDiffLines {
+		if i == limit {
 			d.Truncated = true
 			break
 		}

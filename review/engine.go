@@ -247,8 +247,8 @@ func (e *Engine) Get(ctx context.Context, key string, kind wire.ReviewKind) (wir
 	return d, nil
 }
 
-// Diff gives the diff of one file of the code review of key.
-func (e *Engine) Diff(ctx context.Context, key, repo, path string) (wire.FileDiff, error) {
+// Diff gives the diff of one file of the code review of key. full asks for the whole file.
+func (e *Engine) Diff(ctx context.Context, key, repo, path string, full bool) (wire.FileDiff, error) {
 	g, r, err := e.repoOf(ctx, key, repo)
 	if err != nil {
 		return wire.FileDiff{}, err
@@ -259,7 +259,7 @@ func (e *Engine) Diff(ctx context.Context, key, repo, path string) (wire.FileDif
 	}
 	for _, f := range files {
 		if f.Path == path {
-			return e.d.Git.diff(ctx, g, r, f)
+			return e.d.Git.diff(ctx, g, r, f, full)
 		}
 	}
 	return wire.FileDiff{}, refuse(NotFound, "The review %s has no changed file %s/%s.", key, repo, path)

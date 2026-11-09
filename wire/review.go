@@ -158,6 +158,7 @@ type FileDiff struct {
 	Status    FileStatus `json:"status"`
 	Binary    bool       `json:"binary"`
 	Truncated bool       `json:"truncated"`
+	Full      bool       `json:"full,omitempty"`
 	Hunks     []DiffHunk `json:"hunks"`
 }
 

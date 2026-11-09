@@ -91,6 +91,13 @@ func TestRoutes(t *testing.T) {
 	if code, _ = send(t, "GET", tailnet+"/v1/reviews/APP-1/diff?repo=app&path=n.go", "", peer...); code != 200 {
 		t.Fatal("a peer daemon reads", code)
 	}
+	code, body = send(t, "GET", loop+"/v1/reviews/APP-1/diff?repo=app&path=n.go&context=full", "")
+	if d := decodeAs[wire.FileDiff](t, body); code != 200 || !d.Full || !strings.Contains(body, `"full":true`) {
+		t.Fatal(code, body)
+	}
+	if code, body = send(t, "GET", loop+"/v1/reviews/APP-1/diff?repo=app&path=n.go&context=x", ""); code != 400 || !strings.Contains(body, "only be full") {
+		t.Fatal(code, body)
+	}
 	if code, body = send(t, "GET", loop+"/v1/reviews/APP-1/diff?repo=app", ""); code != 400 {
 		t.Fatal(code, body)
 	}

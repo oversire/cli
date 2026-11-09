@@ -74,7 +74,7 @@ func TestParseDiff(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			d := wire.FileDiff{Status: wire.FileModified}
-			parseDiff(tc.out, &d)
+			parseDiff(tc.out, &d, MaxDiffLines)
 			if d.Status != tc.status || d.OldPath != tc.oldPath || d.Binary != tc.binary || d.Truncated != tc.truncated {
 				t.Fatalf("got %+v", d)
 			}
@@ -85,8 +85,19 @@ func TestParseDiff(t *testing.T) {
 	}
 	t.Run("truncated", func(t *testing.T) {
 		var d wire.FileDiff
-		parseDiff(long, &d)
+		parseDiff(long, &d, MaxDiffLines)
 		if !d.Truncated || len(d.Hunks[0].Lines) != MaxDiffLines {
+			t.Fatalf("truncated %v, %d lines", d.Truncated, len(d.Hunks[0].Lines))
+		}
+	})
+	t.Run("full limit", func(t *testing.T) {
+		var d wire.FileDiff
+		parseDiff(long, &d, MaxFullDiffLines)
+		if d.Truncated || len(d.Hunks[0].Lines) != 3005 {
+			t.Fatalf("truncated %v, %d lines", d.Truncated, len(d.Hunks[0].Lines))
+		}
+		parseDiff("@@ -1,0 +1,20001 @@\n"+strings.Repeat("+x\n", MaxFullDiffLines+1), &d, MaxFullDiffLines)
+		if !d.Truncated || len(d.Hunks[0].Lines) != MaxFullDiffLines {
 			t.Fatalf("truncated %v, %d lines", d.Truncated, len(d.Hunks[0].Lines))
 		}
 	})
@@ -94,19 +105,24 @@ func TestParseDiff(t *testing.T) {
 
 func TestFileDiff(t *testing.T) {
 	var d wire.FileDiff
-	fileDiff([]byte("a\r\nb\n"), &d)
+	fileDiff([]byte("a\r\nb\n"), &d, MaxDiffLines)
 	want := []wire.DiffHunk{{NewStart: 1, NewLines: 2, Lines: []wire.DiffLine{{Kind: wire.DiffAdd, New: 1, Text: "a"}, {Kind: wire.DiffAdd, New: 2, Text: "b"}}}}
 	if d.Binary || !reflect.DeepEqual(d.Hunks, want) {
 		t.Fatalf("%+v", d)
 	}
 	d = wire.FileDiff{}
-	fileDiff([]byte("PNG\x00\x01"), &d)
+	fileDiff([]byte("PNG\x00\x01"), &d, MaxDiffLines)
 	if !d.Binary || len(d.Hunks) != 0 {
 		t.Fatalf("%+v", d)
 	}
 	d = wire.FileDiff{}
-	fileDiff([]byte(strings.Repeat("x\n", MaxDiffLines+1)), &d)
+	fileDiff([]byte(strings.Repeat("x\n", MaxDiffLines+1)), &d, MaxDiffLines)
 	if !d.Truncated || len(d.Hunks[0].Lines) != MaxDiffLines || d.Hunks[0].NewLines != MaxDiffLines+1 {
+		t.Fatalf("truncated %v", d.Truncated)
+	}
+	d = wire.FileDiff{}
+	fileDiff([]byte(strings.Repeat("x\n", MaxFullDiffLines+1)), &d, MaxFullDiffLines)
+	if !d.Truncated || len(d.Hunks[0].Lines) != MaxFullDiffLines {
 		t.Fatalf("truncated %v", d.Truncated)
 	}
 }

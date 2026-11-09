@@ -403,7 +403,7 @@ How a run goes:
 
 ### Reviews
 
-The review gate (OVERSIRE-365) shows the work of an agent before it merges. An agent commits to the branches of its worktree group `<root>/.wt/<key>`, does not merge, and hands off with `oversire review ready`. The user reads the diffs in the app, adds comments, and submits a round. The daemon sends the round to the session of the key as one prompt. When the user approves, the daemon merges the group locally. It never pushes. The bodies are in `contract/schema/review.json`. The app finds these routes by the capability `reviews` in `GET /v1/runtimes`.
+The review gate (OVERSIRE-365) shows the work of an agent before it merges. An agent commits to the branches of its worktree group `<root>/.wt/<key>`, does not merge, and hands off with `oversire review ready`. The user reads the diffs in the app, adds comments, and submits a round. The daemon sends the round to the session of the key as one prompt. When the user approves, the daemon merges the group locally. It never pushes. The bodies are in `contract/schema/review.json`. The app asks each active machine.
 
 A code review is a worktree group: `<root>/.wt/<name>`, and the key is the name in upper case. Each folder in the group whose `.git` is a file is a repo. A symlink is a link. The roots are the folder repos of the runtimes, plus each root that a hand-off names. The daemon keeps these roots. The base of a repo is the branch of the primary checkout `<root>/<repo>`. A group is in the list when a repo has commits that its base does not have, or changes that are not committed. A plan review is the plan of a Plan session, split at each `##` heading.
 
@@ -411,7 +411,7 @@ A code review is a worktree group: `<root>/.wt/<name>`, and the key is the name 
 | --- | --- | --- |
 | `GET /v1/reviews?kind=code\|plan` | member | `ReviewsPage`: the reviews, newest first, and the bases that are not pushed. No `kind` gives both. The daemon keeps the git state of each group and base. A read computes live only the entries whose git files (HEAD, index, refs, logs) changed. The daemon computes a changed entry 1 min after its last change and sends `review.changed`, and each entry each 10 min. |
 | `GET /v1/reviews/{key}?kind=` | member | `ReviewDetail`: the summary, the changed files (from the merge base to the work tree, with untracked files), the comments, the rounds and the plan. |
-| `GET /v1/reviews/{key}/diff?repo=<repo>&path=<path>` | member | `FileDiff` of one file. A diff stops at 3000 lines with `truncated`. |
+| `GET /v1/reviews/{key}/diff?repo=<repo>&path=<path>[&context=full]` | member | `FileDiff` of one file. A diff stops at 3000 lines with `truncated`. With `context=full` the daemon sends the whole file as one hunk with `full`. A file over 20000 lines gets the normal diff. Another `context` value gives 400. |
 | `POST /v1/reviews/{key}/comments` | app | Body `CommentDraft`. Answers 201 with the pending `ReviewComment`. |
 | `PATCH /v1/reviews/{key}/comments/{id}` | app | Body `CommentEdit`. 409: the comment is not pending. |
 | `DELETE /v1/reviews/{key}/comments/{id}?kind=` | app | 204. 409: the comment is not pending. |
