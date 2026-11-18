@@ -1,0 +1,21 @@
+{
+  "seq": 240,
+  "id": "plane:epic-3f9a2c1b-4d5e-4f60-8a7b-9c0d1e2f3a4b:closed:1793700000000",
+  "at": "2026-11-10T16:05:00Z",
+  "seenAt": "2026-11-10T16:05:03Z",
+  "kind": "epic.closed",
+  "item": "EPIC-3F9A2C1B4D5E",
+  "project": "oversire",
+  "machine": "mba",
+  "provider": "plane",
+  "actorType": "provider",
+  "actor": "plane",
+  "via": "poll",
+  "summary": "Epics in the work tab done",
+  "payload": {
+    "epic": "3f9a2c1b-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+    "title": "Epics in the work tab",
+    "state": "done",
+    "open": 0
+  }
+}

@@ -1703,6 +1703,132 @@
       }
     },
     {
+      "kind": "epic.created",
+      "domain": "tracker",
+      "actorTypes": [
+        "human",
+        "provider",
+        "agent"
+      ],
+      "private": false,
+      "summary": "the epic title",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "epic": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "targetDate": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "epic",
+          "title"
+        ]
+      }
+    },
+    {
+      "kind": "epic.item_added",
+      "domain": "tracker",
+      "actorTypes": [
+        "human",
+        "provider",
+        "agent"
+      ],
+      "private": false,
+      "summary": "Added to the epic title",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "epic": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "epic"
+        ]
+      }
+    },
+    {
+      "kind": "epic.item_removed",
+      "domain": "tracker",
+      "actorTypes": [
+        "human",
+        "provider",
+        "agent"
+      ],
+      "private": false,
+      "summary": "Removed from the epic title",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "epic": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "epic"
+        ]
+      }
+    },
+    {
+      "kind": "epic.closed",
+      "domain": "tracker",
+      "actorTypes": [
+        "human",
+        "provider",
+        "agent"
+      ],
+      "private": false,
+      "summary": "the epic title and done or canceled",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "epic": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "done",
+              "canceled"
+            ]
+          },
+          "open": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "epic",
+          "state"
+        ]
+      }
+    },
+    {
       "kind": "queue.picked",
       "domain": "system",
       "actorTypes": [
