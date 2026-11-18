@@ -628,7 +628,7 @@ The layout:
 
 ## Ticket skill
 
-The `oversire` agent skill (OVERSIRE-434) makes, plans, works and closes tracker tickets in the agent session: `/oversire new|plan|work|delegate|done`. Plain words ("create a ticket") also start it.
+The `oversire` agent skill (OVERSIRE-434) makes, plans, works and closes tracker tickets in the agent session: `/oversire new|epic|plan|work|delegate|done`. Plain words ("create a ticket") also start it.
 
 - `oversire ticket skill --install` writes `~/.claude/skills/oversire/SKILL.md` (`--harness codex` writes `~/.codex/skills/oversire/SKILL.md`). The file is thin: it loads the body with `` !`oversire ticket skill` ``.
 - The body is in `ticket/skill/*.md`, embedded in the binary. Thus `oversire update` makes the skill fresh. Each run of `oversire ticket skill` also rewrites an old installed file that has the OverSire mark.

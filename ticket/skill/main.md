@@ -7,6 +7,7 @@ The `oversire` skill makes, plans, works and closes tracker tickets. The user do
 | Command | Use |
 | --- | --- |
 | `new [text]` | Make a planned ticket from the work of this session. |
+| `epic [goal]` | Make an epic (a Plane module) for one goal and break the goal into planned tickets. |
 | `plan [KEY...]` | Plan an existing ticket that has no full spec, or a batch of them (no key: choose by date). |
 | `work <KEY>` | Work a ticket, in this session or in a new session. |
 | `delegate <KEY> [--harness codex]` | Give the work of a planned ticket to a worker agent on the daemon. A background Overseer drives it to ready for review. |
@@ -19,6 +20,7 @@ Find the command in the arguments of the skill. With no command:
 - The user asks for a ticket in plain words ("create a ticket", "make a ticket for this"): use `new`.
 - The user names a ticket to work ("pick up OVERSIRE-12"): use `work`.
 - The user asks to hand a planned ticket to a worker ("delegate OVERSIRE-12", "give it to codex"): use `delegate`.
+- The user asks to make an epic, or to break a goal into tickets: use `epic`.
 - The user asks to plan more items ("plan the new items", "plan these"): use `plan`.
 - The user asks to "groom the intake", "clean up the intake" or "combine the intake items": use `groom`.
 - The user asks to "clean up the tickets", asks "what is done", or asks to "check the tickets in progress": use `sweep`.

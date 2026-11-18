@@ -17,7 +17,7 @@ func TestBodyRendersEachVerb(t *testing.T) {
 			t.Errorf("main body has no %q", want)
 		}
 	}
-	if len(s.Verbs()) != 8 {
+	if len(s.Verbs()) != 9 {
 		t.Fatalf("verbs %v", s.Verbs())
 	}
 	for _, v := range s.Verbs() {
@@ -30,6 +30,12 @@ func TestBodyRendersEachVerb(t *testing.T) {
 	for _, want := range []string{"## Many tickets", "all but 3", "at most 5"} {
 		if !strings.Contains(pb, want) {
 			t.Errorf("plan body has no %q", want)
+		}
+	}
+	eb, _ := s.Body("epic", c)
+	for _, want := range []string{"module manage-work-items", "--add <work item id>", "### Plan with a subagent", "### Set the plan to Todo"} {
+		if !strings.Contains(eb, want) {
+			t.Errorf("epic body has no %q", want)
 		}
 	}
 	gb, _ := s.Body("groom", c)
@@ -47,6 +53,9 @@ func TestBodyRendersEachVerb(t *testing.T) {
 	nb, _ := s.Body("new", c)
 	if !strings.Contains(nb, "planner subagent") {
 		t.Error("new has no planning steps")
+	}
+	if !strings.Contains(nb, "- Epic:") {
+		t.Error("new has no epic step")
 	}
 }
 

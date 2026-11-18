@@ -27,7 +27,7 @@ import (
 )
 
 const ticketUsage = `Usage:
-  oversire ticket skill [new|plan|work|delegate|done|groom|sweep|spec]
+  oversire ticket skill [new|epic|plan|work|delegate|done|groom|sweep|spec]
                                                           print the body of the oversire agent skill
   oversire ticket skill --install|--refresh [--harness claude,codex]
                                                           install the skill file, or update the installed files
