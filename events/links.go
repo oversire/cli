@@ -27,7 +27,7 @@ func (s *Store) SetLinks(ctx context.Context, links []wire.ItemLink) (int, error
 			ON CONFLICT(item) DO UPDATE SET parent = excluded.parent, updated_at = excluded.updated_at`, item, null(parent), now); err != nil {
 			return 0, err
 		}
-		res, err := tx.ExecContext(ctx, "UPDATE events SET parent_item = ? WHERE item = ? AND parent_item IS NOT ?", null(parent), item, null(parent))
+		res, err := tx.ExecContext(ctx, "UPDATE events SET parent_item = ? WHERE item = ? AND parent_item IS NOT ? AND kind NOT LIKE 'epic.%'", null(parent), item, null(parent))
 		if err != nil {
 			return 0, err
 		}

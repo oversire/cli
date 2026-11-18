@@ -119,6 +119,48 @@ func TestQueryByItemAndTree(t *testing.T) {
 	}
 }
 
+// An epic row keeps the epic as its parent. A sub-item link, or no parent, must not replace it.
+func TestSetLinksKeepsEpicRows(t *testing.T) {
+	s, ctx := open(t), context.Background()
+	added := draft("plane:epic-m1:add:a", "epic.item_added", "OVERSIRE-375")
+	added.ParentItem = "EPIC-AB12"
+	plain := draft("hook:x", "item.updated", "OVERSIRE-375")
+	solo := draft("plane:epic-m1:add:b", "epic.item_added", "OVERSIRE-376")
+	solo.ParentItem = "EPIC-AB12"
+	if _, err := s.Append(ctx, []wire.EventDraft{added, plain, solo}); err != nil {
+		t.Fatal(err)
+	}
+	n, err := s.SetLinks(ctx, []wire.ItemLink{{Item: "OVERSIRE-375", Parent: "OVERSIRE-371"}, {Item: "OVERSIRE-376"}})
+	if err != nil || n != 1 {
+		t.Fatalf("changed %d %v", n, err)
+	}
+	page, _ := s.Query(ctx, wire.EventQuery{Item: "OVERSIRE-375"})
+	for _, e := range page.Events {
+		if want := map[string]string{"hook:x": "OVERSIRE-371"}[e.ID]; want == "" && e.ParentItem != "EPIC-AB12" || want != "" && e.ParentItem != want {
+			t.Fatalf("%s has parent %q", e.ID, e.ParentItem)
+		}
+	}
+	page, _ = s.Query(ctx, wire.EventQuery{Item: "EPIC-AB12", Tree: true})
+	if ids(page) != "plane:epic-m1:add:a plane:epic-m1:add:b" {
+		t.Fatalf("epic rows lost their parent: %s", ids(page))
+	}
+}
+
+func TestQueryTreeOnEpicKey(t *testing.T) {
+	s, ctx := open(t), context.Background()
+	created := draft("plane:epic-m1:created", "epic.created", "EPIC-AB12")
+	added := draft("plane:epic-m1:add:a", "epic.item_added", "OVERSIRE-375")
+	added.ParentItem = "EPIC-AB12"
+	other := draft("hook:y", "turn.ended", "OVERSIRE-375")
+	if _, err := s.Append(ctx, []wire.EventDraft{created, added, other}); err != nil {
+		t.Fatal(err)
+	}
+	page, _ := s.Query(ctx, wire.EventQuery{Item: "EPIC-AB12", Tree: true})
+	if ids(page) != "plane:epic-m1:created plane:epic-m1:add:a" {
+		t.Fatalf("epic tree %s", ids(page))
+	}
+}
+
 func ids(p wire.EventPage) string {
 	var out []string
 	for _, e := range p.Events {
