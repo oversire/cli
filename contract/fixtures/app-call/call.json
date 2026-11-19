@@ -1,0 +1,10 @@
+{
+  "id": "c-7f3a91",
+  "action": "epic.addItems",
+  "args": {
+    "project": "OVERSIRE",
+    "epic": "Project Plan tab",
+    "keys": ["OVERSIRE-484", "OVERSIRE-485"]
+  },
+  "agent": "codex"
+}

@@ -1,0 +1,20 @@
+{
+  "seq": 251,
+  "id": "app:mba:EPIC-3F9A2C1B4D5E:epic-update:1795013100000",
+  "at": "2026-11-18T14:05:00Z",
+  "seenAt": "2026-11-18T14:05:01Z",
+  "kind": "epic.updated",
+  "item": "EPIC-3F9A2C1B4D5E",
+  "project": "oversire",
+  "machine": "mba",
+  "actorType": "agent",
+  "actor": "codex",
+  "via": "app@mba",
+  "summary": "Project Plan tab updated: state, targetDate",
+  "payload": {
+    "epic": "3f9a2c1b-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+    "title": "Project Plan tab",
+    "fields": ["state", "targetDate"],
+    "state": "active"
+  }
+}

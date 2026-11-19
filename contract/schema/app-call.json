@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oversire.dev/contract/app-call.json",
+  "title": "OverSire app calls",
+  "description": "A CLI command that the app runs (OVERSIRE-484). The CLI calls its local daemon. The daemon sends AppCallFrame on the WebSocket /v1/connect of the app on the same Mac (loopback only). The app runs the action from its action catalog and sends AppCallResult to POST /v1/app-calls/{id}/result. The app runs only the actions of its allowed list. Other actions give notAllowed. The daemon advertises the feature app-calls in DaemonInfo.features.",
+  "x-oversire-schema": 1,
+  "$defs": {
+    "AppCall": {
+      "description": "One action for the app. action is an id of the action catalog, for example epic.list. args holds the args of the action. agent names the agent that ran the command. The events of a change name it as the actor.",
+      "type": "object",
+      "properties": {
+        "id": { "description": "The id of the call. The daemon makes it.", "type": "string", "minLength": 1 },
+        "action": { "type": "string", "minLength": 1 },
+        "args": { "type": "object" },
+        "agent": { "description": "For example codex or claude. Absent: a human ran the command.", "type": "string", "minLength": 1 }
+      },
+      "required": ["id", "action", "args"],
+      "additionalProperties": false
+    },
+    "AppCallStatus": {
+      "description": "ok: the action ran. failed: the action ran and did not work. notAllowed: the action did not run (not in the allowed list, a bad arg, an unknown project or epic).",
+      "enum": ["ok", "failed", "notAllowed"]
+    },
+    "AppCallResult": {
+      "description": "The answer of the app to one AppCall. summary is one short text for a human. data is the JSON result of a read action, for --json.",
+      "type": "object",
+      "properties": {
+        "id": { "description": "The id of the AppCall.", "type": "string", "minLength": 1 },
+        "status": { "$ref": "#/$defs/AppCallStatus" },
+        "summary": { "type": "string" },
+        "data": { "description": "Any JSON value." }
+      },
+      "required": ["id", "status", "summary"],
+      "additionalProperties": false
+    },
+    "AppCallFrame": {
+      "description": "The frame of the daemon on the WebSocket of the app.",
+      "type": "object",
+      "properties": {
+        "type": { "const": "appCall" },
+        "call": { "$ref": "#/$defs/AppCall" }
+      },
+      "required": ["type", "call"],
+      "additionalProperties": false
+    }
+  }
+}

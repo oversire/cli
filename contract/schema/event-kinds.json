@@ -1791,6 +1791,43 @@
       }
     },
     {
+      "kind": "epic.updated",
+      "domain": "tracker",
+      "actorTypes": [
+        "human",
+        "agent",
+        "provider"
+      ],
+      "private": false,
+      "summary": "the epic title and the changed fields",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "epic": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "epic",
+          "fields"
+        ]
+      }
+    },
+    {
       "kind": "epic.closed",
       "domain": "tracker",
       "actorTypes": [
