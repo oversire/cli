@@ -33,7 +33,7 @@ func TestBodyRendersEachVerb(t *testing.T) {
 		}
 	}
 	eb, _ := s.Body("epic", c)
-	for _, want := range []string{"module manage-work-items", "--add <work item id>", "### Plan with a subagent", "### Set the plan to Todo"} {
+	for _, want := range []string{"oversire epic create", "oversire epic add", "oversire epic show", "### Plan with a subagent", "### Set the plan to Todo"} {
 		if !strings.Contains(eb, want) {
 			t.Errorf("epic body has no %q", want)
 		}
@@ -54,8 +54,16 @@ func TestBodyRendersEachVerb(t *testing.T) {
 	if !strings.Contains(nb, "planner subagent") {
 		t.Error("new has no planning steps")
 	}
-	if !strings.Contains(nb, "- Epic:") {
+	if !strings.Contains(nb, "- Epic:") || !strings.Contains(nb, "oversire epic add") {
 		t.Error("new has no epic step")
+	}
+	for _, b := range []string{main, eb, nb} {
+		if strings.Contains(b, "plane-cli module") {
+			t.Error("a body makes epics with plane-cli")
+		}
+	}
+	if !strings.Contains(main, "oversire project north-star") {
+		t.Error("main has no north star command")
 	}
 }
 

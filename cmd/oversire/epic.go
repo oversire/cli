@@ -1,0 +1,522 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"strings"
+	"text/tabwriter"
+	"time"
+
+	"github.com/oversire/cli/ticket"
+	"github.com/oversire/cli/wire"
+)
+
+const epicUsage = `usage:
+  oversire epic list [--project P]
+  oversire epic show <epic> --project P
+  oversire epic create --project P --title T [--goal G] [--start YYYY-MM-DD] [--target YYYY-MM-DD] [--lead ID]
+  oversire epic update <epic> --project P [--title T] [--goal G] [--state S] [--start D] [--target D] [--lead ID]
+  oversire epic close <epic> --project P
+  oversire epic add <epic> KEY... [--project P]
+  oversire epic remove KEY... [--project P]
+  oversire epic plan [<epic>] --project P
+Each command takes --json, --harness H and --session ID. <epic> is the id or the title of the epic.
+The state is planned, active, paused, done or canceled. The value none removes a date or the lead.
+The app on this Mac runs the command. Exit codes: 0 ok, 1 failed or not allowed, 2 usage, 3 no daemon or no app.`
+
+const projectUsage = "usage: oversire project north-star --project P [--set TEXT] [--json]"
+
+const appUsage = "usage: oversire app run <action> ['<args as a JSON object>'] [--json]"
+
+// appCallTimeout is longer than the wait of the daemon (appcall.Wait), so the daemon answers first.
+const appCallTimeout = 70 * time.Second
+
+// appFlags are the flags of each command that the app runs.
+type appFlags struct {
+	fs      *flag.FlagSet
+	project *string
+	harness *string
+	session *string
+	json    *bool
+}
+
+func newAppFlags(name string) *appFlags {
+	fs := flag.NewFlagSet(name, flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	return &appFlags{
+		fs:      fs,
+		project: fs.String("project", "", "the project identifier, for example OVERSIRE"),
+		harness: fs.String("harness", "", "the harness of the agent that runs the command"),
+		session: fs.String("session", "", "the session id of the agent"),
+		json:    fs.Bool("json", false, "print the result as JSON"),
+	}
+}
+
+// parse takes the flags before and after the positional arguments, and gives the positional arguments.
+func (f *appFlags) parse(args []string) ([]string, error) {
+	var pos []string
+	for {
+		if err := f.fs.Parse(args); err != nil {
+			return nil, err
+		}
+		args = f.fs.Args()
+		if len(args) == 0 {
+			return pos, nil
+		}
+		pos, args = append(pos, args[0]), args[1:]
+	}
+}
+
+// agent names the agent for the event rows of a change: "<harness> <session>". Empty: a human ran the command.
+func (f *appFlags) agent() string {
+	h, s := *f.harness, *f.session
+	if s == "" {
+		if s = os.Getenv("CLAUDE_CODE_SESSION_ID"); s != "" && h == "" {
+			h = "claude"
+		}
+	}
+	if s == "" {
+		s = os.Getenv("OVERSIRE_SESSION")
+	}
+	if h == "" && s != "" {
+		h = "agent"
+	}
+	return strings.TrimSpace(h + " " + s)
+}
+
+// projectArg gives the normal project. Without --project it takes the project of the keys, when they have one.
+func (f *appFlags) projectArg(keys ...string) (string, error) {
+	p := *f.project
+	if p == "" {
+		for _, k := range keys {
+			kp, _, _ := strings.Cut(k, "-")
+			if p != "" && kp != p {
+				return "", errors.New("the keys are in more than one project: give --project")
+			}
+			p = kp
+		}
+	}
+	if p == "" {
+		return "", errors.New("give --project")
+	}
+	return ticket.NormalProject(p)
+}
+
+func (f *appFlags) usage(text string, err error) error {
+	if err == nil {
+		return &exitError{2, errors.New(text)}
+	}
+	return &exitError{2, fmt.Errorf("%w\n%s", err, text)}
+}
+
+// epic runs `oversire epic <list|show|create|update|close|add|remove|plan>`.
+func (c *cli) epic(ctx context.Context, args []string) error {
+	if len(args) == 0 {
+		return &exitError{2, errors.New(epicUsage)}
+	}
+	sub := args[0]
+	f := newAppFlags("epic " + sub)
+	// The epic fields by flag name, with the arg name of the action.
+	type field struct {
+		arg string
+		v   *string
+	}
+	fields := map[string]field{}
+	add := func(name, arg, help string) { fields[name] = field{arg, f.fs.String(name, "", help)} }
+	if sub == "create" || sub == "update" {
+		add("title", "title", "the title")
+		add("goal", "goal", "the goal, in Markdown")
+		add("start", "startDate", "the start date, YYYY-MM-DD")
+		add("target", "targetDate", "the target date, YYYY-MM-DD")
+		add("lead", "lead", "the person id of the lead")
+	}
+	if sub == "update" {
+		add("state", "state", "planned, active, paused, done or canceled")
+	}
+	pos, err := f.parse(args[1:])
+	if err != nil {
+		return f.usage(epicUsage, err)
+	}
+	keys := make([]string, 0, len(pos))
+	if sub == "add" || sub == "remove" {
+		from := 1
+		if sub == "remove" {
+			from = 0
+		}
+		if len(pos) <= from {
+			return f.usage(epicUsage, nil)
+		}
+		for _, k := range pos[from:] {
+			n, err := ticket.NormalKey(k)
+			if err != nil {
+				return f.usage(epicUsage, err)
+			}
+			keys = append(keys, n)
+		}
+	}
+	a := map[string]any{}
+	var show func(json.RawMessage) error
+	needEpic := false
+	switch sub {
+	case "list":
+		if len(pos) > 0 {
+			return f.usage(epicUsage, nil)
+		}
+		if *f.project != "" {
+			p, err := f.projectArg()
+			if err != nil {
+				return f.usage(epicUsage, err)
+			}
+			a["project"] = p
+		}
+		show = c.printEpicList
+	case "show", "close":
+		needEpic = true
+		if sub == "show" {
+			show = c.printEpic
+		}
+	case "create":
+		if len(pos) > 0 || *fields["title"].v == "" {
+			return f.usage(epicUsage, nil)
+		}
+		show = c.printID
+	case "update":
+		needEpic = true
+		f.fs.Visit(func(fl *flag.Flag) {
+			if fd, ok := fields[fl.Name]; ok {
+				a[fd.arg] = *fd.v
+			}
+		})
+		if len(a) == 0 {
+			return f.usage(epicUsage, errors.New("give a field to change"))
+		}
+	case "add":
+		a["epic"], a["keys"] = pos[0], keys
+	case "remove":
+		a["keys"] = keys
+	case "plan":
+		if len(pos) > 1 {
+			return f.usage(epicUsage, nil)
+		}
+		if len(pos) == 1 {
+			a["epic"] = pos[0]
+		}
+		show = c.printPlan
+	default:
+		return f.usage(epicUsage, fmt.Errorf("unknown epic command %q", sub))
+	}
+	if needEpic {
+		if len(pos) != 1 {
+			return f.usage(epicUsage, nil)
+		}
+		a["epic"] = pos[0]
+	}
+	if sub == "create" {
+		for _, fd := range fields {
+			if *fd.v != "" {
+				a[fd.arg] = *fd.v
+			}
+		}
+	}
+	if sub != "list" {
+		p, err := f.projectArg(keys...)
+		if err != nil {
+			return f.usage(epicUsage, err)
+		}
+		a["project"] = p
+	}
+	action := map[string]string{"list": "epic.list", "show": "epic.show", "create": "epic.create", "update": "epic.update",
+		"close": "epic.close", "add": "epic.addItems", "remove": "epic.removeItems", "plan": "epic.plan"}[sub]
+	return c.runApp(ctx, f, action, a, show)
+}
+
+// project runs `oversire project north-star`.
+func (c *cli) project(ctx context.Context, args []string) error {
+	if len(args) == 0 || args[0] != "north-star" {
+		return &exitError{2, errors.New(projectUsage)}
+	}
+	f := newAppFlags("project north-star")
+	set := f.fs.String("set", "", "the new north star")
+	pos, err := f.parse(args[1:])
+	if err != nil {
+		return f.usage(projectUsage, err)
+	}
+	if len(pos) > 0 {
+		return f.usage(projectUsage, nil)
+	}
+	p, err := f.projectArg()
+	if err != nil {
+		return f.usage(projectUsage, err)
+	}
+	isSet := false
+	f.fs.Visit(func(fl *flag.Flag) { isSet = isSet || fl.Name == "set" })
+	if isSet {
+		return c.runApp(ctx, f, "project.setNorthStar", map[string]any{"project": p, "text": *set}, nil)
+	}
+	return c.runApp(ctx, f, "project.northStar", map[string]any{"project": p}, nil)
+}
+
+// app runs `oversire app run <action> [json]`: any action of the allowed list of the app.
+func (c *cli) app(ctx context.Context, args []string) error {
+	if len(args) == 0 || args[0] != "run" {
+		return &exitError{2, errors.New(appUsage)}
+	}
+	f := newAppFlags("app run")
+	pos, err := f.parse(args[1:])
+	if err != nil {
+		return f.usage(appUsage, err)
+	}
+	if len(pos) == 0 || len(pos) > 2 {
+		return f.usage(appUsage, nil)
+	}
+	a := map[string]any{}
+	if len(pos) == 2 {
+		if err := json.Unmarshal([]byte(pos[1]), &a); err != nil || a == nil {
+			return f.usage(appUsage, errors.New("the args must be a JSON object"))
+		}
+	}
+	return c.runApp(ctx, f, pos[0], a, c.printData)
+}
+
+// runApp sends the call through the daemon to the app and prints the result. show prints the data of an ok
+// result after the summary; nil prints only the summary.
+func (c *cli) runApp(ctx context.Context, f *appFlags, action string, args map[string]any, show func(json.RawMessage) error) error {
+	d, err := c.daemonClient()
+	if err != nil {
+		return err
+	}
+	b, err := json.Marshal(args)
+	if err != nil {
+		return err
+	}
+	res, err := d.appCall(ctx, wire.AppCall{Action: action, Args: b, Agent: f.agent()})
+	if err != nil {
+		return err
+	}
+	if *f.json {
+		enc := json.NewEncoder(c.out)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(res); err != nil {
+			return err
+		}
+		if res.Status != wire.AppCallOK {
+			return &exitError{1, errSilent}
+		}
+		return nil
+	}
+	if res.Status != wire.AppCallOK {
+		return &exitError{1, errors.New(res.Summary)}
+	}
+	fmt.Fprintln(c.out, res.Summary)
+	if show == nil || len(res.Data) == 0 || string(res.Data) == "null" {
+		return nil
+	}
+	return show(res.Data)
+}
+
+// appCall posts the call to POST /v1/app-calls. No daemon, no app, or a daemon without app calls gives exit code 3.
+func (d daemonClient) appCall(ctx context.Context, call wire.AppCall) (wire.AppCallResult, error) {
+	d.http = &http.Client{Timeout: appCallTimeout}
+	var res wire.AppCallResult
+	err := d.call(ctx, http.MethodPost, "/v1/app-calls", call, &res)
+	if de, ok := errors.AsType[*daemonError](err); ok {
+		switch de.Status {
+		case 0, http.StatusServiceUnavailable:
+			return res, &exitError{3, err}
+		case http.StatusNotFound:
+			return res, &exitError{3, errors.New("The daemon does not run app calls. Update it: oversire update")}
+		}
+	}
+	return res, err
+}
+
+func (c *cli) printData(data json.RawMessage) error {
+	enc := json.NewEncoder(c.out)
+	enc.SetIndent("", "  ")
+	return enc.Encode(data)
+}
+
+func (c *cli) printID(data json.RawMessage) error {
+	var e struct{ ID string }
+	if json.Unmarshal(data, &e) == nil && e.ID != "" {
+		fmt.Fprintln(c.out, "Id: "+e.ID)
+	}
+	return nil
+}
+
+type epicRow struct {
+	Project, ID, Title, State, Progress string
+	Next                                []string
+	LateDays                            *int
+	ReadyToClose                        bool
+}
+
+func (c *cli) printEpicList(data json.RawMessage) error {
+	var rows []epicRow
+	if err := json.Unmarshal(data, &rows); err != nil {
+		return fmt.Errorf("The app answer is not valid: %w", err)
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+	tw := tabwriter.NewWriter(c.out, 0, 2, 2, ' ', 0)
+	fmt.Fprintln(tw, "PROJECT\tEPIC\tSTATE\tPROGRESS\tLATE\tNEXT")
+	for _, r := range rows {
+		state := r.State
+		if r.ReadyToClose {
+			state += ", ready to close"
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", r.Project, r.Title, state, r.Progress, days(r.LateDays), dash(strings.Join(r.Next, " ")))
+	}
+	return tw.Flush()
+}
+
+type forecast struct {
+	Start, End string
+	LateBy     *int
+}
+
+func (f forecast) String() string {
+	s := "starts " + f.Start
+	if f.End != "" {
+		s = f.Start + " to " + f.End
+	}
+	if f.LateBy != nil && *f.LateBy > 0 {
+		s += fmt.Sprintf(", %d days late", *f.LateBy)
+	}
+	return s
+}
+
+type relations struct{ Loaded, Total, Failed int }
+
+func (r relations) note() string {
+	if r.Loaded >= r.Total {
+		return ""
+	}
+	return fmt.Sprintf("Relations %d of %d loaded: the order can change.", r.Loaded, r.Total)
+}
+
+// slot is the place of a step in the schedule.
+type slot struct {
+	Key, Title, State string
+	Start, End        string
+	Slack             *int
+	Critical          bool
+}
+
+func (s slot) key() string {
+	if s.Critical {
+		return "*" + s.Key
+	}
+	return s.Key
+}
+
+func (c *cli) printEpic(data json.RawMessage) error {
+	var e struct {
+		Title, State, URL, Goal, StartDate, TargetDate string
+		Forecast                                       forecast
+		Relations                                      relations
+		Progress                                       struct{ Done, Total, Open, Started int }
+		Steps                                          []struct {
+			slot
+			Number      int
+			WaitsOnStep *int
+			WaitsOnKey  string
+		}
+		Done []string
+	}
+	if err := json.Unmarshal(data, &e); err != nil {
+		return fmt.Errorf("The app answer is not valid: %w", err)
+	}
+	line := fmt.Sprintf("State: %s. Progress: %d of %d done, %d started. Forecast: %s.", e.State, e.Progress.Done, e.Progress.Total, e.Progress.Started, e.Forecast)
+	if e.StartDate != "" || e.TargetDate != "" {
+		line += fmt.Sprintf(" Dates: %s to %s.", dash(e.StartDate), dash(e.TargetDate))
+	}
+	fmt.Fprintln(c.out, line)
+	if e.Goal != "" {
+		fmt.Fprintln(c.out, "Goal: "+strings.ReplaceAll(strings.TrimSpace(e.Goal), "\n", "\n  "))
+	}
+	if e.URL != "" {
+		fmt.Fprintln(c.out, "URL: "+e.URL)
+	}
+	if len(e.Steps) > 0 {
+		tw := tabwriter.NewWriter(c.out, 0, 2, 2, ' ', 0)
+		fmt.Fprintln(tw, "#\tKEY\tSTATE\tSTART\tEND\tSLACK\tWAITS ON\tTITLE")
+		for _, s := range e.Steps {
+			waits := s.WaitsOnKey
+			if s.WaitsOnStep != nil {
+				waits = fmt.Sprintf("step %d", *s.WaitsOnStep)
+			}
+			fmt.Fprintf(tw, "%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", s.Number, s.key(), s.State, dash(s.Start), dash(s.End), days(s.Slack), dash(waits), s.Title)
+		}
+		if err := tw.Flush(); err != nil {
+			return err
+		}
+	}
+	if len(e.Done) > 0 {
+		fmt.Fprintln(c.out, "Done: "+strings.Join(e.Done, ", "))
+	}
+	if n := e.Relations.note(); n != "" {
+		fmt.Fprintln(c.out, n)
+	}
+	return nil
+}
+
+func (c *cli) printPlan(data json.RawMessage) error {
+	var p struct {
+		Relations relations
+		Critical  []string
+		Epics     []struct {
+			Title, State string
+			Forecast     forecast
+			Steps        []struct {
+				slot
+				WaitsOn []string
+			}
+		}
+	}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return fmt.Errorf("The app answer is not valid: %w", err)
+	}
+	for _, e := range p.Epics {
+		fmt.Fprintf(c.out, "\n%s (%s): %s.\n", e.Title, e.State, e.Forecast)
+		if len(e.Steps) == 0 {
+			continue
+		}
+		tw := tabwriter.NewWriter(c.out, 0, 2, 2, ' ', 0)
+		fmt.Fprintln(tw, "  KEY\tSTATE\tSTART\tEND\tSLACK\tWAITS ON\tTITLE")
+		for _, s := range e.Steps {
+			fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\t%s\t%s\t%s\n", s.key(), s.State, dash(s.Start), dash(s.End), days(s.Slack), dash(strings.Join(s.WaitsOn, " ")), s.Title)
+		}
+		if err := tw.Flush(); err != nil {
+			return err
+		}
+	}
+	if len(p.Critical) > 0 {
+		fmt.Fprintln(c.out, "\nCritical path (*): "+strings.Join(p.Critical, ", "))
+	}
+	if n := p.Relations.note(); n != "" {
+		fmt.Fprintln(c.out, n)
+	}
+	return nil
+}
+
+func days(n *int) string {
+	if n == nil {
+		return "-"
+	}
+	return fmt.Sprintf("%dd", *n)
+}
+
+func dash(s string) string {
+	if s == "" {
+		return "-"
+	}
+	return s
+}

@@ -24,7 +24,7 @@ If the session has no investigation (the user only gave an idea), the brief is t
 - State: the Todo state (see below). Use "In Progress" only if the user said to work it now.
 - Follow the rules of the user for the lead and the assignee.
 - Sub-items: make one for each part that the spec proposes, with `--parent <KEY> --state "<Todo>"`. Each sub-item holds its own Changes and Tests.
-- Epic: if the work is a part of a larger goal, list the epics (`plane-cli module list`). Put the ticket in the epic that the user names, or ask when one epic fits clearly. Add it with `plane-cli module manage-work-items <module id> --add <work item id>` (the UUID, not the key). Skip this when modules are off in the project.
+- Epic: if the work is a part of a larger goal, list the epics (`oversire epic list --project <PROJECT>`). Put the ticket in the epic that the user names, or ask when one epic fits clearly. After you make the ticket, add it with `oversire epic add "<epic>" <KEY>`. Skip this when the project has no epics, or when the command exits with 3 (no OverSire app on this Mac).
 
 {{template "todo" .}}
 Then run `oversire ticket new <KEY>`. It binds this session to the ticket.

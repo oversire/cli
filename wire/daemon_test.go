@@ -24,6 +24,8 @@ func roundTrip[T any](t *testing.T, kind string) {
 
 func TestDaemonFixtures(t *testing.T) {
 	roundTrip[DaemonSession](t, "daemon-session")
+	roundTrip[AppCall](t, "app-call")
+	roundTrip[AppCallResult](t, "app-call-result")
 	roundTrip[DaemonSessionsPage](t, "daemon-sessions-page")
 	roundTrip[AgentModels](t, "agent-models")
 	roundTrip[DaemonQuestion](t, "daemon-question")

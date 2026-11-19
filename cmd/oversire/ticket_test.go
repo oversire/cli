@@ -30,7 +30,7 @@ import (
 
 // TestSkillCommandsExist fails when the skill body names an oversire command that the CLI does not have.
 func TestSkillCommandsExist(t *testing.T) {
-	cmd := regexp.MustCompile("`oversire ([a-z]+)(?: ([a-z]+))?")
+	cmd := regexp.MustCompile("`oversire ([a-z]+)(?: ([a-z][a-z-]*))?")
 	s := ticket.NewSkill()
 	n := 0
 	fs.WalkDir(s.Files(), ".", func(p string, d fs.DirEntry, err error) error {

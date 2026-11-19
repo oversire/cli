@@ -121,19 +121,36 @@ func (s *Server) Handle(routes ...Route) {
 }
 
 // Notify sends msg as a JSON text frame to each WebSocket client. loopbackOnly skips the Tailscale clients.
-func (s *Server) Notify(loopbackOnly bool, msg any) {
+func (s *Server) Notify(loopbackOnly bool, msg any) { s.Deliver(loopbackOnly, msg) }
+
+// Deliver is Notify, and gives the number of clients that took the frame. A client with a full buffer drops it.
+func (s *Server) Deliver(loopbackOnly bool, msg any) int {
 	b, err := json.Marshal(msg)
 	if err != nil {
 		s.Log.Error("notify", "err", err)
-		return
+		return 0
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n := 0
+	for c := range s.clients {
+		if (!loopbackOnly || c.caller.Loopback) && c.send(b) {
+			n++
+		}
+	}
+	return n
+}
+
+// HasClient tells if a WebSocket client is connected. loopbackOnly counts only the clients on loopback (the app of this Mac).
+func (s *Server) HasClient(loopbackOnly bool) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for c := range s.clients {
 		if !loopbackOnly || c.caller.Loopback {
-			c.send(b)
+			return true
 		}
 	}
+	return false
 }
 
 // Listen gives the bound addresses. Tailscale is the first IPv4 tailnet address, else the first IPv6 one.
@@ -511,10 +528,12 @@ type client struct {
 }
 
 // send drops the frame when the buffer is full: a poke in the buffer already tells the client to read.
-func (c *client) send(b []byte) {
+func (c *client) send(b []byte) bool {
 	select {
 	case c.out <- b:
+		return true
 	default:
+		return false
 	}
 }
 

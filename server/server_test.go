@@ -398,6 +398,26 @@ func TestWebSocket(t *testing.T) {
 	waitClients(t, f.s, 1)
 }
 
+func TestDeliverCountsLoopbackClients(t *testing.T) {
+	f := newFixture(t, true)
+	if f.s.HasClient(false) || f.s.Deliver(false, map[string]string{"type": "x"}) != 0 {
+		t.Fatal("a client with no socket")
+	}
+	dial(t, f.net.URL, http.Header{"Authorization": {"Bearer good"}})
+	waitClients(t, f.s, 1)
+	if !f.s.HasClient(false) || f.s.HasClient(true) || f.s.Deliver(true, map[string]string{"type": "x"}) != 0 {
+		t.Fatal("a Tailscale client counts as the app of this Mac")
+	}
+	local := dial(t, f.loop.URL, nil)
+	waitClients(t, f.s, 2)
+	if !f.s.HasClient(true) || f.s.Deliver(true, map[string]string{"type": "appCall"}) != 1 {
+		t.Fatal("no loopback client")
+	}
+	if m := read(t, local); m != `{"type":"appCall"}` {
+		t.Fatal(m)
+	}
+}
+
 func TestWebSocketAuth(t *testing.T) {
 	f := newFixture(t, true)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)

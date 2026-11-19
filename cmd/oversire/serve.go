@@ -11,6 +11,7 @@ import (
 
 	"github.com/oversire/cli/agents"
 	"github.com/oversire/cli/agentsecret"
+	"github.com/oversire/cli/appcall"
 	"github.com/oversire/cli/ask"
 	"github.com/oversire/cli/capture"
 	"github.com/oversire/cli/config"
@@ -159,7 +160,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 		d := wire.DaemonInfo{Machine: cfg.Machine(), Version: version, Contract: wire.DaemonContract, Roles: cfg.Roles, Runtimes: reg.IDs(), Harnesses: installer.Status()}
 		d.Group, d.Home = store.Info()
 		d.Update = updates.Status()
-		d.Features = []string{wire.FeatureLaunchEnv, wire.FeatureAgentSecrets}
+		d.Features = []string{wire.FeatureLaunchEnv, wire.FeatureAgentSecrets, wire.FeatureAppCalls}
 		return d
 	}
 	srv = server.NewServer(serveCfg, info, store, hints, book, ingest)
@@ -176,6 +177,9 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	leases.OnChange = func(l wire.Lease) { srv.Notify(false, map[string]any{"type": "lease", "lease": l}) }
 	srv.Handle(lease.NewRoutes(leases, store).Routes()...)
 	srv.Handle(asks.Routes()...)
+	appCalls := appcall.New(srv.Deliver, func() bool { return srv.HasClient(true) }, appcall.Wait)
+	appCalls.Log = c.log
+	srv.Handle(appCalls.Routes()...)
 	asker := ask.NewAsker(book, screen, reg, time.Now)
 	srv.Handle(asker.Routes()...)
 	srv.Handle(installer.Routes()...)

@@ -36,7 +36,8 @@ Then run `oversire ticket skill <command>` and do its steps.
 
 ## Rules for all commands
 
-- The tracker is Plane. Use `plane-cli`. If you do not know a command, load the `plane-cli` skill. Send Markdown with `--description-md @<file>`.
+- The tracker is Plane. Use `plane-cli` for the fields of the items. If you do not know a command, load the `plane-cli` skill. Send Markdown with `--description-md @<file>`.
+- For the epics and the north star of a project, use `oversire epic` and `oversire project north-star`. The OverSire app on this Mac runs them. Run `oversire epic` with no arguments to see the commands.
 - Get the Plane workspace and project for this folder from the instructions of the user (CLAUDE.md). If they do not tell, ask the user one time.
 - Use the writing rules of the user and of the repository for all ticket text.
 - Do not change the OverSire block of a description: the lines from "OverSire block ▾" to "OverSire block ▴". When you write a new description, keep the block at the end with no change.

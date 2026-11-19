@@ -164,6 +164,16 @@ The budget of the order has caps: 50 earlier turns, 10 last turns and 20000 char
 | `oversire group remove <machine or device>`, `home <machine>`, `rotate` | Remove a member or an app, move home, or make a new group secret. |
 | `oversire join <host> <code>` | Join the group of the member at host. `-` reads the code from stdin. |
 | `oversire step done --run <id> --step <step> --verdict pass\|gaps\|done\|skipped\|blocked [--note <text>]` | End a runbook step. The agent of the step runs it. See "Runbooks". |
+| `oversire epic list [--project P]` | List the epics of a project, or of all projects, with the progress, the late days and the next items. The app on this Mac runs each `epic` command. See "App calls". |
+| `oversire epic show <epic> --project P` | Show an epic: the state, the progress, the dates, the forecast, the goal, the URL and the numbered steps. `<epic>` is the id or the title. |
+| `oversire epic plan [<epic>] --project P` | Show the plan of all open epics, or of one epic: the ordered steps with the dates and the slack, and the critical path (`*`). |
+| `oversire epic create --project P --title T [--goal G] [--start D] [--target D] [--lead ID]` | Make an epic. It prints the id. Dates are `YYYY-MM-DD`. |
+| `oversire epic update <epic> --project P [--title T] [--goal G] [--state S] [--start D] [--target D] [--lead ID]` | Change the fields that you give. The state is `planned`, `active`, `paused`, `done` or `canceled`. The value `none` removes a date or the lead. |
+| `oversire epic close <epic> --project P` | Set the epic to done. An epic with open items does not close. |
+| `oversire epic add <epic> KEY... [--project P]` | Put items in the epic. An item in another epic moves. Without `--project`, the project of the keys is used. |
+| `oversire epic remove KEY... [--project P]` | Take items out of their epic. |
+| `oversire project north-star --project P [--set TEXT]` | Show the north star of a project, or set it. |
+| `oversire app run <action> ['<json args>']` | Run one action of the allowed list of the app, with its args as a JSON object. |
 | `oversire review ready [--key K] [--kind code\|plan] [--note <text>] [--plan <file.md>]` | Hand off a worktree group or a plan for review. The agent runs it. See "Reviews". |
 | `oversire review reply [--key K] <comment id> "<text>"` | Answer a review comment. The agent runs it. |
 | `oversire review ls [--kind code\|plan] [--json]` | Show the reviews of this machine. |
@@ -278,7 +288,7 @@ A `sessionStart` order (a `LaunchRequest`) can carry the env of the agent (OVERS
 
 An env key matches `^[A-Za-z_][A-Za-z0-9_]*$` and has at most 200 characters. The keys `OVERSIRE_*`, `AGENT_VISOR_*` and `ORCA_PANE_KEY` are reserved. An order has at most 64 keys, and a value has at most 8192 characters. A key cannot be in `env` and in `envSecrets`. `POST /v1/orders` answers 400 to a bad key.
 
-`GET /v1/whoami` has `features: ["launch-env","agent-secrets"]`. The app sends `env` and `envSecrets` only to a daemon with these features.
+`GET /v1/whoami` has `features: ["launch-env","agent-secrets","app-calls"]`. The app sends `env` and `envSecrets` only to a daemon with the first two features.
 
 The home daemon keeps the secret values in the Keychain (service `oversire.agent-env`, account `<scope>/<agent>/<KEY>`). The value goes to `security -i` on stdin, as base64, so quotes and new lines are safe. On Linux the store is the Secret Service, else a 0600 file for each account in `<data>/agent-secrets/`. `<data>/agent-secrets.json` is the index: the keys and their `setAt`, no value.
 
@@ -307,6 +317,21 @@ How the env gets to the agent:
 - `orca` runtime with the visor: the Orca backend writes the env into a 0700 start script that removes itself. The terminal gets only `sh <script>`, so no value is in argv or in the scrollback. The `orca` runtime with no visor refuses an order with an env.
 
 The session book keeps the env keys (not the values) of a session. `session.started` has `agent` (the OverSire agent name) and `envKeys`.
+
+### App calls
+
+The `oversire epic`, `oversire project` and `oversire app` commands ask the OverSire app on this Mac to run an action of its action catalog (OVERSIRE-485). The bodies are in `contract/schema/app-call.json`. The feature is `app-calls` in `GET /v1/whoami`.
+
+| Route | Access | What it does |
+|---|---|---|
+| `POST /v1/app-calls` | loopback | Body `{action, args, agent?}`. The daemon gives the call an id and sends the frame `{"type":"appCall","call":{id, action, args, agent?}}` to the loopback clients of `GET /v1/connect`. It holds the request until the app posts the result, at most 60 s. Answers 200 with the `AppCallResult` `{id, status, summary, data?}`. 400: a bad body, or `args` is not an object. 503: no app is connected ("Open the OverSire app."), or the app did not take the frame. 504: the app did not answer. |
+| `POST /v1/app-calls/{id}/result` | loopback | Body `AppCallResult`. The app posts it. Answers 204. 400: the id of the body is not the id of the path. 404: no call waits with this id (also after the 60 s). 409: the call has a result already. |
+
+The app runs only the actions of its allowed list: `item.setEpic`, `epic.list`, `epic.show`, `epic.plan`, `epic.create`, `epic.update`, `epic.close`, `epic.addItems`, `epic.removeItems`, `project.northStar` and `project.setNorthStar`. Another action gives `notAllowed`. A change needs no confirm. Its event rows name the `agent` as the actor.
+
+`agent` is `<harness> <session>`. The commands take it from `--harness` and `--session`, else from `$CLAUDE_CODE_SESSION_ID` (harness `claude`), else from `$OVERSIRE_SESSION`. With none of these, the agent is absent: a human ran the command.
+
+The text output is the summary of the app, then a table for `epic list`, `epic show` and `epic plan`. `--json` prints the whole `AppCallResult`, with `data` as the app sent it. The exit code is 0 for `ok`, 1 for `failed` or `notAllowed` (and for a timeout), 2 for bad usage, and 3 when no daemon answers, no app is connected, or the daemon has no app calls.
 
 ### Events
 
