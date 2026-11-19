@@ -1,0 +1,14 @@
+{
+  "seq": 250,
+  "id": "app:mba:-:north-star:1795013000000",
+  "at": "2026-11-18T14:03:20Z",
+  "seenAt": "2026-11-18T14:03:21Z",
+  "kind": "project.north_star_set",
+  "project": "oversire",
+  "machine": "mba",
+  "actorType": "human",
+  "actor": "flarco@gmail.com",
+  "via": "app@mba",
+  "summary": "North star of OVERSIRE set (88 characters)",
+  "payload": { "project": "OVERSIRE", "length": 88 }
+}

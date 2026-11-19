@@ -1994,6 +1994,33 @@
       }
     },
     {
+      "kind": "project.north_star_set",
+      "domain": "human",
+      "actorTypes": [
+        "human",
+        "agent"
+      ],
+      "private": false,
+      "summary": "the project and the text length",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string"
+          },
+          "length": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "project",
+          "length"
+        ]
+      }
+    },
+    {
       "kind": "agent.changed",
       "domain": "human",
       "actorTypes": [
