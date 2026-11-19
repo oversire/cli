@@ -58,8 +58,9 @@ Usage:
   oversire epic add <epic> KEY... [--project P]        put items in an epic
   oversire epic remove KEY... [--project P]            take items out of their epic
   oversire project north-star --project P [--set TEXT] show or set the north star of a project
+  oversire item show <KEY> [--project P]               print an item and its comments as Markdown (the app on this Mac reads it)
   oversire app run <action> ['<json args>']            run an action of the allowed list of the app on this Mac
-                                                       epic, project and app take --json, --harness H and --session ID
+                                                       epic, project, item and app take --json, --harness H and --session ID
   oversire review ready [--key K] [--kind code|plan] [--note <text>] [--plan <file.md>]
                                                        hand off a group or a plan for review (the agent runs it)
   oversire review reply [--key K] <comment id> "<text>"  answer a review comment (the agent runs it)
@@ -196,6 +197,8 @@ func (c *cli) dispatch(ctx context.Context, args []string) error {
 		return c.epic(ctx, rest)
 	case cmd == "project":
 		return c.project(ctx, rest)
+	case cmd == "item":
+		return c.item(ctx, rest)
 	case cmd == "app":
 		return c.app(ctx, rest)
 	case cmd == "review":

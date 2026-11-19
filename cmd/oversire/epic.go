@@ -284,18 +284,23 @@ func (c *cli) app(ctx context.Context, args []string) error {
 	return c.runApp(ctx, f, pos[0], a, c.printData)
 }
 
-// runApp sends the call through the daemon to the app and prints the result. show prints the data of an ok
-// result after the summary; nil prints only the summary.
-func (c *cli) runApp(ctx context.Context, f *appFlags, action string, args map[string]any, show func(json.RawMessage) error) error {
+// callApp sends the call through the daemon to the app and gives the result.
+func (c *cli) callApp(ctx context.Context, f *appFlags, action string, args map[string]any) (wire.AppCallResult, error) {
 	d, err := c.daemonClient()
 	if err != nil {
-		return err
+		return wire.AppCallResult{}, err
 	}
 	b, err := json.Marshal(args)
 	if err != nil {
-		return err
+		return wire.AppCallResult{}, err
 	}
-	res, err := d.appCall(ctx, wire.AppCall{Action: action, Args: b, Agent: f.agent()})
+	return d.appCall(ctx, wire.AppCall{Action: action, Args: b, Agent: f.agent()})
+}
+
+// runApp sends the call through the daemon to the app and prints the result. show prints the data of an ok
+// result after the summary; nil prints only the summary.
+func (c *cli) runApp(ctx context.Context, f *appFlags, action string, args map[string]any, show func(json.RawMessage) error) error {
+	res, err := c.callApp(ctx, f, action, args)
 	if err != nil {
 		return err
 	}

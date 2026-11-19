@@ -173,6 +173,7 @@ The budget of the order has caps: 50 earlier turns, 10 last turns and 20000 char
 | `oversire epic add <epic> KEY... [--project P]` | Put items in the epic. An item in another epic moves. Without `--project`, the project of the keys is used. |
 | `oversire epic remove KEY... [--project P]` | Take items out of their epic. |
 | `oversire project north-star --project P [--set TEXT]` | Show the north star of a project, or set it. |
+| `oversire item show <KEY> [--project P] [--json]` | Print an item and its comments as Markdown. `--project` lets you give only the number. `--json` prints the item object of `item.get`. The app on this Mac reads the item from its tracker (Plane or Big Timer). See "App calls". |
 | `oversire app run <action> ['<json args>']` | Run one action of the allowed list of the app, with its args as a JSON object. |
 | `oversire review ready [--key K] [--kind code\|plan] [--note <text>] [--plan <file.md>]` | Hand off a worktree group or a plan for review. The agent runs it. See "Reviews". |
 | `oversire review reply [--key K] <comment id> "<text>"` | Answer a review comment. The agent runs it. |
@@ -320,18 +321,18 @@ The session book keeps the env keys (not the values) of a session. `session.star
 
 ### App calls
 
-The `oversire epic`, `oversire project` and `oversire app` commands ask the OverSire app on this Mac to run an action of its action catalog (OVERSIRE-485). The bodies are in `contract/schema/app-call.json`. The feature is `app-calls` in `GET /v1/whoami`.
+The `oversire epic`, `oversire project`, `oversire item` and `oversire app` commands ask the OverSire app on this Mac to run an action of its action catalog (OVERSIRE-485). The bodies are in `contract/schema/app-call.json`. The feature is `app-calls` in `GET /v1/whoami`.
 
 | Route | Access | What it does |
 |---|---|---|
 | `POST /v1/app-calls` | loopback | Body `{action, args, agent?}`. The daemon gives the call an id and sends the frame `{"type":"appCall","call":{id, action, args, agent?}}` to the loopback clients of `GET /v1/connect`. It holds the request until the app posts the result, at most 60 s. Answers 200 with the `AppCallResult` `{id, status, summary, data?}`. 400: a bad body, or `args` is not an object. 503: no app is connected ("Open the OverSire app."), or the app did not take the frame. 504: the app did not answer. |
 | `POST /v1/app-calls/{id}/result` | loopback | Body `AppCallResult`. The app posts it. Answers 204. 400: the id of the body is not the id of the path. 404: no call waits with this id (also after the 60 s). 409: the call has a result already. |
 
-The app runs only the actions of its allowed list: `item.setEpic`, `epic.list`, `epic.show`, `epic.plan`, `epic.create`, `epic.update`, `epic.close`, `epic.addItems`, `epic.removeItems`, `project.northStar` and `project.setNorthStar`. Another action gives `notAllowed`. A change needs no confirm. Its event rows name the `agent` as the actor.
+The app runs only the actions of its allowed list: `item.setEpic`, `epic.list`, `epic.show`, `epic.plan`, `epic.create`, `epic.update`, `epic.close`, `epic.addItems`, `epic.removeItems`, `item.get`, `item.list`, `item.markdown`, `project.northStar` and `project.setNorthStar`. Another action gives `notAllowed`. A change needs no confirm. Its event rows name the `agent` as the actor.
 
 `agent` is `<harness> <session>`. The commands take it from `--harness` and `--session`, else from `$CLAUDE_CODE_SESSION_ID` (harness `claude`), else from `$OVERSIRE_SESSION`. With none of these, the agent is absent: a human ran the command.
 
-The text output is the summary of the app, then a table for `epic list`, `epic show` and `epic plan`. `--json` prints the whole `AppCallResult`, with `data` as the app sent it. The exit code is 0 for `ok`, 1 for `failed` or `notAllowed` (and for a timeout), 2 for bad usage, and 3 when no daemon answers, no app is connected, or the daemon has no app calls.
+The text output is the summary of the app, then a table for `epic list`, `epic show` and `epic plan`. `item show` prints the Markdown after the summary. `--json` prints the whole `AppCallResult`, with `data` as the app sent it. `item show --json` prints only `data` of `item.get`, the item object. The exit code is 0 for `ok`, 1 for `failed` or `notAllowed` (and for a timeout), 2 for bad usage, and 3 when no daemon answers, no app is connected, or the daemon has no app calls.
 
 ### Events
 
