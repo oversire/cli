@@ -1,0 +1,15 @@
+{
+  "seq": 260,
+  "id": "app:mba:OVERSIRE-12:link:1795100000000",
+  "at": "2026-11-19T10:13:20Z",
+  "seenAt": "2026-11-19T10:13:21Z",
+  "kind": "item.link_added",
+  "item": "OVERSIRE-12",
+  "project": "oversire",
+  "machine": "mba",
+  "actorType": "agent",
+  "actor": "codex s1",
+  "via": "app@mba",
+  "summary": "Spec",
+  "payload": { "url": "https://example.com/spec", "title": "Spec" }
+}

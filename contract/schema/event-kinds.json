@@ -824,7 +824,8 @@
       "actorTypes": [
         "human",
         "provider",
-        "system"
+        "system",
+        "agent"
       ],
       "private": false,
       "summary": "from and to",
@@ -1657,6 +1658,62 @@
           }
         },
         "additionalProperties": false
+      }
+    },
+    {
+      "kind": "item.link_added",
+      "domain": "tracker",
+      "actorTypes": [
+        "human",
+        "agent"
+      ],
+      "private": false,
+      "summary": "the link title",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "url"
+        ]
+      }
+    },
+    {
+      "kind": "item.attachment_added",
+      "domain": "tracker",
+      "actorTypes": [
+        "human",
+        "agent"
+      ],
+      "private": false,
+      "summary": "the file name",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "attachment": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer"
+          },
+          "mimeType": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ]
       }
     },
     {
