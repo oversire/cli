@@ -13,9 +13,9 @@ If a check fails, tell the user and stop.
 
 ## 3. Close
 
-- Post a result comment on the ticket: what changed, the commits, the tests, and each difference from the spec.
-- Set the ticket to Done. If the rules of the root say that a different tool sets Done (for example after a merge), do not set it.
-- List the sub-items (`plane-cli wi list --parent-id <id>`). Set each finished sub-item to Done with a comment that names the commit.
+- Post a result comment on the ticket with `oversire item comment <KEY> --body-file <file>`: what changed, the commits, the tests, and each difference from the spec.
+- Set the ticket to Done with `oversire item done <KEY>`. If the rules of the root say that a different tool sets Done (for example after a merge), do not set it.
+- List the sub-items with `oversire item show <KEY> --json` (`subItems`). For each finished sub-item, run `oversire item comment <SUB> --body-file -` with a comment that names the commit, then `oversire item done <SUB>`.
 
 ## 4. Stop the worker and attach the transcripts
 
@@ -26,8 +26,8 @@ If `oversire ticket skill delegate` ran for this ticket:
 
 Run `oversire ticket done <KEY>`. It writes the transcript of this session as gzip files and prints one line for each file: `<path><TAB><name>`. If the ticket has a worker, it also writes the turns of the worker (`<KEY>-worker-turns`). A line with no TAB is a note, for example that there is no worker. Show it to the user and go on.
 
-- List the attachments of the ticket (`plane-cli wi attachment list <KEY>`). Delete each attachment whose name starts with the session part of the names (for example `claude-session-<id>`, or `<KEY>-worker-turns`). Thus the ticket keeps only the latest transcript of this session.
-- Upload each file: `plane-cli wi attachment upload <KEY> <path> --name <name>`.
+- On Plane, list the attachments of the ticket (`plane-cli wi attachment list <KEY>`). Delete each attachment whose name starts with the session part of the names (for example `claude-session-<id>`, or `<KEY>-worker-turns`). Thus the ticket keeps only the latest transcript of this session. The protocol of the app has no delete. On other trackers, skip this step.
+- Upload each file: `oversire item attach <KEY> <path> --name <name>`. If it answers "<Tracker> has no attachments", skip the upload and tell the user.
 
 ## 5. Report
 

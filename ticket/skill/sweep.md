@@ -5,12 +5,12 @@ Goal: started tickets show the true state. Sweep sets Done what is merged, ends 
 ## 1. Find the project
 
 - A project in the arguments wins.
-- Else use the map of the folder to the Plane project in the instructions of the user (CLAUDE.md).
+- Else use the map of the folder to the tracker project in the instructions of the user (CLAUDE.md).
 - Ask the user one time only when the map has no line for this folder.
 
 ## 2. List the started items
 
-Run `plane-cli wi list --state-group started`. Keep the key, the state name, the parent and the sub-items of each item.
+Run `oversire item list --project <PROJECT> --group progress,review,blocked --limit 200 --json`. Keep the key, the status, the parent and the sub-items of each item. For the sub-items of one item, run `oversire item show <KEY> --json`.
 
 ## 3. Get the facts
 
@@ -25,7 +25,7 @@ For a repository with a remote, run `gh pr list --search <KEY> --state all`. A m
 
 ## 5. Sort into buckets
 
-Show one table for each bucket: key, Plane state, signal and the proposed action.
+Show one table for each bucket: key, tracker status, signal and the proposed action.
 
 | Bucket | Rule | Proposed action |
 | --- | --- | --- |
@@ -42,7 +42,7 @@ Ask with AskUserQuestion: one question for each bucket, at most 4 in one call. T
 
 ## 7. Apply
 
-- Set the state and add the comment with `plane-cli`.
+- Set the state with `oversire item status` (or `oversire item done`) and add the comment with `oversire item comment`.
 - Close the open sub-items before their parent, because the parent guard reopens a Done parent.
 - Run `oversire ticket stop <SESSION>` for each stoppable live session. For a `cli` session, or a session on a different machine, tell the user.
 - Do not merge. Do not push. Never use `rm -r` in `.wt/`. When `git branch -d` refuses, stop and tell the user.

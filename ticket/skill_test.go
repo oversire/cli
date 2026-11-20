@@ -91,7 +91,7 @@ func TestPlannedTicketGoesToTodo(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, want := range []string{"state list --group unstarted", "Todo", "backlog"} {
+		for _, want := range []string{"oversire item status", "todo", "Todo", "backlog"} {
 			if !strings.Contains(b, want) {
 				t.Errorf("%s has no %q", v, want)
 			}
@@ -105,8 +105,31 @@ func TestPlannedTicketGoesToTodo(t *testing.T) {
 		t.Error("new lost the In Progress rule")
 	}
 	pb, _ := s.Body("plan", c)
-	if !strings.Contains(pb, "wi update") {
+	if !strings.Contains(pb, "oversire item status <KEY> todo") {
 		t.Error("plan does not move the ticket")
+	}
+}
+
+// The bodies change items with oversire, so that they work on each tracker.
+func TestBodiesUseOversireItem(t *testing.T) {
+	s := NewSkill()
+	for _, v := range append([]string{""}, s.Verbs()...) {
+		b, err := s.Body(v, Context{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, old := range []string{"wi update", "wi list", "wi relation", "attachment upload", "state list"} {
+			if strings.Contains(b, old) {
+				t.Errorf("%q still has %q", v, old)
+			}
+		}
+		if strings.Contains(b, "Big Timer has no sub-items") {
+			t.Errorf("%q says that Big Timer has no sub-items", v)
+		}
+	}
+	main, _ := s.Body("", Context{})
+	if !strings.Contains(main, "oversire item") {
+		t.Error("main has no oversire item")
 	}
 }
 

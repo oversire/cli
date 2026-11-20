@@ -21,9 +21,10 @@ If the session has no investigation (the user only gave an idea), the brief is t
 
 - Title: short, in the imperative, says the change.
 - Description: the context from the brief, then the spec.
-- State: the Todo state (see below). Use "In Progress" only if the user said to work it now.
+- State: Todo (see below). Use "In Progress" only if the user said to work it now.
 - Follow the rules of the user for the lead and the assignee.
-- Sub-items: make one for each part that the spec proposes, with `--parent <KEY> --state "<Todo>"`. Each sub-item holds its own Changes and Tests.
+- Make the ticket with `oversire item create --project <PROJECT> --title <T> --body-file <file> --status todo`. It prints the key. Add `--priority <name>` or `--label <name>` when they apply and the tracker has them.
+- Sub-items: make one for each part that the spec proposes, with `oversire item create --project <PROJECT> --title <T> --body-file <file> --status todo --parent <KEY>`. Each sub-item holds its own Changes and Tests. This works on Plane and on Big Timer.
 - Epic: if the work is a part of a larger goal, list the epics (`oversire epic list --project <PROJECT>`). Put the ticket in the epic that the user names, or ask when one epic fits clearly. After you make the ticket, add it with `oversire epic add "<epic>" <KEY>`. Skip this when the project has no epics, or when the command exits with 3 (no OverSire app on this Mac).
 
 {{template "todo" .}}

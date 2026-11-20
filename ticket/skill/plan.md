@@ -9,7 +9,7 @@ Choose the mode. With one key, do "One ticket". With no key, or with two or more
 ### 1. Read the ticket
 
 - Run `oversire ticket plan <KEY>`. It binds this session and prints the earlier sessions of the ticket.
-- Read the ticket with `plane-cli`: the description, the comments, the links and the sub-items.
+- Read the ticket with `oversire item show <KEY>`: the description, the comments and the links. For the sub-items, run `oversire item show <KEY> --json` and read `subItems`.
 
 ### 2. Write the brief
 
@@ -23,9 +23,10 @@ If the ticket already has a full spec (Changes with signatures, and Tests), tell
 ### 4. Update the ticket
 
 - Write the new description: the context, the spec, then the old text under "## Original request". Keep the OverSire block at the end.
-- Make the sub-items that the spec proposes, with `--state "<Todo>"`. If the ticket has sub-items, update them. Do not make a second copy of a sub-item.
-- Set the ticket to Todo if it is in Backlog or Triage: `plane-cli wi update <KEY> --state "<Todo>"`.
-- Move the existing sub-items in Backlog or Triage to Todo. List them with `plane-cli -p <PROJECT> wi list --parent-id <uuid of the ticket> --state-group-in backlog,triage`, then run `wi update` on each.
+- Write the description with `oversire item edit <KEY> --body-file <file>`.
+- Make the sub-items that the spec proposes, with `oversire item create --project <PROJECT> --title <T> --body-file <file> --status todo --parent <KEY>`. If the ticket has sub-items, update them with `oversire item edit`. Do not make a second copy of a sub-item.
+- Set the ticket to Todo if it is in Backlog or Triage: `oversire item status <KEY> todo`.
+- Move the existing sub-items in Backlog or Triage to Todo. Read `subItems` from `oversire item show <KEY> --json` and the group of each status from `oversire project statuses <PROJECT> --json`. Then run `oversire item status <SUB> todo` on each.
 - Add a comment: "Planned: <one line>. Set to Todo."
 
 {{template "todo" .}}
@@ -42,8 +43,8 @@ If the arguments (or Groom) give the keys, skip this step. Else ask with AskUser
 
 ### 2. Find the candidates
 
-- Read the work items with `plane-cli wi list --state-group-in backlog,unstarted`. For a date scope, add `--created-at-gte <date>`.
-- Add the pending intake items: `plane-cli intake list --status -2`.
+- Read the work items with `oversire item list --project <PROJECT> --group todo --limit 200`. A date scope needs the created date, which the app does not have. On Plane only, use `plane-cli` for that scope. On other trackers, ask the user for keys.
+- On Plane, add the pending intake items: `plane-cli intake list --status -2`.
 - Keep only the items whose description has no `## Changes` and no `## Tests`.
 - Show a numbered table: #, key, title, created, state.
 - The user types `all`, `1-5,8` or `all but 3`. Tell back the selected keys.
@@ -80,7 +81,7 @@ Follow "Plan with a subagent" below, with these changes:
 ### 7. Update the tickets
 
 - Do "One ticket" step 4 for each item.
-- Add the agreed relations with `plane-cli wi relation create --relation-type blocked_by --issues <ids>`. `--issues` takes work item ids, not keys: get the ids first.
+- Add the agreed relations with `oversire item relate <KEY> --blocked-by <OTHER>`. It takes keys.
 
 ### 8. Report
 

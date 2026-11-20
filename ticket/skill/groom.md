@@ -5,7 +5,7 @@ Goal: a short, clear intake. Groom merges the items that tell the same problem, 
 ## 1. Find the project
 
 - A project in the arguments wins.
-- Else use the map of the folder to the Plane project in the instructions of the user (CLAUDE.md).
+- Else use the map of the folder to the tracker project in the instructions of the user (CLAUDE.md).
 - Ask the user one time only when the map has no line for this folder.
 
 ## 2. Check the Groom key
@@ -18,7 +18,7 @@ Run `oversire ticket groom <PROJECT>`.
 ## 3. Read the items
 
 - Read the pending intake: `plane-cli intake list --status -2`. To include snoozed items, use `--status-in -2,0`.
-- With `--backlog`, also read `plane-cli wi list --state-group-in backlog,unstarted`. `--per-page` allows at most 200.
+- With `--backlog`, also read `oversire item list --project <PROJECT> --group todo --limit 200`.
 - Skip the items in a started, completed or cancelled state, and the busy items.
 - The skill cannot see the queue lanes of the app. Tell the user this one time.
 - Read at most 200 items. With more, tell the user and use the intake only.
@@ -51,7 +51,7 @@ Use the kinds and the rules of the Groom prompt (`Contract/prompts/groom.md`):
 - Show one table: #, kind, keys, reason (at most 25 words), evidence, confidence.
 - Ask with AskUserQuestion only about the maybe lines. Ask at most 4 questions in one call. Ask about merges and closes first. A yes makes the line sure. A no removes the line.
 - Then ask one time. The options are "Apply all N", "Apply some (type the numbers)" and "Cancel".
-- Nothing goes to Plane before this yes.
+- Nothing goes to the tracker before this yes.
 
 ## 7. Apply
 
@@ -59,11 +59,11 @@ Show one table of the writes. Then write one item at a time, as the app does:
 
 | Kind | Work item | Intake item |
 | --- | --- | --- |
-| merge | The kept item gets the new description. Keep its OverSire block. Each other item gets the `duplicate` relation to the kept item, the comment "Merged into <KEEP> by Groom. <reason>", and the Cancelled state. | Each other item: `plane-cli intake update --status 2 --duplicate-to-id <id of KEEP>` (2 = Duplicate). |
-| done | The comment "Done: <reason>" plus the evidence lines, then the Done state. | The same comment, then `--status -1` (Rejected). |
-| obsolete | The comment "Obsolete: <reason>", then the Cancelled state. | The same comment, then `--status -1` (Rejected). |
-| fold | Set the parent. | Set the parent, then `--status 1` (Accepted). |
-| relate | Add the relation. | Add the relation. |
+| merge | The kept item gets the new description (`oversire item edit <KEEP> --body-file <file>`). Keep its OverSire block. Each other item gets the `duplicate` relation (`oversire item relate <KEY> --duplicate-of <KEEP>`), the comment "Merged into <KEEP> by Groom. <reason>" (`oversire item comment`), and the Cancelled state (`oversire item status <KEY> Cancelled`). | Each other item: `plane-cli intake update --status 2 --duplicate-to-id <id of KEEP>` (2 = Duplicate). |
+| done | The comment "Done: <reason>" plus the evidence lines (`oversire item comment`), then the Done state (`oversire item done <KEY>`). | The same comment, then `--status -1` (Rejected). |
+| obsolete | The comment "Obsolete: <reason>", then the Cancelled state (`oversire item status <KEY> Cancelled`). | The same comment, then `--status -1` (Rejected). |
+| fold | Set the parent (`oversire item parent <KEY> <PARENT>`). | Set the parent, then `--status 1` (Accepted). |
+| relate | Add the relation (`oversire item relate`). | Add the relation. |
 | vague | No write. | No write. |
 
 - A failed line stays in the list with its error. Offer to try again only the failed lines.

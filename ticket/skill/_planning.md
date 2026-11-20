@@ -33,6 +33,6 @@ If open questions remain, ask the user in one prompt (use AskUserQuestion when i
 
 A plan that the user asked for is approved. The planned ticket and its sub-items go to Todo, so that OverSire ships them with no "Plan first" question.
 
-- Get the name of the Todo state: `plane-cli -p <PROJECT> state list --group unstarted -c name`. Use the first state.
+- Set an item to Todo with `oversire item status <KEY> todo`. The app picks the first Todo state of the project. To see the states and their groups (Backlog, Triage), run `oversire project statuses <PROJECT> --json`.
 - Move only items in the state groups `backlog` or `triage`. Do not move an item that is in progress or closed.
 {{end}}

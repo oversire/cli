@@ -36,11 +36,13 @@ Then run `oversire ticket skill <command>` and do its steps.
 
 ## Rules for all commands
 
-- The tracker is Plane. Use `plane-cli` for the fields of the items. If you do not know a command, load the `plane-cli` skill. Send Markdown with `--description-md @<file>`.
+- Use `oversire item` and `oversire project` for the items of each tracker (Plane, Big Timer). Run `oversire item` with no arguments to see the commands. Put long text in a file: `--body-file <file>`, or `--body-file -` for stdin. The OverSire app on this Mac runs them. Exit 3 means that no app answers: tell the user to open the OverSire app.
+- When a command answers "<Tracker> has no X", the tracker does not have that feature. Skip the step and tell the user.
+- `plane-cli` is only for three jobs on Plane: the intake, the list and delete of attachments, and the created-date scope. The `oversire` commands do all other item work. If you do not know a `plane-cli` command, load its skill.
 - For the epics and the north star of a project, use `oversire epic` and `oversire project north-star`. The OverSire app on this Mac runs them. Run `oversire epic` with no arguments to see the commands.
-- Get the Plane workspace and project for this folder from the instructions of the user (CLAUDE.md). If they do not tell, ask the user one time.
+- Get the tracker workspace and project for this folder from the instructions of the user (CLAUDE.md). If they do not tell, ask the user one time.
 - Use the writing rules of the user and of the repository for all ticket text.
 - Do not change the OverSire block of a description: the lines from "OverSire block ▾" to "OverSire block ▴". When you write a new description, keep the block at the end with no change.
-- Write the files for Plane in your scratchpad folder if you have one, else in a temporary folder.
+- Write the files for the tracker in your scratchpad folder if you have one, else in a temporary folder.
 - Do not ask the user to approve a plan that they asked for. Ask only about open design decisions.
 - In commit messages, add the trailer line `Item: <KEY>`, unless the repository has a different rule.
