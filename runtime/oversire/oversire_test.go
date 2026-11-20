@@ -416,7 +416,8 @@ func TestStopQueued(t *testing.T) {
 }
 
 func TestAgentExitFails(t *testing.T) {
-	f := setup(t, `read -r line; echo 'no login' >&2; exit 3`, Options{})
+	// agent-wire reads stderr at the exit and does not wait for the drain. The sleep gives the drain time.
+	f := setup(t, `read -r line; echo 'no login' >&2; sleep 0.2; exit 3`, Options{})
 	ref := f.launch(t, "A-1", runtime.Order{ID: "o1"})
 	s := f.rec.wait(t, ref.ID, wire.SessionFailed)
 	if !strings.Contains(s.Error, "no login") {
