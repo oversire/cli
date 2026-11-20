@@ -22,6 +22,9 @@ import (
 // Wait is how long a call waits for the app. The CLI client waits longer.
 const Wait = 60 * time.Second
 
+// MaxCallBody is the largest body of POST /v1/app-calls. It holds an attachment of 10 MB as base64.
+const MaxCallBody = 16 << 20
+
 // answeredKeep is how long the relay knows an answered id, to refuse a second result.
 const answeredKeep = 10 * time.Minute
 
@@ -118,7 +121,11 @@ func (r *Relay) Routes() []server.Route {
 }
 
 func (r *Relay) serveCall(w http.ResponseWriter, req *http.Request) {
-	body, err := io.ReadAll(io.LimitReader(req.Body, 1<<20))
+	body, err := io.ReadAll(io.LimitReader(req.Body, MaxCallBody+1))
+	if len(body) > MaxCallBody {
+		reply(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "The call is too large."})
+		return
+	}
 	var c wire.AppCall
 	if err == nil {
 		err = wire.Decode(body, &c)

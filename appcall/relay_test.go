@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -188,5 +189,25 @@ func TestRoutesLoopbackOnly(t *testing.T) {
 		if code, _ := post(t, net.URL+p, `{}`); code != http.StatusNotFound {
 			t.Errorf("%s on Tailscale: %d", p, code)
 		}
+	}
+}
+
+func TestCallBodyLimit(t *testing.T) {
+	app := &fakeApp{}
+	r := newRelay(app, true, time.Second)
+	app.answer = func(c wire.AppCall) {
+		r.Deliver(wire.AppCallResult{ID: c.ID, Status: wire.AppCallOK, Summary: "got " + strconv.Itoa(len(c.Args))})
+	}
+	loop, _ := rig(t, r)
+	body := func(n int) string { return `{"action":"item.attach","args":{"data":"` + strings.Repeat("a", n) + `"}}` }
+	if code, out := post(t, loop.URL+"/v1/app-calls", body(2<<20)); code != 200 || !strings.Contains(out, `"summary":"got `) {
+		t.Fatal(code, out[:min(len(out), 200)])
+	}
+	code, out := post(t, loop.URL+"/v1/app-calls", body(17<<20))
+	if code != http.StatusRequestEntityTooLarge || !strings.Contains(out, "The call is too large.") {
+		t.Fatal(code, out)
+	}
+	if app.count() != 1 {
+		t.Fatalf("%d frames", app.count())
 	}
 }
