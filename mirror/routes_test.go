@@ -315,6 +315,19 @@ func TestHeadRecordsReaders(t *testing.T) {
 	}
 }
 
+func TestPeekDoesNotRecordAReader(t *testing.T) {
+	f := newFixture(t, nil)
+	f.caller = mbaApp
+	f.do(t, "GET", "/v1/mirror?peek=1", nil)
+	f.caller = local
+	_, data, _ := f.do(t, "GET", "/v1/mirror?peek=1", nil)
+	var h wire.MirrorHead
+	_ = json.Unmarshal(data, &h)
+	if len(h.Readers) != 0 {
+		t.Fatalf("a peek recorded a reader: %s", data)
+	}
+}
+
 func TestDocsRecordTheReaderHead(t *testing.T) {
 	f := newFixture(t, nil)
 	f.caller = mbaApp

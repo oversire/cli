@@ -398,7 +398,7 @@ The home member keeps the mirror feed in `<data>/mirror.db`, also when the group
 
 | Route | What it does |
 | --- | --- |
-| `GET /v1/mirror` | Answers the `MirrorHead` `{epoch, head, floor, ready, source?, sourceName?, sourceMachine?, appVersion?, publishedAt?, sourceOnline?, readers?}`. `sourceOnline` is true when a WebSocket client of the source is connected. The call records the caller as a reader. |
+| `GET /v1/mirror` | Answers the `MirrorHead` `{epoch, head, floor, ready, source?, sourceName?, sourceMachine?, appVersion?, publishedAt?, sourceOnline?, readers?}`. `sourceOnline` is true when a WebSocket client of the source is connected. The call records the caller as a reader. `?peek=1` reads the head and records no reader. |
 | `GET /v1/mirror/docs?after=&limit=&epoch=` | Answers a `MirrorPage` `{epoch, docs, next, more, reset}` with the docs that have `seq` above `after`. `limit` is 1 to 500 (default 500). A page ends after 8 MiB of bodies. `reset: true` means: drop all docs and read again from 0. It happens when `epoch` is not the epoch of the feed, when `after` is above the head, and when `after` is above 0 and below `floor`. A reset page has no docs. With `Accept-Encoding: gzip` the body is gzip. |
 | `GET /v1/mirror/index` | Apps only. Answers the `MirrorIndex` `{epoch, head, docs: [{kind, id, hash}]}` of the live docs. |
 | `PUT /v1/mirror/docs` | Apps only. Body `MirrorPut` `{epoch, source, sourceName, appVersion, ready?, docs}`. At most 500 docs, 1 MiB for a doc and 8 MiB for the batch. `source` must be the holder of the lease `automations`. The daemon sets `hash` (sha256 of the compact body) and `seq`. A doc with the same hash and `v` changes nothing. Answers the `MirrorPutResult` `{head, applied, same}`. |

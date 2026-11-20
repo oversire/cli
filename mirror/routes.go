@@ -119,7 +119,10 @@ func (r *Routes) withOnline(h wire.MirrorHead) wire.MirrorHead {
 }
 
 func (r *Routes) head(w http.ResponseWriter, req *http.Request) {
-	r.seen(req, -1)
+	// peek=1 reads the head without a reader record (the Machines page).
+	if req.URL.Query().Get("peek") != "1" {
+		r.seen(req, -1)
+	}
 	writeJSON(w, http.StatusOK, r.withOnline(r.store.Head()))
 }
 
