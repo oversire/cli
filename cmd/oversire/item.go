@@ -2,24 +2,130 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
+	"io"
+	"mime"
+	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/oversire/cli/ticket"
 	"github.com/oversire/cli/wire"
 )
 
-const itemUsage = "usage: oversire item show <KEY> [--project P] [--json]"
+const itemUsage = `usage:
+  oversire item list [--project P] [--group G[,G]] [--mine] [--label L] [--text T] [--limit N]
+  oversire item search <text> [--project P] [--limit N]
+  oversire item show <KEY> [--project P]
+  oversire item create --project P --title T [--body-file F|-] [--status S] [--priority X] [--parent KEY] [--label L]... [--epic E]
+  oversire item edit <KEY> [--title T] [--body-file F|-]
+  oversire item status <KEY> <status> [--force]
+  oversire item start <KEY>
+  oversire item done <KEY> [--force]
+  oversire item reopen <KEY>
+  oversire item assign <KEY> --me | PERSON... | --none
+  oversire item priority <KEY> <name>
+  oversire item comment <KEY> --body-file F|-
+  oversire item relate <KEY> --blocks|--blocked-by|--relates-to|--duplicate-of OTHER [--remove]
+  oversire item parent <KEY> <PARENT|none>
+  oversire item link <KEY> <URL> [--title T]
+  oversire item attach <KEY> <FILE> [--name N]
+Each command takes --json, --harness H and --session ID, and --project P for a bare item number.
+The status is an id, a name, or one of todo, progress, review, blocked, done. A group is one of the same words.
+--body-file - reads the text from stdin. The text has at most 1 MB. A file has at most 10 MB.
+The app on this Mac runs the command. Exit codes: 0 ok, 1 failed or not allowed, 2 usage, 3 no daemon or no app.`
 
-// item runs `oversire item show`.
+const (
+	maxBodyBytes   = 1 << 20
+	maxAttachBytes = 10 << 20
+)
+
+// stringsFlag is a flag that you can repeat.
+type stringsFlag []string
+
+func (s *stringsFlag) String() string { return strings.Join(*s, ",") }
+
+func (s *stringsFlag) Set(v string) error {
+	*s = append(*s, v)
+	return nil
+}
+
+// itemFlags are the flags of the item commands. A command registers only its own flags.
+type itemFlags struct {
+	title, bodyFile, status, priority, parent, epic string
+	group, label, text, name                        string
+	labels                                          stringsFlag
+	limit                                           int
+	mine, force, me, none, remove                   bool
+	// The relate flags by relation kind.
+	relate map[string]*string
+}
+
+func (it *itemFlags) register(fs *flag.FlagSet, sub string) {
+	switch sub {
+	case "list":
+		fs.StringVar(&it.group, "group", "", "todo, progress, review, blocked or done; separate with commas")
+		fs.BoolVar(&it.mine, "mine", false, "only the items that are assigned to you")
+		fs.StringVar(&it.label, "label", "", "a label name")
+		fs.StringVar(&it.text, "text", "", "words in the key, title or body")
+		fs.IntVar(&it.limit, "limit", 0, "at most this many items")
+	case "search":
+		fs.IntVar(&it.limit, "limit", 0, "at most this many results")
+	case "create":
+		fs.StringVar(&it.title, "title", "", "the title")
+		fs.StringVar(&it.bodyFile, "body-file", "", "the Markdown description: a file, or - for stdin")
+		fs.StringVar(&it.status, "status", "", "a status name, id or category word")
+		fs.StringVar(&it.priority, "priority", "", "a priority name")
+		fs.StringVar(&it.parent, "parent", "", "the key of the parent item")
+		fs.Var(&it.labels, "label", "a label name; repeat for more")
+		fs.StringVar(&it.epic, "epic", "", "the epic id or title")
+	case "edit":
+		fs.StringVar(&it.title, "title", "", "the new title")
+		fs.StringVar(&it.bodyFile, "body-file", "", "the new Markdown description: a file, or - for stdin")
+	case "comment":
+		fs.StringVar(&it.bodyFile, "body-file", "", "the Markdown comment: a file, or - for stdin")
+	case "status", "done":
+		fs.BoolVar(&it.force, "force", false, "close a parent that has open sub-items")
+	case "assign":
+		fs.BoolVar(&it.me, "me", false, "add yourself and keep the others")
+		fs.BoolVar(&it.none, "none", false, "remove all assignees")
+	case "relate":
+		fs.BoolVar(&it.remove, "remove", false, "remove the relation")
+		it.relate = map[string]*string{}
+		for flagName, kind := range map[string]string{"blocks": "blocks", "blocked-by": "blockedBy", "relates-to": "relatesTo", "duplicate-of": "duplicate"} {
+			it.relate[kind] = fs.String(flagName, "", "the key of the other item")
+		}
+	case "link":
+		fs.StringVar(&it.title, "title", "", "the link title")
+	case "attach":
+		fs.StringVar(&it.name, "name", "", "the file name in the tracker")
+	}
+}
+
+// item runs `oversire item <sub>`.
 func (c *cli) item(ctx context.Context, args []string) error {
-	if len(args) == 0 || args[0] != "show" {
+	if len(args) == 0 {
 		return &exitError{2, errors.New(itemUsage)}
 	}
+	switch args[0] {
+	case "show":
+		return c.itemShow(ctx, args[1:])
+	case "list", "search", "create", "edit", "status", "start", "done", "reopen", "assign", "priority", "comment", "relate", "parent", "link", "attach":
+		return c.itemSub(ctx, args[0], args[1:])
+	}
+	return &exitError{2, fmt.Errorf("unknown item command %q\n%s", args[0], itemUsage)}
+}
+
+func (c *cli) itemShow(ctx context.Context, args []string) error {
 	f := newAppFlags("item show")
-	pos, err := f.parse(args[1:])
+	pos, err := f.parse(args)
 	if err != nil {
 		return f.usage(itemUsage, err)
 	}
@@ -41,6 +147,318 @@ func (c *cli) item(ctx context.Context, args []string) error {
 		return &exitError{1, errors.New(res.Summary)}
 	}
 	return c.printData(res.Data)
+}
+
+// itemSub runs each item command except show.
+func (c *cli) itemSub(ctx context.Context, sub string, args []string) error {
+	f := newAppFlags("item " + sub)
+	var it itemFlags
+	it.register(f.fs, sub)
+	pos, err := f.parse(args)
+	if err != nil {
+		return f.usage(itemUsage, err)
+	}
+	bad := func(err error) error { return f.usage(itemUsage, err) }
+	// want checks the count of the positional arguments.
+	want := func(min, max int) error {
+		if len(pos) < min || len(pos) > max {
+			return bad(nil)
+		}
+		return nil
+	}
+	project := ""
+	if *f.project != "" {
+		if project, err = ticket.NormalProject(*f.project); err != nil {
+			return bad(err)
+		}
+	}
+	a := map[string]any{}
+	// first sets the key from the first positional argument.
+	first := func() error {
+		k, err := itemKey(pos[0], project)
+		a["key"] = k
+		return err
+	}
+	var action string
+	var show func(json.RawMessage) error
+	switch sub {
+	case "list":
+		if err := want(0, 0); err != nil {
+			return err
+		}
+		action, show = "item.list", c.printItems
+		if project != "" {
+			a["project"] = project
+		}
+		if it.group != "" {
+			a["group"] = strings.ToLower(it.group)
+		}
+		if it.mine {
+			a["assignee"] = "me"
+		}
+		if it.label != "" {
+			a["label"] = it.label
+		}
+		if it.text != "" {
+			a["text"] = it.text
+		}
+		if it.limit > 0 {
+			a["limit"] = it.limit
+		}
+	case "search":
+		if err := want(1, 1); err != nil {
+			return err
+		}
+		action, show = "search.all", c.printSearch
+		a["query"] = pos[0]
+		if project != "" {
+			a["project"] = project
+		}
+		if it.limit > 0 {
+			a["limit"] = it.limit
+		}
+	case "create":
+		if err := want(0, 0); err != nil {
+			return err
+		}
+		if project == "" || it.title == "" {
+			return bad(errors.New("give --project and --title"))
+		}
+		action, show = "item.create", c.printKey
+		a["project"], a["title"] = project, it.title
+		if it.bodyFile != "" {
+			if a["body"], err = c.readBody(it.bodyFile); err != nil {
+				return err
+			}
+		}
+		if it.parent != "" {
+			if a["parent"], err = itemKey(it.parent, project); err != nil {
+				return bad(err)
+			}
+		}
+		for k, v := range map[string]string{"status": it.status, "priority": it.priority, "epic": it.epic} {
+			if v != "" {
+				a[k] = v
+			}
+		}
+		if len(it.labels) > 0 {
+			a["labels"] = []string(it.labels)
+		}
+	case "edit":
+		if err := want(1, 1); err != nil {
+			return err
+		}
+		if err := first(); err != nil {
+			return bad(err)
+		}
+		switch {
+		case it.bodyFile != "":
+			action = "item.edit"
+			if a["body"], err = c.readBody(it.bodyFile); err != nil {
+				return err
+			}
+			if it.title != "" {
+				a["title"] = it.title
+			}
+		case it.title != "":
+			action = "item.update"
+			a["title"] = it.title
+		default:
+			return bad(errors.New("give --title or --body-file"))
+		}
+	case "status":
+		if err := want(2, 2); err != nil {
+			return err
+		}
+		if err := first(); err != nil {
+			return bad(err)
+		}
+		action = "item.setStatus"
+		a["status"], a["force"] = pos[1], it.force
+	case "done":
+		if err := want(1, 1); err != nil {
+			return err
+		}
+		if err := first(); err != nil {
+			return bad(err)
+		}
+		action = "item.setStatus"
+		a["status"], a["force"] = "done", it.force
+	case "start", "reopen":
+		if err := want(1, 1); err != nil {
+			return err
+		}
+		if err := first(); err != nil {
+			return bad(err)
+		}
+		action = "item." + sub
+	case "assign":
+		if err := want(1, 1<<10); err != nil {
+			return err
+		}
+		if err := first(); err != nil {
+			return bad(err)
+		}
+		people := pos[1:]
+		switch {
+		case it.me && (it.none || len(people) > 0):
+			return bad(errors.New("--me does not go with --none or a person"))
+		case it.me:
+			action = "item.assignMe"
+		case it.none && len(people) > 0:
+			return bad(errors.New("--none does not go with a person"))
+		case !it.none && len(people) == 0:
+			return bad(errors.New("give --me, --none or a person"))
+		default:
+			action = "item.assign"
+			a["people"] = append([]string{}, people...)
+		}
+	case "priority":
+		if err := want(2, 2); err != nil {
+			return err
+		}
+		if err := first(); err != nil {
+			return bad(err)
+		}
+		action = "item.setPriority"
+		a["priority"] = pos[1]
+	case "comment":
+		if err := want(1, 1); err != nil {
+			return err
+		}
+		if err := first(); err != nil {
+			return bad(err)
+		}
+		if it.bodyFile == "" {
+			return bad(errors.New("give --body-file"))
+		}
+		action = "item.comment"
+		if a["body"], err = c.readBody(it.bodyFile); err != nil {
+			return err
+		}
+	case "relate":
+		if err := want(1, 1); err != nil {
+			return err
+		}
+		if err := first(); err != nil {
+			return bad(err)
+		}
+		kind, other := "", ""
+		for k, v := range it.relate {
+			if *v == "" {
+				continue
+			}
+			if kind != "" {
+				return bad(errors.New("give only one relation flag"))
+			}
+			kind, other = k, *v
+		}
+		if kind == "" {
+			return bad(errors.New("give --blocks, --blocked-by, --relates-to or --duplicate-of"))
+		}
+		if other, err = itemKey(other, project); err != nil {
+			return bad(err)
+		}
+		action = "item.relate"
+		a["kind"], a["other"] = kind, other
+		if it.remove {
+			a["remove"] = true
+		}
+	case "parent":
+		if err := want(2, 2); err != nil {
+			return err
+		}
+		if err := first(); err != nil {
+			return bad(err)
+		}
+		action = "item.update"
+		a["parent"] = ""
+		if strings.ToLower(pos[1]) != "none" {
+			if a["parent"], err = itemKey(pos[1], project); err != nil {
+				return bad(err)
+			}
+		}
+	case "link":
+		if err := want(2, 2); err != nil {
+			return err
+		}
+		if err := first(); err != nil {
+			return bad(err)
+		}
+		if u, err := url.Parse(pos[1]); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return bad(errors.New("give an http or https URL"))
+		}
+		action = "item.link"
+		a["url"] = pos[1]
+		if it.title != "" {
+			a["title"] = it.title
+		}
+	case "attach":
+		if err := want(2, 2); err != nil {
+			return err
+		}
+		if err := first(); err != nil {
+			return bad(err)
+		}
+		name := it.name
+		if name == "" {
+			name = filepath.Base(pos[1])
+		}
+		if a, err = readAttachment(a, pos[1], name); err != nil {
+			return &exitError{2, err}
+		}
+		action = "item.attach"
+	}
+	return c.runApp(ctx, f, action, a, show)
+}
+
+// readBody reads the text of --body-file: a file, or - for stdin.
+func (c *cli) readBody(path string) (string, error) {
+	var r io.Reader = c.in
+	if path != "-" {
+		file, err := os.Open(path)
+		if err != nil {
+			return "", &exitError{2, err}
+		}
+		defer file.Close()
+		r = file
+	}
+	b, err := io.ReadAll(io.LimitReader(r, maxBodyBytes+1))
+	switch {
+	case err != nil:
+		return "", &exitError{2, err}
+	case len(b) > maxBodyBytes:
+		return "", &exitError{2, errors.New("the body has more than 1 MB")}
+	case strings.TrimSpace(string(b)) == "":
+		return "", &exitError{2, errors.New("the body is empty")}
+	}
+	return string(b), nil
+}
+
+// readAttachment adds the name, the media type and the base64 bytes of the file to the args of item.attach.
+func readAttachment(a map[string]any, path, name string) (map[string]any, error) {
+	st, err := os.Stat(path)
+	switch {
+	case err != nil:
+		return nil, err
+	case st.IsDir():
+		return nil, fmt.Errorf("%s is a folder", path)
+	case st.Size() > maxAttachBytes:
+		return nil, fmt.Errorf("The file has %d MB. The limit is %d MB.", (st.Size()+1<<20-1)>>20, maxAttachBytes>>20)
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	typ := mime.TypeByExtension(filepath.Ext(name))
+	if typ == "" {
+		typ = http.DetectContentType(b)
+	}
+	if m, _, err := mime.ParseMediaType(typ); err == nil {
+		typ = m
+	}
+	a["name"], a["mimeType"], a["data"] = name, typ, base64.StdEncoding.EncodeToString(b)
+	return a, nil
 }
 
 // itemKey gives the normal key. With a project, a bare number N gives P-N.
@@ -80,4 +498,60 @@ func (c *cli) printMarkdown(data json.RawMessage) error {
 		fmt.Fprintf(c.out, "\n%s\n", d.CommentsNote)
 	}
 	return nil
+}
+
+// printKey prints the key of a new item.
+func (c *cli) printKey(data json.RawMessage) error {
+	var d struct{ Key string }
+	if json.Unmarshal(data, &d) == nil && d.Key != "" {
+		fmt.Fprintln(c.out, "Key: "+d.Key)
+	}
+	return nil
+}
+
+func (c *cli) printItems(data json.RawMessage) error {
+	var d struct {
+		Items []struct {
+			Key, Title, Status string
+			Assignees          []string
+		}
+		Total int
+	}
+	if err := json.Unmarshal(data, &d); err != nil {
+		return fmt.Errorf("The app answer is not valid: %w", err)
+	}
+	if len(d.Items) == 0 {
+		return nil
+	}
+	tw := tabwriter.NewWriter(c.out, 0, 2, 2, ' ', 0)
+	fmt.Fprintln(tw, "KEY\tSTATUS\tASSIGNEES\tTITLE")
+	for _, i := range d.Items {
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", i.Key, dash(i.Status), dash(strings.Join(i.Assignees, ",")), i.Title)
+	}
+	if err := tw.Flush(); err != nil {
+		return err
+	}
+	if d.Total > len(d.Items) {
+		fmt.Fprintf(c.out, "Showing %d of %d.\n", len(d.Items), d.Total)
+	}
+	return nil
+}
+
+// printSearch prints only the items. Results from the tracker search have no status.
+func (c *cli) printSearch(data json.RawMessage) error {
+	var d struct {
+		Items []struct{ Key, Title, Status string }
+	}
+	if err := json.Unmarshal(data, &d); err != nil {
+		return fmt.Errorf("The app answer is not valid: %w", err)
+	}
+	if len(d.Items) == 0 {
+		return nil
+	}
+	tw := tabwriter.NewWriter(c.out, 0, 2, 2, ' ', 0)
+	fmt.Fprintln(tw, "KEY\tSTATUS\tTITLE")
+	for _, i := range d.Items {
+		fmt.Fprintf(tw, "%s\t%s\t%s\n", i.Key, i.Status, i.Title)
+	}
+	return tw.Flush()
 }

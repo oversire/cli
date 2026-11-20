@@ -374,3 +374,42 @@ func TestEpicCreate(t *testing.T) {
 		t.Fatal(string(b), out)
 	}
 }
+
+func TestProjectStatusesLabelsPeople(t *testing.T) {
+	c, out, _ := testCLI(t, "")
+	app := appDaemon(t, c)
+	data := map[string]string{
+		"project.statuses": `[{"id":"s1","name":"Backlog","group":"backlog","category":"todo","color":"#000"},{"id":"s2","name":"Done","category":"done","color":"#0f0"}]`,
+		"project.labels":   `[{"id":"l1","name":"bug","color":"#f00"}]`,
+		"project.people":   `[{"id":"u1","name":"Ann","me":true},{"id":"u2","name":"Bo","me":false}]`,
+	}
+	app.answer = func(call wire.AppCall) wire.AppCallResult {
+		return wire.AppCallResult{ID: call.ID, Status: wire.AppCallOK, Summary: "ok.", Data: json.RawMessage(data[call.Action])}
+	}
+	for _, sub := range []string{"statuses", "labels", "people"} {
+		for _, args := range [][]string{{"project", sub, "oversire"}, {"project", sub, "--project", "oversire"}} {
+			out.Reset()
+			if err := c.dispatch(context.Background(), args); err != nil {
+				t.Fatal(args, err)
+			}
+			if call := app.last(t); call.Action != "project."+sub || string(call.Args) != `{"project":"OVERSIRE"}` {
+				t.Fatal(args, call)
+			}
+		}
+	}
+	checks := map[string][]string{"statuses": {"NAME", "GROUP", "CATEGORY", "Backlog", "backlog", "s2"}, "labels": {"bug", "l1"}, "people": {"Ann (you)", "u1", "Bo"}}
+	for sub, wants := range checks {
+		out.Reset()
+		c.dispatch(context.Background(), []string{"project", sub, "oversire"})
+		for _, w := range wants {
+			if !strings.Contains(out.String(), w) {
+				t.Errorf("%s: no %q in %q", sub, w, out)
+			}
+		}
+	}
+	for _, args := range [][]string{{"project", "statuses"}, {"project", "statuses", "a", "b"}, {"project", "statuses", "a", "--project", "b"}, {"project", "frob"}, {"project"}} {
+		if err := c.dispatch(context.Background(), args); exitCode(err) != 2 {
+			t.Errorf("%v: %v", args, err)
+		}
+	}
+}

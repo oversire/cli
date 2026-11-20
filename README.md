@@ -173,7 +173,21 @@ The budget of the order has caps: 50 earlier turns, 10 last turns and 20000 char
 | `oversire epic add <epic> KEY... [--project P]` | Put items in the epic. An item in another epic moves. Without `--project`, the project of the keys is used. |
 | `oversire epic remove KEY... [--project P]` | Take items out of their epic. |
 | `oversire project north-star --project P [--set TEXT]` | Show the north star of a project, or set it. |
+| `oversire project statuses\|labels\|people [P] [--project P]` | List the statuses (name, group, category, id), the labels or the tracker members of a project. `people` marks you with `(you)`. A tracker without labels answers "<Tracker> has no labels." |
+| `oversire item list [--project P] [--group G[,G]] [--mine] [--label L] [--text T] [--limit N]` | List the loaded items as a table: KEY, STATUS, ASSIGNEES, TITLE. `--group` takes `todo`, `progress`, `review`, `blocked` or `done`, separated by commas. `--mine` keeps your items. |
+| `oversire item search <text> [--project P] [--limit N]` | Search the items of the trackers. It also finds items that the app has not loaded. It prints KEY, STATUS and TITLE. |
 | `oversire item show <KEY> [--project P] [--json]` | Print an item and its comments as Markdown. `--project` lets you give only the number. `--json` prints the item object of `item.get`. The app on this Mac reads the item from its tracker (Plane or Big Timer). See "App calls". |
+| `oversire item create --project P --title T [--body-file F\|-] [--status S] [--priority X] [--parent KEY] [--label L]... [--epic E]` | Make an item. It prints the key. Status, priority and label names map to ids in the app. |
+| `oversire item edit <KEY> [--title T] [--body-file F\|-]` | Change the title or the Markdown description. |
+| `oversire item status <KEY> <status> [--force]` | Set the status. The status is an id, a name, or `todo`, `progress`, `review`, `blocked` or `done`. `--force` closes a parent that has open sub-items. |
+| `oversire item start <KEY>`, `done <KEY> [--force]`, `reopen <KEY>` | Set the item in progress and assign it to you, set it to done, or move it back to in progress. |
+| `oversire item assign <KEY> --me \| PERSON... \| --none` | `--me` adds you and keeps the others. A person is an id, a name or `me`. A list replaces the assignees. `--none` removes all. |
+| `oversire item priority <KEY> <name>` | Set the priority. |
+| `oversire item comment <KEY> --body-file F\|-` | Add a Markdown comment. |
+| `oversire item relate <KEY> --blocks\|--blocked-by\|--relates-to\|--duplicate-of OTHER [--remove]` | Add or remove a relation. Give exactly one flag. |
+| `oversire item parent <KEY> <PARENT\|none>` | Set the parent, or remove it with `none`. |
+| `oversire item link <KEY> <URL> [--title T]` | Add a web link. The URL is http or https. |
+| `oversire item attach <KEY> <FILE> [--name N]` | Upload a file of at most 10 MB. |
 | `oversire app run <action> ['<json args>']` | Run one action of the allowed list of the app, with its args as a JSON object. |
 | `oversire review ready [--key K] [--kind code\|plan] [--note <text>] [--plan <file.md>]` | Hand off a worktree group or a plan for review. The agent runs it. See "Reviews". |
 | `oversire review reply [--key K] <comment id> "<text>"` | Answer a review comment. The agent runs it. |
@@ -325,10 +339,12 @@ The `oversire epic`, `oversire project`, `oversire item` and `oversire app` comm
 
 | Route | Access | What it does |
 |---|---|---|
-| `POST /v1/app-calls` | loopback | Body `{action, args, agent?}`. The daemon gives the call an id and sends the frame `{"type":"appCall","call":{id, action, args, agent?}}` to the loopback clients of `GET /v1/connect`. It holds the request until the app posts the result, at most 60 s. Answers 200 with the `AppCallResult` `{id, status, summary, data?}`. 400: a bad body, or `args` is not an object. 503: no app is connected ("Open the OverSire app."), or the app did not take the frame. 504: the app did not answer. |
+| `POST /v1/app-calls` | loopback | Body `{action, args, agent?}`. The daemon gives the call an id and sends the frame `{"type":"appCall","call":{id, action, args, agent?}}` to the loopback clients of `GET /v1/connect`. It holds the request until the app posts the result, at most 60 s. Answers 200 with the `AppCallResult` `{id, status, summary, data?}`. 400: a bad body, or `args` is not an object. 413: the body has more than 16 MiB ("The call is too large."). 503: no app is connected ("Open the OverSire app."), or the app did not take the frame. 504: the app did not answer. |
 | `POST /v1/app-calls/{id}/result` | loopback | Body `AppCallResult`. The app posts it. Answers 204. 400: the id of the body is not the id of the path. 404: no call waits with this id (also after the 60 s). 409: the call has a result already. |
 
-The app runs only the actions of its allowed list: `item.setEpic`, `epic.list`, `epic.show`, `epic.plan`, `epic.create`, `epic.update`, `epic.close`, `epic.addItems`, `epic.removeItems`, `item.get`, `item.list`, `item.markdown`, `project.northStar` and `project.setNorthStar`. Another action gives `notAllowed`. A change needs no confirm. Its event rows name the `agent` as the actor.
+The app runs only the actions of its allowed list: `item.get`, `item.list`, `item.markdown`, `item.setEpic`, `item.setStatus`, `item.setPriority`, `item.update`, `item.edit`, `item.comment`, `item.assignMe`, `item.assign`, `item.start`, `item.reopen`, `item.create`, `item.relate`, `item.link`, `item.attach`, `epic.list`, `epic.show`, `epic.plan`, `epic.create`, `epic.update`, `epic.close`, `epic.addItems`, `epic.removeItems`, `project.northStar`, `project.setNorthStar`, `project.statuses`, `project.labels`, `project.people` and `search.all`. The list holds no action that leaves the Mac (for example `item.closeSubItems` and `intake.delete`). Another action gives `notAllowed`. A change needs no confirm. The app names the agent as the actor of the rows of its writes (state, comment, create, field changes, link, attach, epics, north star).
+
+The body limit of `POST /v1/app-calls` is 16 MiB. An attachment goes in `args` as base64 text, so the limit of a file is 10 MB. A tracker that lacks a feature answers `notAllowed` with "<Tracker> has no X." (for example Big Timer has no links, attachments, labels, relations, priority or epics).
 
 `agent` is `<harness> <session>`. The commands take it from `--harness` and `--session`, else from `$CLAUDE_CODE_SESSION_ID` (harness `claude`), else from `$OVERSIRE_SESSION`. With none of these, the agent is absent: a human ran the command.
 
@@ -664,7 +680,7 @@ The `oversire` agent skill (OVERSIRE-434) makes, plans, works and closes tracker
 - `groom` does the Groom of the app in the chat: the same kinds and the same Plane writes, after a yes. `oversire ticket groom` checks the key `groom:<PROJECT>` on the local daemon and lists the busy items. It sets no key, because the app adopts each live `groom:` session.
 - `sweep` reads the facts from the daemon, the ledger and git. The agent adds the Plane state, sorts the items into buckets and asks one time for each bucket. It does not merge. `stop` ends only the sessions of the `orca` and `oversire` runtimes.
 - `delegate` starts a background Overseer (model sonnet) with a fixed prompt. The Overseer drives a worker through `oversire worker` (see "Workers"): `worker start`, then `worker wait --timeout 8m` in a loop, then one action for each wake. It gives back `READY: ...` or `BLOCKED: ...`. `done` runs `oversire worker stop`, and `oversire ticket done` packs the turns of the worker as `<KEY>-worker-turns` beside the transcript.
-- The skill calls Plane with `plane-cli`. The CLI makes no Plane calls.
+- The skill uses `oversire item` and `oversire project` for the items of each tracker (Plane and Big Timer). It uses `plane-cli` only for the intake, the attachment list and delete, and the created-date scope, on Plane. The CLI makes no tracker calls.
 - `TestSkillCommandsExist` fails when the body names an `oversire` command that is not in the usage.
 
 ## Release

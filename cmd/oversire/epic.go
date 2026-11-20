@@ -30,7 +30,10 @@ Each command takes --json, --harness H and --session ID. <epic> is the id or the
 The state is planned, active, paused, done or canceled. The value none removes a date or the lead.
 The app on this Mac runs the command. Exit codes: 0 ok, 1 failed or not allowed, 2 usage, 3 no daemon or no app.`
 
-const projectUsage = "usage: oversire project north-star --project P [--set TEXT] [--json]"
+const projectUsage = `usage:
+  oversire project north-star --project P [--set TEXT] [--json]
+  oversire project statuses|labels|people [P] [--project P] [--json]
+The project is a positional argument or --project. The app on this Mac runs the command.`
 
 const appUsage = "usage: oversire app run <action> ['<args as a JSON object>'] [--json]"
 
@@ -236,28 +239,53 @@ func (c *cli) epic(ctx context.Context, args []string) error {
 	return c.runApp(ctx, f, action, a, show)
 }
 
-// project runs `oversire project north-star`.
+// project runs `oversire project <north-star|statuses|labels|people>`.
 func (c *cli) project(ctx context.Context, args []string) error {
-	if len(args) == 0 || args[0] != "north-star" {
+	if len(args) == 0 {
 		return &exitError{2, errors.New(projectUsage)}
 	}
-	f := newAppFlags("project north-star")
-	set := f.fs.String("set", "", "the new north star")
+	sub := args[0]
+	reads := map[string]struct {
+		action string
+		show   func(json.RawMessage) error
+	}{
+		"statuses": {"project.statuses", c.printStatuses},
+		"labels":   {"project.labels", c.printLabels},
+		"people":   {"project.people", c.printPeople},
+	}
+	read, isRead := reads[sub]
+	if sub != "north-star" && !isRead {
+		return &exitError{2, fmt.Errorf("unknown project command %q\n%s", sub, projectUsage)}
+	}
+	f := newAppFlags("project " + sub)
+	var set string
+	if !isRead {
+		f.fs.StringVar(&set, "set", "", "the new north star")
+	}
 	pos, err := f.parse(args[1:])
 	if err != nil {
 		return f.usage(projectUsage, err)
 	}
-	if len(pos) > 0 {
+	if len(pos) > 1 || (len(pos) == 1 && !isRead) {
 		return f.usage(projectUsage, nil)
+	}
+	if len(pos) == 1 {
+		if *f.project != "" && !strings.EqualFold(*f.project, pos[0]) {
+			return f.usage(projectUsage, errors.New("the project argument and --project differ"))
+		}
+		*f.project = pos[0]
 	}
 	p, err := f.projectArg()
 	if err != nil {
 		return f.usage(projectUsage, err)
 	}
+	if isRead {
+		return c.runApp(ctx, f, read.action, map[string]any{"project": p}, read.show)
+	}
 	isSet := false
 	f.fs.Visit(func(fl *flag.Flag) { isSet = isSet || fl.Name == "set" })
 	if isSet {
-		return c.runApp(ctx, f, "project.setNorthStar", map[string]any{"project": p, "text": *set}, nil)
+		return c.runApp(ctx, f, "project.setNorthStar", map[string]any{"project": p, "text": set}, nil)
 	}
 	return c.runApp(ctx, f, "project.northStar", map[string]any{"project": p}, nil)
 }
@@ -524,4 +552,59 @@ func dash(s string) string {
 		return "-"
 	}
 	return s
+}
+
+func (c *cli) printStatuses(data json.RawMessage) error {
+	var rows []struct{ ID, Name, Group, Category string }
+	if err := json.Unmarshal(data, &rows); err != nil {
+		return fmt.Errorf("The app answer is not valid: %w", err)
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+	tw := tabwriter.NewWriter(c.out, 0, 2, 2, ' ', 0)
+	fmt.Fprintln(tw, "NAME\tGROUP\tCATEGORY\tID")
+	for _, r := range rows {
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", r.Name, dash(r.Group), r.Category, r.ID)
+	}
+	return tw.Flush()
+}
+
+func (c *cli) printLabels(data json.RawMessage) error {
+	var rows []struct{ ID, Name string }
+	if err := json.Unmarshal(data, &rows); err != nil {
+		return fmt.Errorf("The app answer is not valid: %w", err)
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+	tw := tabwriter.NewWriter(c.out, 0, 2, 2, ' ', 0)
+	fmt.Fprintln(tw, "NAME\tID")
+	for _, r := range rows {
+		fmt.Fprintf(tw, "%s\t%s\n", r.Name, r.ID)
+	}
+	return tw.Flush()
+}
+
+func (c *cli) printPeople(data json.RawMessage) error {
+	var rows []struct {
+		ID, Name string
+		Me       bool
+	}
+	if err := json.Unmarshal(data, &rows); err != nil {
+		return fmt.Errorf("The app answer is not valid: %w", err)
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+	tw := tabwriter.NewWriter(c.out, 0, 2, 2, ' ', 0)
+	fmt.Fprintln(tw, "NAME\tID")
+	for _, r := range rows {
+		name := r.Name
+		if r.Me {
+			name += " (you)"
+		}
+		fmt.Fprintf(tw, "%s\t%s\n", name, r.ID)
+	}
+	return tw.Flush()
 }

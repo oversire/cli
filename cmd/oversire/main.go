@@ -58,7 +58,27 @@ Usage:
   oversire epic add <epic> KEY... [--project P]        put items in an epic
   oversire epic remove KEY... [--project P]            take items out of their epic
   oversire project north-star --project P [--set TEXT] show or set the north star of a project
-  oversire item show <KEY> [--project P]               print an item and its comments as Markdown (the app on this Mac reads it)
+  oversire project statuses|labels|people [P] [--project P]
+                                                       list the statuses, labels or tracker members of a project
+  oversire item list [--project P] [--group G[,G]] [--mine] [--label L] [--text T] [--limit N]
+                                                       list the loaded items (the app on this Mac runs each item command)
+  oversire item search <text> [--project P] [--limit N]  search the items of the trackers
+  oversire item show <KEY> [--project P]               print an item and its comments as Markdown
+  oversire item create --project P --title T [--body-file F|-] [--status S] [--priority X] [--parent KEY] [--label L]... [--epic E]
+                                                       make an item and print its key
+  oversire item edit <KEY> [--title T] [--body-file F|-]  change the title or the description
+  oversire item status <KEY> <status> [--force]        set the status: id, name, todo, progress, review, blocked or done
+  oversire item start <KEY>                            set the item in progress and assign it to you
+  oversire item done <KEY> [--force]                   set the item to done
+  oversire item reopen <KEY>                           move a done item back to in progress
+  oversire item assign <KEY> --me | PERSON... | --none  add you, set the assignees, or remove all
+  oversire item priority <KEY> <name>                  set the priority
+  oversire item comment <KEY> --body-file F|-          add a Markdown comment
+  oversire item relate <KEY> --blocks|--blocked-by|--relates-to|--duplicate-of OTHER [--remove]
+                                                       add or remove a relation
+  oversire item parent <KEY> <PARENT|none>             set or remove the parent
+  oversire item link <KEY> <URL> [--title T]           add a web link
+  oversire item attach <KEY> <FILE> [--name N]         upload a file (at most 10 MB)
   oversire app run <action> ['<json args>']            run an action of the allowed list of the app on this Mac
                                                        epic, project, item and app take --json, --harness H and --session ID
   oversire review ready [--key K] [--kind code|plan] [--note <text>] [--plan <file.md>]
