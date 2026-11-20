@@ -1,0 +1,13 @@
+{
+  "seq": 212,
+  "id": "app:mbp:-:settings:1793650400000",
+  "at": "2026-11-02T18:26:40Z",
+  "seenAt": "2026-11-02T18:26:41Z",
+  "kind": "settings.changed",
+  "machine": "mbp",
+  "actorType": "human",
+  "actor": "flarco@gmail.com",
+  "via": "app@mba",
+  "summary": "Agents settings changed from mba",
+  "payload": { "section": "agents", "keys": ["autoStart"], "from": "mba" }
+}

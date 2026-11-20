@@ -2178,6 +2178,38 @@
       }
     },
     {
+      "kind": "settings.changed",
+      "domain": "human",
+      "actorTypes": [
+        "human"
+      ],
+      "private": false,
+      "summary": "the section and the Mac of the change",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "section": {
+            "type": "string"
+          },
+          "keys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "from": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "section",
+          "keys",
+          "from"
+        ]
+      }
+    },
+    {
       "kind": "secret.set",
       "domain": "human",
       "actorTypes": [
