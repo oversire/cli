@@ -1,0 +1,13 @@
+{
+  "seq": 211,
+  "id": "app:mba:-:mode:1793650100000",
+  "at": "2026-11-02T18:21:40Z",
+  "seenAt": "2026-11-02T18:21:41Z",
+  "kind": "app.mode_changed",
+  "machine": "mba",
+  "actorType": "human",
+  "actor": "flarco@gmail.com",
+  "via": "app@mba",
+  "summary": "Mode set to Client of mbp",
+  "payload": { "mode": "client", "home": "mbp" }
+}

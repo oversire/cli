@@ -2151,6 +2151,33 @@
       }
     },
     {
+      "kind": "app.mode_changed",
+      "domain": "human",
+      "actorTypes": [
+        "human"
+      ],
+      "private": false,
+      "summary": "the mode and the home Mac",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "enum": [
+              "full",
+              "client"
+            ]
+          },
+          "home": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "mode"
+        ]
+      }
+    },
+    {
       "kind": "secret.set",
       "domain": "human",
       "actorTypes": [
