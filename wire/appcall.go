@@ -34,3 +34,33 @@ type AppCallFrame struct {
 	Type string  `json:"type"`
 	Call AppCall `json:"call"`
 }
+
+// MemberCaller is the app that sent a member call. The daemon fills it from the credential of the request.
+type MemberCaller struct {
+	Machine string `json:"machine"`
+	Name    string `json:"name"`
+	Device  string `json:"device,omitempty"`
+}
+
+// MemberCallRequest is the body of POST /v1/member-calls.
+type MemberCallRequest struct {
+	Action string          `json:"action"`
+	Args   json.RawMessage `json:"args"`
+}
+
+// MemberCall is one action of a client app for the source app of the mirror (app-call.json).
+// The answer is AppCallResult.
+type MemberCall struct {
+	ID     string          `json:"id"`
+	Action string          `json:"action"`
+	Args   json.RawMessage `json:"args"`
+	From   MemberCaller    `json:"from"`
+}
+
+// FrameMemberCall is the type of MemberCallFrame on GET /v1/connect.
+const FrameMemberCall = "memberCall"
+
+type MemberCallFrame struct {
+	Type string     `json:"type"`
+	Call MemberCall `json:"call"`
+}

@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/oversire/cli/server"
 	"github.com/oversire/cli/wire"
 	_ "modernc.org/sqlite"
 )
@@ -48,6 +49,14 @@ var (
 type Source struct {
 	App, Device, Name, Machine string
 	Loopback                   bool
+}
+
+// Match tells if a connected caller is the app of the source. Device is the credential of the put request.
+func (src Source) Match(c server.Caller) bool {
+	if src.Loopback {
+		return c.Loopback
+	}
+	return c.DeviceID != "" && c.DeviceID == src.Device
 }
 
 // Store is the mirror feed in SQLite.

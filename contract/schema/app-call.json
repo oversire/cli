@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://oversire.dev/contract/app-call.json",
   "title": "OverSire app calls",
-  "description": "A CLI command that the app runs (OVERSIRE-484). The CLI calls its local daemon. The daemon sends AppCallFrame on the WebSocket /v1/connect of the app on the same Mac (loopback only). The app runs the action from its action catalog and sends AppCallResult to POST /v1/app-calls/{id}/result. The app runs only the actions of its allowed list. Other actions give notAllowed. The daemon advertises the feature app-calls in DaemonInfo.features.",
+  "description": "A CLI command that the app runs (OVERSIRE-484). The CLI calls its local daemon. The daemon sends AppCallFrame on the WebSocket /v1/connect of the app on the same Mac (loopback only). The app runs the action from its action catalog and sends AppCallResult to POST /v1/app-calls/{id}/result. The app runs only the actions of its allowed list. Other actions give notAllowed. The daemon advertises the feature app-calls in DaemonInfo.features. A member call (OVERSIRE-528) is an app call from a client app: the client sends MemberCallRequest to POST /v1/member-calls on the home daemon, the daemon sends MemberCallFrame on the WebSocket of the source app of the mirror, and the source app answers with AppCallResult to POST /v1/member-calls/{id}/result. The daemon advertises the feature member-calls.",
   "x-oversire-schema": 1,
   "$defs": {
     "AppCall": {
@@ -39,6 +39,49 @@
       "properties": {
         "type": { "const": "appCall" },
         "call": { "$ref": "#/$defs/AppCall" }
+      },
+      "required": ["type", "call"],
+      "additionalProperties": false
+    },
+    "MemberCaller": {
+      "description": "The app that sent a member call. The daemon fills it from the credential of the request, not from the body.",
+      "type": "object",
+      "properties": {
+        "machine": { "description": "The machine of the sender, for example mba.", "type": "string", "minLength": 1 },
+        "name": { "description": "The name of the credential, for example OverSire on mba.", "type": "string" },
+        "device": { "description": "The device id of the credential. Absent on loopback.", "type": "string", "minLength": 1 }
+      },
+      "required": ["machine", "name"],
+      "additionalProperties": false
+    },
+    "MemberCallRequest": {
+      "description": "The body of POST /v1/member-calls. action is an id of the action catalog. args holds the args of the action.",
+      "type": "object",
+      "properties": {
+        "action": { "type": "string", "minLength": 1 },
+        "args": { "type": "object" }
+      },
+      "required": ["action", "args"],
+      "additionalProperties": false
+    },
+    "MemberCall": {
+      "description": "One action for the source app, from a client app. The result is AppCallResult. A refused call gives notAllowed. A settings conflict gives failed with data {\"conflict\": true}.",
+      "type": "object",
+      "properties": {
+        "id": { "description": "The id of the call. The daemon makes it.", "type": "string", "minLength": 1 },
+        "action": { "type": "string", "minLength": 1 },
+        "args": { "type": "object" },
+        "from": { "$ref": "#/$defs/MemberCaller" }
+      },
+      "required": ["id", "action", "args", "from"],
+      "additionalProperties": false
+    },
+    "MemberCallFrame": {
+      "description": "The frame of the daemon on the WebSocket of the source app.",
+      "type": "object",
+      "properties": {
+        "type": { "const": "memberCall" },
+        "call": { "$ref": "#/$defs/MemberCall" }
       },
       "required": ["type", "call"],
       "additionalProperties": false

@@ -173,6 +173,7 @@ const (
 	FeatureAgentSecrets = "agent-secrets" // the /v1/agent-secrets routes and LaunchRequest.EnvSecrets
 	FeatureAppCalls     = "app-calls"     // the /v1/app-calls routes: the oversire commands that the app runs
 	FeatureMirror       = "mirror"        // the /v1/mirror routes: the mirror feed for the client apps
+	FeatureMemberCalls  = "member-calls"  // the /v1/member-calls routes: the clicks of a client app
 )
 
 // UpdateStatus is the last self-update check of a daemon.

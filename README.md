@@ -303,7 +303,7 @@ A `sessionStart` order (a `LaunchRequest`) can carry the env of the agent (OVERS
 
 An env key matches `^[A-Za-z_][A-Za-z0-9_]*$` and has at most 200 characters. The keys `OVERSIRE_*`, `AGENT_VISOR_*` and `ORCA_PANE_KEY` are reserved. An order has at most 64 keys, and a value has at most 8192 characters. A key cannot be in `env` and in `envSecrets`. `POST /v1/orders` answers 400 to a bad key.
 
-`GET /v1/whoami` has `features: ["launch-env","agent-secrets","app-calls","mirror"]`. The app sends `env` and `envSecrets` only to a daemon with the first two features.
+`GET /v1/whoami` has `features: ["launch-env","agent-secrets","app-calls","mirror","member-calls"]`. The app sends `env` and `envSecrets` only to a daemon with the first two features.
 
 The home daemon keeps the secret values in the Keychain (service `oversire.agent-env`, account `<scope>/<agent>/<KEY>`). The value goes to `security -i` on stdin, as base64, so quotes and new lines are safe. On Linux the store is the Secret Service, else a 0600 file for each account in `<data>/agent-secrets/`. `<data>/agent-secrets.json` is the index: the keys and their `setAt`, no value.
 
@@ -411,6 +411,21 @@ The routes need member access. A daemon that is not home answers 409 `{"error":"
 - 400: a bad body, an unknown kind, an empty id, a `v` below 1, or a body that is not an object.
 
 A put that changes docs, or sets `ready`, sends the frame `{"type":"mirror","head":<n>,"epoch":"<epoch>"}` on `GET /v1/connect`. A deleted doc stays as a tombstone for 7 days, and the `floor` moves up when the daemon drops it. A reader that is not seen for 30 days leaves the head. When the home moves, the new home starts with an empty feed and a new epoch, and the source sends all docs again.
+
+### Member calls
+
+An app in Client mode sends each click to the source app of the mirror through the home daemon (OVERSIRE-528). The daemon sends the call on the WebSocket of the source app only, not to the other clients. It holds the request until the source app posts the result. The call does not go through the cloud. The bodies are `MemberCallRequest`, `MemberCall`, `MemberCallFrame` and `AppCallResult` of `contract/schema/app-call.json`. The feature is `member-calls` in `GET /v1/whoami`. The source is the sender of the last accepted put of the mirror.
+
+| Route | What it does |
+| --- | --- |
+| `POST /v1/member-calls` | Body `{action, args}`. The daemon makes the id and fills `from` (`machine`, `name`, `device`) from the credential, so a `from` in the body does nothing. On loopback, `from.machine` is this machine. It sends the frame `{"type":"memberCall","call":{id, action, args, from}}` to the source app and waits for the result, at most 60 s. Answers 200 with the `AppCallResult`. A body of more than 16 MiB gives 413. 400: a bad body. |
+| `POST /v1/member-calls/{id}/result` | Body `AppCallResult`. Only the source app can post it. Answers 204. 400: the id of the body is not the id of the path. 403: the caller is not the source (`{"error":"Only the source app answers."}`). 404: no call waits with this id. 409: the call has a result already. |
+
+The routes need member access, and only the home member serves them: another member answers 409 `{"error":"<machine> is home","home":"<machine>"}`. A daemon credential gets 403. `POST /v1/member-calls` answers also:
+
+- 503 `{"error":"The OverSire app on <source> is not open."}`: the mirror has no source, or the source app has no WebSocket.
+- 429 `{"error":"<source> is busy. Try again."}`: 8 calls wait already.
+- 504 `{"error":"<source> did not answer. Try again."}`: the wait of 60 s ended.
 
 ### Direct orders
 

@@ -1,0 +1,8 @@
+{
+  "action": "item.setStatus",
+  "args": {
+    "project": "ocral/oversire",
+    "item": "OVERSIRE-12",
+    "status": "Done"
+  }
+}

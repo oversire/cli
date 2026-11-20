@@ -125,6 +125,11 @@ func (s *Server) Notify(loopbackOnly bool, msg any) { s.Deliver(loopbackOnly, ms
 
 // Deliver is Notify, and gives the number of clients that took the frame. A client with a full buffer drops it.
 func (s *Server) Deliver(loopbackOnly bool, msg any) int {
+	return s.DeliverTo(func(c Caller) bool { return !loopbackOnly || c.Loopback }, msg)
+}
+
+// DeliverTo sends msg to each WebSocket client whose caller matches. It gives the number of clients that took the frame.
+func (s *Server) DeliverTo(match func(Caller) bool, msg any) int {
 	b, err := json.Marshal(msg)
 	if err != nil {
 		s.Log.Error("notify", "err", err)
@@ -134,7 +139,7 @@ func (s *Server) Deliver(loopbackOnly bool, msg any) int {
 	defer s.mu.Unlock()
 	n := 0
 	for c := range s.clients {
-		if (!loopbackOnly || c.caller.Loopback) && c.send(b) {
+		if match(c.caller) && c.send(b) {
 			n++
 		}
 	}

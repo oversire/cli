@@ -1,0 +1,17 @@
+{
+  "type": "memberCall",
+  "call": {
+    "id": "m-5b21c0",
+    "action": "item.setStatus",
+    "args": {
+      "project": "ocral/oversire",
+      "item": "OVERSIRE-12",
+      "status": "Done"
+    },
+    "from": {
+      "machine": "mba",
+      "name": "OverSire on mba",
+      "device": "dev-9c41e2"
+    }
+  }
+}

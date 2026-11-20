@@ -418,6 +418,26 @@ func TestDeliverCountsLoopbackClients(t *testing.T) {
 	}
 }
 
+func TestDeliverToMatchesOneClient(t *testing.T) {
+	f := newFixture(t, true)
+	remote := dial(t, f.net.URL, http.Header{"Authorization": {"Bearer good"}})
+	local := dial(t, f.loop.URL, nil)
+	waitClients(t, f.s, 2)
+	if n := f.s.DeliverTo(func(c Caller) bool { return c.Loopback }, map[string]string{"type": "memberCall"}); n != 1 {
+		t.Fatalf("took %d", n)
+	}
+	if m := read(t, local); m != `{"type":"memberCall"}` {
+		t.Fatal(m)
+	}
+	if n := f.s.DeliverTo(func(Caller) bool { return false }, map[string]string{"type": "none"}); n != 0 {
+		t.Fatalf("took %d", n)
+	}
+	f.s.Notify(false, map[string]string{"type": "next"})
+	if m := read(t, remote); m != `{"type":"next"}` {
+		t.Fatal("the other client got a frame that was not for it:", m)
+	}
+}
+
 func TestHasCallerMatches(t *testing.T) {
 	f := newFixture(t, true)
 	loopback := func(c Caller) bool { return c.Loopback }
