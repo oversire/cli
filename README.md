@@ -303,7 +303,7 @@ A `sessionStart` order (a `LaunchRequest`) can carry the env of the agent (OVERS
 
 An env key matches `^[A-Za-z_][A-Za-z0-9_]*$` and has at most 200 characters. The keys `OVERSIRE_*`, `AGENT_VISOR_*` and `ORCA_PANE_KEY` are reserved. An order has at most 64 keys, and a value has at most 8192 characters. A key cannot be in `env` and in `envSecrets`. `POST /v1/orders` answers 400 to a bad key.
 
-`GET /v1/whoami` has `features: ["launch-env","agent-secrets","app-calls"]`. The app sends `env` and `envSecrets` only to a daemon with the first two features.
+`GET /v1/whoami` has `features: ["launch-env","agent-secrets","app-calls","mirror"]`. The app sends `env` and `envSecrets` only to a daemon with the first two features.
 
 The home daemon keeps the secret values in the Keychain (service `oversire.agent-env`, account `<scope>/<agent>/<KEY>`). The value goes to `security -i` on stdin, as base64, so quotes and new lines are safe. On Linux the store is the Secret Service, else a 0600 file for each account in `<data>/agent-secrets/`. `<data>/agent-secrets.json` is the index: the keys and their `setAt`, no value.
 
@@ -391,6 +391,26 @@ The home member of the group keeps named leases in `<data>/leases.json`, also wh
 | `GET /v1/leases/{name}` | Answers the `Lease`. 404: nobody holds it. |
 
 The routes need member access. A member that is not home answers 409 `{"error":"<machine> is home","home":"<machine>"}`, as the store routes do. Each new holder sends the frame `{"type":"lease","lease":…}` on `GET /v1/connect`. The app renews each 30 s with a time limit of 90 s. A Mac that sleeps or quits gives the lease back.
+
+### Mirror feed
+
+The home member keeps the mirror feed in `<data>/mirror.db`, also when the group has a cloud. The feed carries the provider data (projects, items, CI runs, pull requests, activity, shared settings and the catalog) for the apps in Client mode. The app that holds the lease `automations` (the source) writes it. Each other app reads it with a cursor. The daemon does not read the bodies. The store does not hold this data: a record of the store has a limit of 32 KB, and each app syncs the store. The bodies are in `contract/schema/mirror.json`. The feature is `mirror` in `GET /v1/whoami`.
+
+| Route | What it does |
+| --- | --- |
+| `GET /v1/mirror` | Answers the `MirrorHead` `{epoch, head, floor, ready, source?, sourceName?, sourceMachine?, appVersion?, publishedAt?, sourceOnline?, readers?}`. `sourceOnline` is true when a WebSocket client of the source is connected. The call records the caller as a reader. |
+| `GET /v1/mirror/docs?after=&limit=&epoch=` | Answers a `MirrorPage` `{epoch, docs, next, more, reset}` with the docs that have `seq` above `after`. `limit` is 1 to 500 (default 500). A page ends after 8 MiB of bodies. `reset: true` means: drop all docs and read again from 0. It happens when `epoch` is not the epoch of the feed, when `after` is above the head, and when `after` is above 0 and below `floor`. A reset page has no docs. With `Accept-Encoding: gzip` the body is gzip. |
+| `GET /v1/mirror/index` | Apps only. Answers the `MirrorIndex` `{epoch, head, docs: [{kind, id, hash}]}` of the live docs. |
+| `PUT /v1/mirror/docs` | Apps only. Body `MirrorPut` `{epoch, source, sourceName, appVersion, ready?, docs}`. At most 500 docs, 1 MiB for a doc and 8 MiB for the batch. `source` must be the holder of the lease `automations`. The daemon sets `hash` (sha256 of the compact body) and `seq`. A doc with the same hash and `v` changes nothing. Answers the `MirrorPutResult` `{head, applied, same}`. |
+
+The routes need member access. A daemon that is not home answers 409 `{"error":"<machine> is home","home":"<machine>"}`. A daemon credential gets 403 `{"error":"only an app writes the mirror"}` on the two apps-only routes. A put answers:
+
+- 403 `{"error":"<sourceName> does not hold the automations lease."}`: `source` does not hold the lease, or the lease expired.
+- 409 `{"error":"The mirror changed. Send all again.","epoch":"<epoch>"}`: the epoch is old. The source then sends all its docs.
+- 413 `{"error":"The batch is too large."}`.
+- 400: a bad body, an unknown kind, an empty id, a `v` below 1, or a body that is not an object.
+
+A put that changes docs, or sets `ready`, sends the frame `{"type":"mirror","head":<n>,"epoch":"<epoch>"}` on `GET /v1/connect`. A deleted doc stays as a tombstone for 7 days, and the `floor` moves up when the daemon drops it. A reader that is not seen for 30 days leaves the head. When the home moves, the new home starts with an empty feed and a new epoch, and the source sends all docs again.
 
 ### Direct orders
 

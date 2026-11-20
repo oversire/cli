@@ -1,0 +1,14 @@
+{
+  "kind": "item",
+  "id": "ocral-oversire/OVERSIRE-525",
+  "v": 1,
+  "hash": "9b74c9897bac770ffc029102a200c5de3e9b6b2f3a1c1c5b8a0f6d1d5c1e7a40",
+  "seq": 12,
+  "at": "2026-11-20T10:15:00Z",
+  "body": {
+    "key": "OVERSIRE-525",
+    "title": "Add the mirror feed to the home daemon",
+    "state": "started",
+    "labels": ["client-mode"]
+  }
+}

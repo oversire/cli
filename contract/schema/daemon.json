@@ -140,7 +140,7 @@
         "home": { "description": "The home machine of the group.", "$ref": "#/$defs/MachineName" },
         "device": { "description": "The device id of the credential of the call.", "type": "string" },
         "update": { "$ref": "#/$defs/UpdateStatus" },
-        "features": { "description": "The features of this daemon version. Open set: launch-env (LaunchRequest.env on the session), agent-secrets (the /v1/agent-secrets routes and LaunchRequest.envSecrets), app-calls (the oversire commands that the app runs, app-call.json).", "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "features": { "description": "The features of this daemon version. Open set: launch-env (LaunchRequest.env on the session), agent-secrets (the /v1/agent-secrets routes and LaunchRequest.envSecrets), app-calls (the oversire commands that the app runs, app-call.json), mirror (the /v1/mirror routes, mirror.json).", "type": "array", "items": { "type": "string", "minLength": 1 } },
         "listen": {
           "type": "object",
           "properties": {

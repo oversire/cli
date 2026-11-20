@@ -1,0 +1,16 @@
+{
+  "epoch": "e7c1a9f04b2d4c58",
+  "head": 14,
+  "floor": 0,
+  "ready": true,
+  "source": "app-3f9a1c2e",
+  "sourceName": "mbp",
+  "sourceMachine": "mbp",
+  "appVersion": "0.42.0",
+  "publishedAt": "2026-11-20T10:20:00Z",
+  "sourceOnline": true,
+  "readers": [
+    { "machine": "mba", "name": "OverSire on mba", "device": "D-7a1b", "head": 14, "seenAt": "2026-11-20T10:20:05Z" },
+    { "machine": "mbp", "name": "", "head": 12, "seenAt": "2026-11-20T10:19:40Z" }
+  ]
+}

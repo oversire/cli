@@ -21,6 +21,7 @@ import (
 	"github.com/oversire/cli/group"
 	"github.com/oversire/cli/hooks"
 	"github.com/oversire/cli/lease"
+	"github.com/oversire/cli/mirror"
 	"github.com/oversire/cli/orcawatch"
 	"github.com/oversire/cli/orders"
 	"github.com/oversire/cli/proc"
@@ -148,6 +149,12 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	syncer.WithHomeTaker(storeRoutes)
 	eventRoutes := events.NewRoutes(rows, func(m any) { srv.Notify(false, m) }, c.log)
 	syncer.WithHomeTaker(eventRoutes)
+	mirrors, err := mirror.Open(filepath.Join(data, "mirror.db"), time.Now)
+	if err != nil {
+		return nil, err
+	}
+	mirrors.Log = c.log
+	syncer.WithHomeTaker(mirrors)
 	outbox := events.NewOutbox(rows, store, nil, c.log)
 	eventSpool := events.NewSpool(events.SpoolPath(data))
 	if n, err := eventSpool.Drain(ctx, rows); err != nil {
@@ -160,7 +167,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 		d := wire.DaemonInfo{Machine: cfg.Machine(), Version: version, Contract: wire.DaemonContract, Roles: cfg.Roles, Runtimes: reg.IDs(), Harnesses: installer.Status()}
 		d.Group, d.Home = store.Info()
 		d.Update = updates.Status()
-		d.Features = []string{wire.FeatureLaunchEnv, wire.FeatureAgentSecrets, wire.FeatureAppCalls}
+		d.Features = []string{wire.FeatureLaunchEnv, wire.FeatureAgentSecrets, wire.FeatureAppCalls, wire.FeatureMirror}
 		return d
 	}
 	srv = server.NewServer(serveCfg, info, store, hints, book, ingest)
@@ -176,6 +183,14 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	leases := lease.NewBook(filepath.Join(data, "leases.json"), time.Now)
 	leases.OnChange = func(l wire.Lease) { srv.Notify(false, map[string]any{"type": "lease", "lease": l}) }
 	srv.Handle(lease.NewRoutes(leases, store).Routes()...)
+	srv.Handle(mirror.NewRoutes(mirrors, store, leases, store.Self, func(src mirror.Source) bool {
+		return srv.HasCaller(func(c server.Caller) bool {
+			if src.Loopback {
+				return c.Loopback
+			}
+			return c.DeviceID != "" && c.DeviceID == src.Device
+		})
+	}, func(m any) { srv.Notify(false, m) }).Routes()...)
 	srv.Handle(asks.Routes()...)
 	appCalls := appcall.New(srv.Deliver, func() bool { return srv.HasClient(true) }, appcall.Wait)
 	appCalls.Log = c.log
@@ -245,7 +260,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 			}
 		}
 	}
-	return []func(context.Context) error{srv.Run, book.Run, watcher.Run, syncer.Run, asks.Run, drain, c.pruneStore(oplog), runbooks.Run, reviews.Run, workers.Run,
+	return []func(context.Context) error{srv.Run, book.Run, watcher.Run, syncer.Run, asks.Run, drain, c.pruneStore(oplog), c.pruneMirror(mirrors), runbooks.Run, reviews.Run, workers.Run,
 		outbox.Run, capt.Run, gitRows.Run, func(ctx context.Context) error { return rows.RunRetention(ctx, c.log) }}, nil
 }
 
@@ -267,6 +282,24 @@ func (c *cli) pruneStore(l *homestore.OpLog) func(context.Context) error {
 		for {
 			if err := l.Prune(time.Now()); err != nil {
 				c.log.Warn("store prune", "err", err)
+			}
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-t.C:
+			}
+		}
+	}
+}
+
+// pruneMirror drops old tombstones from the mirror at the start and then each hour.
+func (c *cli) pruneMirror(s *mirror.Store) func(context.Context) error {
+	return func(ctx context.Context) error {
+		t := time.NewTicker(time.Hour)
+		defer t.Stop()
+		for {
+			if err := s.Prune(time.Now()); err != nil {
+				c.log.Warn("mirror prune", "err", err)
 			}
 			select {
 			case <-ctx.Done():

@@ -418,6 +418,27 @@ func TestDeliverCountsLoopbackClients(t *testing.T) {
 	}
 }
 
+func TestHasCallerMatches(t *testing.T) {
+	f := newFixture(t, true)
+	loopback := func(c Caller) bool { return c.Loopback }
+	if f.s.HasCaller(loopback) {
+		t.Fatal("a caller with no socket")
+	}
+	dial(t, f.net.URL, http.Header{"Authorization": {"Bearer good"}})
+	waitClients(t, f.s, 1)
+	if f.s.HasCaller(loopback) {
+		t.Fatal("a Tailscale client is not on loopback")
+	}
+	dial(t, f.loop.URL, nil)
+	waitClients(t, f.s, 2)
+	if !f.s.HasCaller(loopback) {
+		t.Fatal("no loopback client")
+	}
+	if f.s.HasCaller(func(c Caller) bool { return c.DeviceID == "other" }) {
+		t.Fatal("a device that is not connected")
+	}
+}
+
 func TestWebSocketAuth(t *testing.T) {
 	f := newFixture(t, true)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)

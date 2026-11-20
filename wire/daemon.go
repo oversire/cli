@@ -172,6 +172,7 @@ const (
 	FeatureLaunchEnv    = "launch-env"    // LaunchRequest.Env reaches the agent process
 	FeatureAgentSecrets = "agent-secrets" // the /v1/agent-secrets routes and LaunchRequest.EnvSecrets
 	FeatureAppCalls     = "app-calls"     // the /v1/app-calls routes: the oversire commands that the app runs
+	FeatureMirror       = "mirror"        // the /v1/mirror routes: the mirror feed for the client apps
 )
 
 // UpdateStatus is the last self-update check of a daemon.

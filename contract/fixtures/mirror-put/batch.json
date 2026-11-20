@@ -1,0 +1,36 @@
+{
+  "epoch": "e7c1a9f04b2d4c58",
+  "source": "app-3f9a1c2e",
+  "sourceName": "mbp",
+  "appVersion": "0.42.0",
+  "ready": true,
+  "docs": [
+    {
+      "kind": "catalog",
+      "id": "home",
+      "v": 1,
+      "hash": "",
+      "seq": 0,
+      "at": "2026-11-20T10:15:00Z",
+      "body": { "projects": ["ocral-oversire"] }
+    },
+    {
+      "kind": "runs",
+      "id": "oversire/oversire",
+      "v": 1,
+      "hash": "",
+      "seq": 0,
+      "at": "2026-11-20T10:15:00Z",
+      "body": { "runs": [] }
+    },
+    {
+      "kind": "item",
+      "id": "ocral-oversire/OVERSIRE-100",
+      "v": 1,
+      "hash": "",
+      "seq": 0,
+      "at": "2026-11-20T10:15:00Z",
+      "deleted": true
+    }
+  ]
+}

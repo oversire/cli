@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oversire.dev/contract/mirror.json",
+  "title": "OverSire mirror feed",
+  "description": "The mirror feed of the home daemon (OVERSIRE-525). The app that holds the automations lease (the source) puts the provider data in the feed. Each other app (a client) reads it with a cursor. The daemon does not read the bodies. Routes: GET /v1/mirror (MirrorHead), GET /v1/mirror/docs (MirrorPage), GET /v1/mirror/index (MirrorIndex, apps only), PUT /v1/mirror/docs (MirrorPut, apps only). All routes are on the home daemon, also when the group has a cloud. A daemon that is not home answers 409 with error and home. The daemon advertises the feature mirror in DaemonInfo.features.",
+  "x-oversire-schema": 1,
+  "$defs": {
+    "Date": { "type": "string", "format": "date-time" },
+    "MirrorKind": { "enum": ["project", "item", "runs", "prs", "activity", "settings", "catalog"] },
+    "MirrorDoc": {
+      "description": "One doc of the feed. id by kind: project is <storeKey>, item is <storeKey>/<itemId>, runs and prs are <owner>/<repo>, activity is the entry id, settings and catalog are home. v is the version of the body type: a reader skips a higher v. The source does not set seq or hash. The daemon sets hash (sha256 of the body bytes, hex) and seq. A deleted doc is a tombstone and has no body.",
+      "type": "object",
+      "properties": {
+        "kind": { "$ref": "#/$defs/MirrorKind" },
+        "id": { "type": "string", "minLength": 1 },
+        "v": { "type": "integer", "minimum": 1 },
+        "hash": { "type": "string" },
+        "seq": { "description": "The place of the last change of the doc in the feed.", "type": "integer", "minimum": 0 },
+        "at": { "description": "When the source made the doc.", "$ref": "#/$defs/Date" },
+        "deleted": { "type": "boolean" },
+        "body": { "type": "object" }
+      },
+      "required": ["kind", "id", "v", "hash", "seq", "at"],
+      "additionalProperties": false
+    },
+    "MirrorPut": {
+      "description": "The body of PUT /v1/mirror/docs. Limits: 500 docs, 8 MiB for the batch, 1 MiB for a doc. source must be the holder of the lease automations. epoch is the epoch from the last MirrorHead. ready says that the source sent all its docs once.",
+      "type": "object",
+      "properties": {
+        "epoch": { "type": "string", "minLength": 1 },
+        "source": { "description": "The app device of the sender (app-xxxxxxxx). It is the holder of the lease.", "type": "string", "minLength": 1 },
+        "sourceName": { "description": "The machine name that a client shows.", "type": "string", "minLength": 1 },
+        "appVersion": { "type": "string" },
+        "ready": { "type": "boolean" },
+        "docs": { "type": "array", "items": { "$ref": "#/$defs/MirrorDoc" } }
+      },
+      "required": ["epoch", "source", "sourceName", "appVersion", "docs"],
+      "additionalProperties": false
+    },
+    "MirrorReader": {
+      "description": "A client that read the feed.",
+      "type": "object",
+      "properties": {
+        "machine": { "type": "string", "minLength": 1 },
+        "name": { "type": "string" },
+        "device": { "type": "string" },
+        "head": { "description": "The last seq that it read.", "type": "integer", "minimum": 0 },
+        "seenAt": { "$ref": "#/$defs/Date" }
+      },
+      "required": ["machine", "name", "head", "seenAt"],
+      "additionalProperties": false
+    },
+    "MirrorHead": {
+      "description": "The state of the feed. epoch changes when the feed starts again (a new home, a reset). floor is the lowest seq that a reader can continue from. ready is true after the source sent all its docs. source is the app device of the last accepted put. sourceOnline is true when a WebSocket client of the source is connected.",
+      "type": "object",
+      "properties": {
+        "epoch": { "type": "string", "minLength": 1 },
+        "head": { "type": "integer", "minimum": 0 },
+        "floor": { "type": "integer", "minimum": 0 },
+        "ready": { "type": "boolean" },
+        "source": { "type": "string" },
+        "sourceName": { "type": "string" },
+        "sourceMachine": { "type": "string" },
+        "appVersion": { "type": "string" },
+        "publishedAt": { "$ref": "#/$defs/Date" },
+        "sourceOnline": { "type": "boolean" },
+        "readers": { "type": "array", "items": { "$ref": "#/$defs/MirrorReader" } }
+      },
+      "required": ["epoch", "head", "floor", "ready"],
+      "additionalProperties": false
+    },
+    "MirrorPutResult": {
+      "description": "The answer of PUT /v1/mirror/docs. applied is the number of docs that changed. same is the number of docs with the same hash.",
+      "type": "object",
+      "properties": {
+        "head": { "$ref": "#/$defs/MirrorHead" },
+        "applied": { "type": "integer", "minimum": 0 },
+        "same": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["head", "applied", "same"],
+      "additionalProperties": false
+    },
+    "MirrorPage": {
+      "description": "The answer of GET /v1/mirror/docs?after=&limit=&epoch=. The docs have seq above after. next is the cursor for the next page. more is true when the page is not the last one. reset is true when epoch is not the epoch of the feed, or when after is below floor: the reader drops its docs and reads from 0. The body can be gzip.",
+      "type": "object",
+      "properties": {
+        "epoch": { "type": "string", "minLength": 1 },
+        "docs": { "type": "array", "items": { "$ref": "#/$defs/MirrorDoc" } },
+        "next": { "type": "integer", "minimum": 0 },
+        "more": { "type": "boolean" },
+        "reset": { "type": "boolean" }
+      },
+      "required": ["epoch", "docs", "next", "more", "reset"],
+      "additionalProperties": false
+    },
+    "MirrorIndex": {
+      "description": "The answer of GET /v1/mirror/index: the kind, id and hash of each live doc. The source compares it with its own docs and sends the difference.",
+      "type": "object",
+      "properties": {
+        "epoch": { "type": "string", "minLength": 1 },
+        "head": { "type": "integer", "minimum": 0 },
+        "docs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "kind": { "$ref": "#/$defs/MirrorKind" },
+              "id": { "type": "string", "minLength": 1 },
+              "hash": { "type": "string" }
+            },
+            "required": ["kind", "id", "hash"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["epoch", "head", "docs"],
+      "additionalProperties": false
+    },
+    "MirrorFrame": {
+      "description": "The WebSocket frame that tells the clients to read the feed. head is the new head.",
+      "type": "object",
+      "properties": {
+        "type": { "const": "mirror" },
+        "head": { "type": "integer", "minimum": 0 },
+        "epoch": { "type": "string", "minLength": 1 }
+      },
+      "required": ["type", "head", "epoch"],
+      "additionalProperties": false
+    }
+  }
+}

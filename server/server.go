@@ -153,6 +153,18 @@ func (s *Server) HasClient(loopbackOnly bool) bool {
 	return false
 }
 
+// HasCaller tells if a connected WebSocket client matches.
+func (s *Server) HasCaller(match func(Caller) bool) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for c := range s.clients {
+		if match(c.caller) {
+			return true
+		}
+	}
+	return false
+}
+
 // Listen gives the bound addresses. Tailscale is the first IPv4 tailnet address, else the first IPv6 one.
 func (s *Server) Listen() wire.DaemonListen {
 	s.mu.Lock()
