@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -55,7 +56,8 @@ func TestWriteFile(t *testing.T) {
 		if err != nil || string(got) != "x" {
 			t.Fatal(string(got), err)
 		}
-		if fi, _ := os.Stat(path); fi.Mode().Perm() != perm {
+		// Windows has no POSIX modes.
+		if fi, _ := os.Stat(path); runtime.GOOS != "windows" && fi.Mode().Perm() != perm {
 			t.Fatalf("mode %v want %v", fi.Mode().Perm(), perm)
 		}
 		if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {

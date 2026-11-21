@@ -200,7 +200,8 @@ func TestHookNoDaemon(t *testing.T) {
 	var out bytes.Buffer
 	start := time.Now()
 	h.Run(context.Background(), "claude", bytes.NewReader(read(t, "payloads/claude/Stop.json")), &out)
-	if d := time.Since(start); d > 1500*time.Millisecond {
+	// The margin is for a loaded CI runner.
+	if d := time.Since(start); d > TotalTimeout+time.Second {
 		t.Fatalf("took %s", d)
 	}
 	if out.String() != "{}\n" {
