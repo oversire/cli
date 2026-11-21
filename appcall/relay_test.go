@@ -172,7 +172,7 @@ func TestRouteErrors(t *testing.T) {
 		t.Fatal(code, body)
 	}
 	loop, _ = rig(t, newRelay(&fakeApp{}, true, 20*time.Millisecond))
-	if code, body := post(t, loop.URL+"/v1/app-calls", `{"action":"epic.list"}`); code != 504 || !strings.Contains(body, "Update the app.") {
+	if code, body := post(t, loop.URL+"/v1/app-calls", `{"action":"epic.list"}`); code != 504 || !strings.Contains(body, "Try again.") {
 		t.Fatal(code, body)
 	}
 }
@@ -209,5 +209,48 @@ func TestCallBodyLimit(t *testing.T) {
 	}
 	if app.count() != 1 {
 		t.Fatalf("%d frames", app.count())
+	}
+}
+
+func timeoutBody(t *testing.T, call string) (int, string) {
+	t.Helper()
+	loop, _ := rig(t, newRelay(&fakeApp{}, true, 20*time.Millisecond))
+	return post(t, loop.URL+"/v1/app-calls", call)
+}
+
+func TestTimeoutMessageForACreate(t *testing.T) {
+	code, body := timeoutBody(t, `{"action":"item.create","args":{"project":"SLING","title":"Fix x"}}`)
+	if code != 504 || !strings.Contains(body, "The change can be made already") ||
+		!strings.Contains(body, `oversire item list --project SLING --text \"Fix x\"`) ||
+		strings.Contains(body, "Update the app") {
+		t.Fatal(code, body)
+	}
+}
+
+func TestTimeoutMessageQuotesTheTitle(t *testing.T) {
+	_, body := timeoutBody(t, `{"action":"item.create","args":{"project":"SLING","title":"a \"b\" $c\nd"}}`)
+	if !strings.Contains(body, `--text \"a \\\"b\\\" \\$c d\"`) {
+		t.Fatal(body)
+	}
+}
+
+func TestTimeoutMessageForARead(t *testing.T) {
+	code, body := timeoutBody(t, `{"action":"epic.list"}`)
+	if code != 504 || !strings.Contains(body, "Try again.") || strings.Contains(body, "change") {
+		t.Fatal(code, body)
+	}
+}
+
+func TestTimeoutMessageForAnUnknownAction(t *testing.T) {
+	code, body := timeoutBody(t, `{"action":"x.y"}`)
+	if code != 504 || !strings.Contains(body, "The change can be made already") || !strings.Contains(body, "with: oversire item list.") {
+		t.Fatal(code, body)
+	}
+}
+
+func TestTimeoutMessageWithAKey(t *testing.T) {
+	code, body := timeoutBody(t, `{"action":"item.setStatus","args":{"key":"ACME-1","status":"Done"}}`)
+	if code != 504 || !strings.Contains(body, "oversire item show ACME-1") {
+		t.Fatal(code, body)
 	}
 }

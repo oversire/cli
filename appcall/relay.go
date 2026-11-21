@@ -9,6 +9,8 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,6 +33,18 @@ var (
 	ErrUnknown  = errors.New("no such app call")
 	ErrAnswered = errors.New("the app call has a result")
 )
+
+// readActions are the actions that change nothing. Any other action counts as a change.
+var readActions = map[string]bool{
+	"item.get": true, "item.list": true, "item.markdown": true,
+	"epic.list": true, "epic.show": true, "epic.plan": true,
+	"project.northStar": true, "project.statuses": true, "project.labels": true, "project.people": true,
+	"search.all": true,
+}
+
+var safeWord = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
+
+var shellQuoter = strings.NewReplacer(`\`, `\\`, `"`, `\"`, "$", `\$`, "`", "\\`")
 
 type Relay struct {
 	Log *slog.Logger
@@ -81,7 +95,7 @@ func (r *Relay) Do(ctx context.Context, c wire.AppCall) (wire.AppCallResult, err
 	case res := <-ch:
 		return res, nil
 	case <-ctx.Done():
-		r.Log.Warn("app call: no result", "id", c.ID, "action", c.Action, "err", ctx.Err())
+		r.Log.Warn("app call: no result", "id", c.ID, "action", c.Action, "change", !readActions[c.Action], "err", ctx.Err())
 		return wire.AppCallResult{}, ctx.Err()
 	}
 }
@@ -140,12 +154,47 @@ func (r *Relay) serveCall(w http.ResponseWriter, req *http.Request) {
 	case errors.Is(err, ErrNoApp), errors.Is(err, ErrBusy):
 		server.WriteError(w, http.StatusServiceUnavailable, err.Error())
 	case errors.Is(err, context.DeadlineExceeded):
-		server.WriteError(w, http.StatusGatewayTimeout, "The app did not answer. Update the app.")
+		server.WriteError(w, http.StatusGatewayTimeout, timeoutMessage(c))
 	case err != nil:
 		server.WriteError(w, http.StatusServiceUnavailable, err.Error())
 	default:
 		server.WriteJSON(w, http.StatusOK, res)
 	}
+}
+
+// timeoutMessage is the 504 text. A change can be made after the timeout, so it tells the agent to check first.
+func timeoutMessage(c wire.AppCall) string {
+	if readActions[c.Action] {
+		return "The app did not answer in time. Try again."
+	}
+	return "The app did not answer in time. The change can be made already. " +
+		"Check it before you try again, for example with: " + checkHint(c) + "."
+}
+
+func checkHint(c wire.AppCall) string {
+	var args struct {
+		Project string `json:"project"`
+		Title   string `json:"title"`
+		Key     string `json:"key"`
+	}
+	_ = json.Unmarshal(c.Args, &args)
+	project := ""
+	if safeWord.MatchString(args.Project) {
+		project = " --project " + args.Project
+	}
+	switch {
+	case c.Action == "item.create":
+		title := strings.Join(strings.Fields(args.Title), " ")
+		if title == "" {
+			return "oversire item list" + project
+		}
+		return "oversire item list" + project + ` --text "` + shellQuoter.Replace(title) + `"`
+	case c.Action == "epic.create":
+		return "oversire epic list" + project
+	case safeWord.MatchString(args.Key):
+		return "oversire item show " + args.Key
+	}
+	return "oversire item list"
 }
 
 func (r *Relay) serveResult(w http.ResponseWriter, req *http.Request) {
