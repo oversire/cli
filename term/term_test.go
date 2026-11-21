@@ -317,6 +317,8 @@ func TestInputAndWritable(t *testing.T) {
 	c := dial(t, srv, wire.StreamAttach{View: wire.ViewTerminal})
 	c.until(isLease(wire.HolderNone))
 	c.input("ls\r")
+	// Binary input and JSON frames use two channels, so their order is not fixed.
+	waitFor(t, func() bool { _, w, _ := src.state(); return len(w) == 1 })
 	c.json(wire.StreamSend{Text: "hi"})
 	waitFor(t, func() bool { _, w, _ := src.state(); return len(w) == 2 })
 	if _, w, _ := src.state(); w[0] != "ls\r" || w[1] != "hi" {
