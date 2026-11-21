@@ -76,6 +76,7 @@ func NewRoutes(x *Index, calls Caller, lim *Limiter, self func() wire.GroupMembe
 func (r *Routes) Routes() []server.Route {
 	return []server.Route{
 		{Pattern: "GET /v1/ci/status", Access: server.Member, Handle: r.status},
+		{Pattern: "GET /v1/ci/wait", Access: server.Member, Handle: r.wait},
 		{Pattern: "GET /v1/ci/runs", Access: server.Member, Handle: r.runs},
 		{Pattern: "GET /v1/ci/runs/{id}", Access: server.Member, Handle: r.run},
 		{Pattern: "GET /v1/ci/runs/{id}/failures", Access: server.Member, Handle: r.failures},
@@ -390,4 +391,98 @@ func (r *Routes) workflows(w http.ResponseWriter, req *http.Request) {
 	}
 	wf.CIFreshness = r.x.Freshness(st.Repo)
 	server.WriteJSON(w, http.StatusOK, wf)
+}
+
+// waitParams are the parameters of GET /v1/ci/wait.
+type waitParams struct {
+	repo, ref, since string
+	timeout, settle  time.Duration
+	failFast         bool
+	started          time.Time
+	workflows        []string
+}
+
+func (q query) waitParams(now time.Time) (p waitParams, err error) {
+	if p.repo, err = q.repo(); err != nil {
+		return p, err
+	}
+	if p.ref = q.Get("ref"); p.ref == "" {
+		return p, invalid("Give the ref.")
+	}
+	timeout, err := q.intIn("timeout", 60, 1, 300)
+	if err != nil {
+		return p, err
+	}
+	settle, err := q.intIn("settle", 60, 0, 600)
+	if err != nil {
+		return p, err
+	}
+	p.since, p.failFast, p.workflows = q.Get("since"), q.flag("failFast"), q.Values["workflow"]
+	p.timeout, p.settle, p.started = time.Duration(timeout)*time.Second, time.Duration(settle)*time.Second, now
+	if s := q.Get("started"); s != "" {
+		n, err := strconv.ParseInt(s, 10, 64)
+		if err != nil || n < 0 {
+			return p, invalid("Give started as Unix seconds.")
+		}
+		p.started = time.Unix(n, 0)
+	}
+	return p, nil
+}
+
+// wait holds the request until the rollup differs from since, is done, or the timeout ends. It holds no lock while it waits.
+func (r *Routes) wait(w http.ResponseWriter, req *http.Request) {
+	p, err := query{req.URL.Query()}.waitParams(r.x.now())
+	if err != nil {
+		r.fail(w, err)
+		return
+	}
+	ref, err := ParseRef(p.ref)
+	if err != nil {
+		r.fail(w, invalid("Give the ref."))
+		return
+	}
+	st, err := r.x.Repo(p.repo)
+	if err != nil {
+		r.fail(w, err)
+		return
+	}
+	deadline := time.NewTimer(p.timeout)
+	defer deadline.Stop()
+	for {
+		changed := r.x.Changed()
+		t, err := r.x.Resolve(st.Repo, ref)
+		if err != nil {
+			r.fail(w, err)
+			return
+		}
+		roll, err := r.x.Rollup(st.Repo, t, p.workflows)
+		if err != nil {
+			r.fail(w, err)
+			return
+		}
+		roll.Ref = p.ref
+		settleAt := p.started.Add(p.settle)
+		if roll.State == wire.CINone && r.x.now().After(settleAt) || p.failFast && roll.State == wire.CIFailure {
+			roll.Done = true
+		}
+		if roll.Rev != p.since || roll.Done {
+			server.WriteJSON(w, http.StatusOK, roll)
+			return
+		}
+		var settled <-chan time.Time
+		if roll.State == wire.CINone {
+			timer := time.NewTimer(settleAt.Sub(r.x.now()) + time.Millisecond)
+			defer timer.Stop()
+			settled = timer.C
+		}
+		select {
+		case <-changed:
+		case <-settled:
+		case <-deadline.C:
+			server.WriteJSON(w, http.StatusOK, roll)
+			return
+		case <-req.Context().Done():
+			return
+		}
+	}
 }

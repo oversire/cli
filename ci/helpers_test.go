@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -211,3 +212,5 @@ func (a *api) errText(path string, want int) string {
 	a.getJSON(path, want, &e)
 	return e.Error
 }
+
+func itoa(n int64) string { return strconv.FormatInt(n, 10) }
