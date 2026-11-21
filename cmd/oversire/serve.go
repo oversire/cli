@@ -157,12 +157,6 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	mirrors.Log = c.log
 	syncer.WithHomeTaker(mirrors)
 	outbox := events.NewOutbox(rows, store, nil, c.log)
-	eventSpool := events.NewSpool(events.SpoolPath(data))
-	if n, err := eventSpool.Drain(ctx, rows); err != nil {
-		c.log.Warn("events: spool", "err", err)
-	} else if n > 0 {
-		c.log.Info("events: read the spool", "rows", n)
-	}
 
 	info := func() wire.DaemonInfo {
 		d := wire.DaemonInfo{Machine: cfg.Machine(), Version: version, Contract: wire.DaemonContract, Roles: cfg.Roles, Runtimes: reg.IDs(), Harnesses: installer.Status()}
@@ -173,6 +167,13 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	}
 	srv = server.NewServer(serveCfg, info, store, hints, book, ingest)
 	srv.Log = c.log
+	// The drain publishes to srv, so it comes after srv.
+	eventSpool := events.NewSpool(events.SpoolPath(data))
+	if n, err := eventSpool.Drain(ctx, rows); err != nil {
+		c.log.Warn("events: spool", "err", err)
+	} else if n > 0 {
+		c.log.Info("events: read the spool", "rows", n)
+	}
 	srv.Health = func() server.HealthSources {
 		return server.HealthSources{Hooks: hookHealth(installer.Status()), Orca: watcher.Health(), Hub: hub()}
 	}
