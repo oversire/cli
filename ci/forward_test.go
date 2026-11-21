@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -118,3 +119,22 @@ func TestForwardSelf(t *testing.T) {
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func TestForwardPostBody(t *testing.T) {
+	var got, ctype string
+	hs := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		got, ctype = string(b), r.Header.Get("Content-Type")
+		w.WriteHeader(204)
+	}))
+	t.Cleanup(hs.Close)
+	m := member(t, hs.URL, func(http.ResponseWriter, *http.Request) { t.Error("the member answered") })
+	resp, err := http.Post(m.URL+"/v1/ci/runs/1/explain", "application/json", strings.NewReader(`{"repo":"o/r"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 204 || got != `{"repo":"o/r"}` || ctype != "application/json" {
+		t.Fatalf("%d %q %q", resp.StatusCode, got, ctype)
+	}
+}

@@ -329,9 +329,68 @@ func TestCIUsage(t *testing.T) {
 }
 
 func TestUsageHasCI(t *testing.T) {
-	for _, sub := range []string{"status", "ls", "show", "why", "logs", "workflows", "wait"} {
+	for _, sub := range []string{"status", "ls", "show", "why", "logs", "workflows", "wait", "explain"} {
 		if !usageHas("ci", sub) {
 			t.Errorf("usage has no ci %s", sub)
+		}
+	}
+}
+
+func TestCIExplainPrints(t *testing.T) {
+	c, out, _ := testCLI(t, "")
+	var req wire.CIExplainRequest
+	d := &ciDaemon{h: func(_ int, w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/ci/runs/7/explain" {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		writeJSON(w, wire.CIExplanation{Repo: "o/r", Run: "7", Job: "99", Attempt: 1, Cause: "A test timed out.", Fix: "Raise the timeout.", Confidence: "high", At: time.Now(), Source: "cache"})
+	}}
+	fakeDaemon(t, c, d)
+	if err := c.ci(context.Background(), []string{"explain", "7", "--repo", "o/r", "--job", "99", "--force"}); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	for _, want := range []string{"Cause: A test timed out.", "Fix: Raise the timeout.", "Confidence: high", "Next: oversire ci logs 99 --repo o/r"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("output has no %q: %q", want, got)
+		}
+	}
+	if req.Repo != "o/r" || req.Job != "99" || !req.Force {
+		t.Fatalf("request %+v", req)
+	}
+}
+
+func TestCIExplainJSON(t *testing.T) {
+	c, out, _ := testCLI(t, "")
+	fakeDaemon(t, c, &ciDaemon{h: func(_ int, w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, wire.CIExplanation{Repo: "o/r", Run: "7", Attempt: 1, Cause: "c", Confidence: "low", At: time.Now(), Source: "ai"})
+	}})
+	if err := c.ci(context.Background(), []string{"explain", "7", "--repo", "o/r", "--json"}); err != nil {
+		t.Fatal(err)
+	}
+	var e wire.CIExplanation
+	if err := json.Unmarshal(out.Bytes(), &e); err != nil || e.Cause != "c" || e.Source != "ai" {
+		t.Fatalf("%v %q", err, out.String())
+	}
+}
+
+func TestCIExplainExitCodes(t *testing.T) {
+	for status, code := range map[int]int{404: 1, 422: 1, 429: 1, 503: 3, 504: 4} {
+		c, _, _ := testCLI(t, "")
+		fakeDaemon(t, c, &ciDaemon{h: func(_ int, w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(status)
+			_, _ = w.Write([]byte(`{"error":"no"}`))
+		}})
+		err := c.ci(context.Background(), []string{"explain", "7", "--repo", "o/r"})
+		var ee *exitError
+		got := 1
+		if errors.As(err, &ee) {
+			got = ee.code
+		}
+		if err == nil || got != code {
+			t.Errorf("status %d: %v, want exit %d", status, err, code)
 		}
 	}
 }

@@ -207,8 +207,9 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	members.Log = c.log
 	srv.Handle(members.Routes()...)
 	ciLimit := ci.NewLimiter(20*time.Second, time.Now)
-	srv.Handle(ci.NewRoutes(ciIndex, ci.NewLogs(ciBook, ciIndex, members, ciLimit, store.Self), members, ciLimit,
-		ci.NewForward(store, &http.Client{Timeout: 330 * time.Second}), store.Self).Routes()...)
+	ciFwd := ci.NewForward(store, &http.Client{Timeout: 330 * time.Second})
+	srv.Handle(ci.NewRoutes(ciIndex, ci.NewLogs(ciBook, ciIndex, members, ciLimit, store.Self), members, ciLimit, ciFwd, store.Self).Routes()...)
+	srv.Handle(ci.NewExplainer(ciIndex, oplog, members, ci.NewLimiter(10*time.Minute, time.Now), store.Self).Routes(ciFwd)...)
 	asker := ask.NewAsker(book, screen, reg, time.Now)
 	srv.Handle(asker.Routes()...)
 	srv.Handle(installer.Routes()...)

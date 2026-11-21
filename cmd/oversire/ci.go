@@ -25,6 +25,7 @@ const ciUsage = `usage:
   oversire ci ls [--repo R] [--branch B] [--sha S] [--pr N] [--workflow W] [--state S] [--limit N] [--json]
   oversire ci show RUN [--repo R] [--jobs] [--attempt N] [--fresh] [--json]
   oversire ci why RUN [--repo R] [--json]
+  oversire ci explain RUN [--repo R] [--attempt N] [--job J] [--force] [--json]
   oversire ci logs RUN|JOB [--repo R] [--failed] [--lines N] [--fresh] [--json]
   oversire ci workflows [--repo R] [--fresh] [--json]
   oversire ci wait [REF] [--repo R] [--timeout 30m] [--fail-fast] [--settle 60s] [--workflow W]... [--log-lines 40] [--json|--events]
@@ -67,6 +68,8 @@ func (c *cli) ci(ctx context.Context, args []string) error {
 		return c.ciShow(ctx, rest)
 	case "why":
 		return c.ciWhy(ctx, rest)
+	case "explain":
+		return c.ciExplain(ctx, rest)
 	case "logs":
 		return c.ciLogs(ctx, rest)
 	case "workflows":
@@ -99,6 +102,26 @@ func (cl ciClient) get(ctx context.Context, path string, q url.Values, out any) 
 		return &exitError{exitCINoSource, err}
 	}
 	return err
+}
+
+// post calls a CI route with a body. A 504 gives exit 4.
+func (cl ciClient) post(ctx context.Context, path string, body, out any) error {
+	err := cl.d.call(ctx, http.MethodPost, path, body, out)
+	var de *daemonError
+	switch {
+	case errors.Is(err, ticket.ErrNoDaemon):
+		return &exitError{exitCINoSource, err}
+	case errors.As(err, &de) && de.Status == http.StatusServiceUnavailable:
+		return &exitError{exitCINoSource, err}
+	case errors.As(err, &de) && de.Status == http.StatusGatewayTimeout:
+		return &exitError{exitCITimeout, err}
+	}
+	return err
+}
+
+func (cl ciClient) Explain(ctx context.Context, id string, req wire.CIExplainRequest) (e wire.CIExplanation, err error) {
+	err = cl.post(ctx, "/v1/ci/runs/"+url.PathEscape(id)+"/explain", req, &e)
+	return e, err
 }
 
 func repoQuery(repo string, fresh bool) url.Values {
@@ -436,6 +459,34 @@ func (c *cli) ciWhy(ctx context.Context, args []string) error {
 		return c.ciJSON(a)
 	}
 	return c.ciPrinter().Failures(a, repo)
+}
+
+func (c *cli) ciExplain(ctx context.Context, args []string) error {
+	f := newAppFlags("ci explain")
+	repoFlag := f.fs.String("repo", "", "owner/name")
+	attempt := f.fs.Int("attempt", 0, "the attempt")
+	job := f.fs.String("job", "", "a job id")
+	force := f.fs.Bool("force", false, "ask the AI engine again")
+	pos, err := f.parse(args)
+	if err != nil || len(pos) != 1 || *attempt < 0 {
+		return ciUsageErr()
+	}
+	id, err := ciRunID(pos[0])
+	if err != nil {
+		return err
+	}
+	cl, repo, err := c.ciSetup(ctx, *repoFlag)
+	if err != nil {
+		return err
+	}
+	e, err := cl.Explain(ctx, id, wire.CIExplainRequest{Repo: repo, Attempt: *attempt, Job: *job, Force: *force, Agent: f.agent()})
+	if err != nil {
+		return err
+	}
+	if *f.json {
+		return c.ciJSON(e)
+	}
+	return c.ciPrinter().Explanation(e)
 }
 
 func (c *cli) ciLogs(ctx context.Context, args []string) error {
@@ -952,6 +1003,28 @@ func (p ciPrinter) Failures(a wire.CIFailuresAnswer, repo string) error {
 	}
 	for _, f := range a.Failures {
 		p.Failure(f, repo)
+	}
+	if len(a.Failures) > 0 {
+		fmt.Fprintf(p.w, "Next: oversire ci explain %s --repo %s\n", a.Run, repo)
+	}
+	return nil
+}
+
+// Explanation prints the cause, the fix, the confidence and the next command.
+func (p ciPrinter) Explanation(e wire.CIExplanation) error {
+	fix := e.Fix
+	if fix == "" {
+		fix = "none"
+	}
+	origin := "new"
+	if e.Source == "cache" {
+		origin = "cache"
+	}
+	fmt.Fprintf(p.w, "Cause: %s\nFix: %s\nConfidence: %s (%s)\n", e.Cause, fix, e.Confidence, origin)
+	if e.Job != "" {
+		fmt.Fprintf(p.w, "Next: oversire ci logs %s --repo %s\n", e.Job, e.Repo)
+	} else {
+		fmt.Fprintf(p.w, "Next: oversire ci logs %s --failed --repo %s\n", e.Run, e.Repo)
 	}
 	return nil
 }

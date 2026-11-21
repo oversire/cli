@@ -50,12 +50,16 @@ func (f *Forward) Wrap(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func (f *Forward) send(w http.ResponseWriter, req *http.Request, base, token, home string) {
-	out, err := http.NewRequestWithContext(req.Context(), req.Method, base+req.URL.Path, nil)
+	out, err := http.NewRequestWithContext(req.Context(), req.Method, base+req.URL.Path, req.Body)
 	if err != nil {
 		server.WriteError(w, http.StatusBadGateway, f.noRoute(home))
 		return
 	}
 	out.URL.RawQuery = req.URL.RawQuery
+	out.ContentLength = req.ContentLength
+	if ct := req.Header.Get("Content-Type"); ct != "" {
+		out.Header.Set("Content-Type", ct)
+	}
 	out.Header.Set("Authorization", "Bearer "+token)
 	out.Header.Set(ForwardedHeader, "1")
 	resp, err := f.client.Do(out)

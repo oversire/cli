@@ -1,0 +1,11 @@
+{
+  "repo": "oversire/cli",
+  "run": "18233412",
+  "attempt": 1,
+  "job": "70002",
+  "cause": "TestStorePut expects 3 rows, but the store keeps 2.",
+  "fix": "Update the row count in store_test.go.",
+  "confidence": "high",
+  "at": "2026-11-21T14:10:03Z",
+  "source": "ai"
+}

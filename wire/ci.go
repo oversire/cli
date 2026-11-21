@@ -286,6 +286,29 @@ type CIActionResult struct {
 	URL     string     `json:"url,omitempty"`
 }
 
+// CIExplainRequest is the body of POST /v1/ci/runs/{id}/explain and the args of the app action ci.explain.
+type CIExplainRequest struct {
+	Repo    string `json:"repo"`
+	Attempt int    `json:"attempt,omitempty"`
+	Job     string `json:"job,omitempty"`
+	Force   bool   `json:"force,omitempty"`
+	// Agent is "<harness> <session>".
+	Agent string `json:"agent,omitempty"`
+}
+
+// CIExplanation is the cause of a failed run. Source is "cache" or "ai".
+type CIExplanation struct {
+	Repo       string    `json:"repo"`
+	Run        string    `json:"run"`
+	Attempt    int       `json:"attempt"`
+	Job        string    `json:"job,omitempty"`
+	Cause      string    `json:"cause"`
+	Fix        string    `json:"fix"`
+	Confidence string    `json:"confidence"`
+	At         time.Time `json:"at"`
+	Source     string    `json:"source"`
+}
+
 // CIWatch asks to keep the CI data of a ref fresh (later phase).
 type CIWatch struct {
 	Repo      string     `json:"repo"`

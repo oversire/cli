@@ -10,7 +10,7 @@
       "type": "object",
       "properties": {
         "id": { "description": "The id of the call. The daemon makes it.", "type": "string", "minLength": 1 },
-        "action": { "description": "A free string, an id of the action catalog. The CI actions are below (ci.json). A `ci.*` read action on a repo that OverSire does not track answers notAllowed.\n\nci.log: args {repo, jobId, lines?} (lines 1 to 2000, default 200), data CILogView (P1).\nci.jobs: args {repo, runId, attempt?, fresh?}, data CIJobsDoc (P1).\nci.workflows: args {repo}, data CIWorkflows (P1).\nci.refresh: args {repo}, no data. The app fetches the runs of the repo once (P1).\nci.rerun, ci.rerunJob, ci.cancel, ci.dispatch, ci.approve: args CIActionRequest, data CIActionResult (P2).", "type": "string", "minLength": 1 },
+        "action": { "description": "A free string, an id of the action catalog. The CI actions are below (ci.json). A `ci.*` read action on a repo that OverSire does not track answers notAllowed.\n\nci.log: args {repo, jobId, lines?} (lines 1 to 2000, default 200), data CILogView (P1).\nci.jobs: args {repo, runId, attempt?, fresh?}, data CIJobsDoc (P1).\nci.workflows: args {repo}, data CIWorkflows (P1).\nci.refresh: args {repo}, no data. The app fetches the runs of the repo once (P1).\nci.rerun, ci.rerunJob, ci.cancel, ci.dispatch, ci.approve: args CIActionRequest, data CIActionResult (P2).\nci.explain: args CIExplainRequest plus runId, data CIExplanation (P3). The app runs the AI task on a cache miss.", "type": "string", "minLength": 1 },
         "args": { "type": "object" },
         "agent": { "description": "For example codex or claude. Absent: a human ran the command.", "type": "string", "minLength": 1 }
       },

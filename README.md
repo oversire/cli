@@ -158,6 +158,7 @@ The budget of the order has caps: 50 earlier turns, 10 last turns and 20000 char
 | `oversire ci ls [--branch B] [--sha S] [--pr N] [--workflow W] [--state S] [--limit N] [--json]` | List the CI runs of the repo. |
 | `oversire ci show RUN [--jobs] [--attempt N] [--fresh] [--json]` | Show a run, with its jobs and failures. |
 | `oversire ci why RUN [--json]` | Show why a run failed: job, step, messages and the end of the log. |
+| `oversire ci explain RUN [--attempt N] [--job J] [--force] [--json]` | Explain a failed run: cause, fix and confidence. It reads the saved explanation first. Else the app runs an AI task with the engine of the user (Settings › AI). `--force` asks the engine again, once in 10 min for each run attempt. Exit 4: the AI did not answer in 60 s; ask again later. Free with your own AI engine. |
 | `oversire ci logs RUN\|JOB [--failed] [--lines N] [--fresh] [--json]` | Print the end of a job log. With `--failed`, the argument is a run. |
 | `oversire ci workflows [--fresh] [--json]` | List the workflows of the repo. |
 | `oversire ci wait [REF] [--timeout 30m] [--fail-fast] [--settle 60s] [--workflow W]... [--log-lines 40] [--json\|--events]` | Block until the CI ends. Exit 0: success. 1: failed or cancelled. 2: usage. 3: no daemon, or no app answers. 4: timeout. 5: no run started. |
@@ -449,16 +450,17 @@ The daemon at home answers CI questions from the mirror feed. The feature is `ci
 | `GET /v1/ci/runs/{id}/failures?repo=&attempt=` | Answers a `CIFailuresAnswer`: job, step, messages and log tail of each failed job. |
 | `GET /v1/ci/jobs/{id}/log?repo=&lines=&fresh=1` | Answers a `CILogView` with the last `lines` lines (1 to 2000, default 200). A complete log stays in the cache. An open log is good for 20 s. Many callers of one log share one fetch. |
 | `GET /v1/ci/workflows?repo=&fresh=1` | Answers the `CIWorkflows` of the repo. |
+| `POST /v1/ci/runs/{id}/explain` | Body: `CIExplainRequest` (`repo`, `attempt`, `job`, `force`, `agent`). Answers a `CIExplanation` of a failed run. The daemon reads the shared cache (store collection `ai-outputs`, id `ci-explanation:<run url>#<attempt>`) first, also when the app is closed: `source` is `cache`. On a miss it sends the member call `ci.explain` to the source app. The app runs the AI task with the engine of the user and saves the result to the cache: `source` is `ai`. Two requests for one run attempt share one call. `force` skips the cache and is allowed once in 10 min for each run attempt. |
 
-The daemon asks the source app for a log, for the jobs of a run or for the workflows with the member-call actions `ci.log`, `ci.jobs`, `ci.workflows` and `ci.refresh`. A `fresh=1` call reaches the app at most one time in 20 s for each repo, run, job or list. An earlier call gives 429 with `Retry-After`. The errors are:
+The daemon asks the source app for a log, for the jobs of a run or for the workflows with the member-call actions `ci.log`, `ci.jobs`, `ci.workflows`, `ci.refresh` and `ci.explain`. A `fresh=1` call reaches the app at most one time in 20 s for each repo, run, job or list. An earlier call gives 429 with `Retry-After`. The errors are:
 
 - 400: a bad `repo`, `ref`, number or `state`.
 - 404: the repo is not tracked, or the run, PR or job is not known.
-- 422: the CI provider of the repo does not have the capability (for example `logs`), or the app does not allow the action.
+- 422: the CI provider of the repo does not have the capability (for example `logs`), or the app does not allow the action. For `explain`: the run did not fail, or no AI engine is set.
 - 429: the `fresh` window is not over, or the app is busy.
 - 502: the app answered with a failure.
 - 503: no app is connected, or the app sends no CI data.
-- 504: the app did not answer in time.
+- 504: the app did not answer in time. For `explain` the text is "The AI did not answer in 60 s. Ask again in a minute. The answer is then in the cache."
 
 A member daemon sends each `/v1/ci` request to home with the group token and the header `X-OverSire-Forwarded`. Home answers a forwarded request that it cannot serve with 409 `{"error":"<machine> is home","home":"<machine>"}`. A group with a cloud still has a mirror home, so a member forwards also then.
 

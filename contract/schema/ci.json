@@ -965,6 +965,88 @@
       ],
       "additionalProperties": false
     },
+    "CIExplainRequest": {
+      "description": "P3. The args of the action ci.explain, plus runId.",
+      "type": "object",
+      "properties": {
+        "repo": {
+          "type": "string"
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "job": {
+          "description": "A job id. Default the first failed job.",
+          "type": "string"
+        },
+        "force": {
+          "description": "Ask the AI engine again. The daemon allows it once in 10 minutes for each run attempt.",
+          "type": "boolean"
+        },
+        "agent": {
+          "description": "\"<harness> <session>\".",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo"
+      ],
+      "additionalProperties": false
+    },
+    "CIExplanation": {
+      "description": "P3. The data of an ok result of ci.explain: the cause of a failed run.",
+      "type": "object",
+      "properties": {
+        "repo": {
+          "type": "string"
+        },
+        "run": {
+          "type": "string"
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "job": {
+          "type": "string"
+        },
+        "cause": {
+          "type": "string"
+        },
+        "fix": {
+          "type": "string"
+        },
+        "confidence": {
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ]
+        },
+        "at": {
+          "$ref": "#/$defs/Date"
+        },
+        "source": {
+          "description": "cache: a saved explanation. ai: the engine just ran.",
+          "enum": [
+            "cache",
+            "ai"
+          ]
+        }
+      },
+      "required": [
+        "repo",
+        "run",
+        "attempt",
+        "cause",
+        "fix",
+        "confidence",
+        "at",
+        "source"
+      ],
+      "additionalProperties": false
+    },
     "CIWatch": {
       "description": "P3. A request to keep the CI data of a ref fresh.",
       "type": "object",

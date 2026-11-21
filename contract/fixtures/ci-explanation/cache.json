@@ -1,0 +1,10 @@
+{
+  "repo": "oversire/cli",
+  "run": "18233412",
+  "attempt": 2,
+  "cause": "The lint step found an unused import in wire/ci.go.",
+  "fix": "",
+  "confidence": "medium",
+  "at": "2026-11-21T14:20:41Z",
+  "source": "cache"
+}

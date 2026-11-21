@@ -67,11 +67,16 @@ type app struct {
 
 // call sends one member call to the source app and gives the data of an ok result.
 func (a app) call(ctx context.Context, action string, args any) (json.RawMessage, error) {
+	return a.callAs(ctx, action, args, "")
+}
+
+// callAs is call for an agent ("<harness> <session>"). An empty agent means a human.
+func (a app) callAs(ctx context.Context, action string, args any, agent string) (json.RawMessage, error) {
 	b, err := json.Marshal(args)
 	if err != nil {
 		return nil, err
 	}
-	res, err := a.calls.Do(ctx, wire.MemberCall{Action: action, Args: b, From: wire.MemberCaller{Machine: a.self().Machine}, CLI: &wire.MemberCLI{}})
+	res, err := a.calls.Do(ctx, wire.MemberCall{Action: action, Args: b, From: wire.MemberCaller{Machine: a.self().Machine}, CLI: &wire.MemberCLI{Agent: agent}})
 	if err != nil {
 		return nil, err
 	}
@@ -122,8 +127,11 @@ type query struct{ url.Values }
 
 func invalid(format string, a ...any) error { return server.Refuse(server.Invalid, format, a...) }
 
-func (q query) repo() (string, error) {
-	repo := strings.TrimSpace(q.Get("repo"))
+func (q query) repo() (string, error) { return checkRepo(q.Get("repo")) }
+
+// checkRepo checks that repo is owner/name.
+func checkRepo(repo string) (string, error) {
+	repo = strings.TrimSpace(repo)
 	parts := strings.Split(repo, "/")
 	if len(parts) < 2 || slicesHasEmpty(parts) {
 		return "", invalid("Give the repo as owner/name.")
@@ -158,7 +166,10 @@ func (q query) flag(name string) bool {
 	return v == "1" || v == "true"
 }
 
-func (r *Routes) fail(w http.ResponseWriter, err error) {
+func (r *Routes) fail(w http.ResponseWriter, err error) { failWith(w, err, r.x.SourceMachine()) }
+
+// failWith writes the status of an error. source is the machine of the source app.
+func failWith(w http.ResponseWriter, err error, source string) {
 	var soon tooSoonError
 	var app *appError
 	switch {
@@ -172,11 +183,11 @@ func (r *Routes) fail(w http.ResponseWriter, err error) {
 		w.Header().Set("Retry-After", strconv.Itoa(soon.wait()))
 		server.WriteError(w, http.StatusTooManyRequests, err.Error())
 	case errors.Is(err, membercall.ErrNoSource):
-		server.WriteError(w, http.StatusServiceUnavailable, "The OverSire app on "+r.x.SourceMachine()+" is not open.")
+		server.WriteError(w, http.StatusServiceUnavailable, "The OverSire app on "+source+" is not open.")
 	case errors.Is(err, membercall.ErrBusy):
-		server.WriteError(w, http.StatusTooManyRequests, r.x.SourceMachine()+" is busy. Try again.")
+		server.WriteError(w, http.StatusTooManyRequests, source+" is busy. Try again.")
 	case errors.Is(err, context.DeadlineExceeded):
-		server.WriteError(w, http.StatusGatewayTimeout, "The OverSire app on "+r.x.SourceMachine()+" did not answer in time. Try again.")
+		server.WriteError(w, http.StatusGatewayTimeout, "The OverSire app on "+source+" did not answer in time. Try again.")
 	case errors.As(err, &app) && app.status == wire.AppCallNotAllowed:
 		server.WriteError(w, http.StatusUnprocessableEntity, app.summary)
 	case errors.As(err, &app):

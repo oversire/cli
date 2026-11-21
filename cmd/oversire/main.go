@@ -119,6 +119,7 @@ Usage:
                                                        list the CI runs of the repo
   oversire ci show RUN [--jobs] [--attempt N] [--fresh] [--json]  show a run, with its jobs and failures
   oversire ci why RUN [--json]                         show why a run failed: job, step, messages and log tail
+  oversire ci explain RUN [--attempt N] [--job J] [--force] [--json]  explain a failed run: cause, fix, confidence (uses the AI engine of the app)
   oversire ci logs RUN|JOB [--failed] [--lines N] [--fresh] [--json]  print the tail of a job log
   oversire ci workflows [--fresh] [--json]             list the workflows of the repo
   oversire ci wait [REF] [--timeout 30m] [--fail-fast] [--settle 60s] [--workflow W]... [--log-lines 40] [--json|--events]

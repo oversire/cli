@@ -1,0 +1,13 @@
+{
+  "id": "ci-explanation:https://github.com/oversire/cli/actions/runs/18233412#1",
+  "kind": "ci-explanation",
+  "subject": "https://github.com/oversire/cli/actions/runs/18233412#1",
+  "hash": "https://github.com/oversire/cli/actions/runs/18233412#1",
+  "body": {
+    "cause": "TestStorePut expects 3 rows, but the store keeps 2.",
+    "fix": "Update the row count in store_test.go.",
+    "confidence": "high",
+    "at": "2026-11-21T14:10:03.512Z"
+  },
+  "at": "2026-11-21T14:10:03Z"
+}
