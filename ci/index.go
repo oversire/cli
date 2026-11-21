@@ -547,7 +547,8 @@ func (x *Index) RunAnswer(repo, id string, att int) (wire.CIRunAnswer, error) {
 	return wire.CIRunAnswer{Run: x.withJobs(repo, v), CIFreshness: x.Freshness(repo)}, nil
 }
 
-// Failures gives the failures of an attempt. ErrNoJobs: the index has no jobs doc for the attempt.
+// Failures gives the failures of an attempt. ErrNoJobs: the index has no jobs doc for the attempt. The answer then holds
+// the repo, the run and the attempt.
 func (x *Index) Failures(repo, id string, att int) (wire.CIFailuresAnswer, error) {
 	st, err := x.Repo(repo)
 	if err != nil {
@@ -564,7 +565,7 @@ func (x *Index) Failures(repo, id string, att int) (wire.CIFailuresAnswer, error
 	att = attempt(att, run)
 	d, ok := x.JobsDoc(repo, id, att)
 	if !ok {
-		return wire.CIFailuresAnswer{}, ErrNoJobs
+		return wire.CIFailuresAnswer{Repo: repo, Run: id, Attempt: att}, ErrNoJobs
 	}
 	f := d.Failures
 	if f == nil {

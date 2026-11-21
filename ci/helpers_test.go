@@ -1,8 +1,12 @@
 package ci
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -83,7 +87,7 @@ func mdoc(kind wire.MirrorKind, id string, body any) wire.MirrorDoc {
 // put writes docs to the feed and reads them into the index.
 func (e *env) put(docs ...wire.MirrorDoc) {
 	e.t.Helper()
-	src := mirror.Source{Machine: "mbp", Loopback: true}
+	src := mirror.Source{Machine: "mba", Loopback: true}
 	if _, err := e.feed.Put(wire.MirrorPut{Epoch: e.feed.Head().Epoch, Source: "app-1", SourceName: "mbp", Docs: docs}, src); err != nil {
 		e.t.Fatal(err)
 	}
@@ -113,4 +117,97 @@ func runsDoc(repo string, runs ...wire.CIRun) wire.MirrorDoc {
 func jobsDoc(repo, runID string, attempt int, final bool, jobs ...wire.CIJob) wire.MirrorDoc {
 	return mdoc(wire.MirrorCIJobs, fmt.Sprintf("%s/%s/%d", repo, runID, attempt), wire.CIJobsDoc{Repo: repo, Run: runID, Attempt: attempt,
 		Status: "completed", HeadSha: sha1, HeadBranch: "main", Event: "push", URL: "u", Jobs: jobs, Failures: []wire.CIFailureView{}, Final: final, FetchedAt: t0})
+}
+
+// fakeCaller answers the member calls of a test. It records them.
+type fakeCaller struct {
+	mu    sync.Mutex
+	calls []wire.MemberCall
+	reply func(c wire.MemberCall) (wire.AppCallResult, error)
+}
+
+func (f *fakeCaller) Do(_ context.Context, c wire.MemberCall) (wire.AppCallResult, error) {
+	f.mu.Lock()
+	f.calls = append(f.calls, c)
+	reply := f.reply
+	f.mu.Unlock()
+	if reply == nil {
+		return wire.AppCallResult{ID: c.ID, Status: wire.AppCallOK}, nil
+	}
+	return reply(c)
+}
+
+func (f *fakeCaller) actions() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []string
+	for _, c := range f.calls {
+		out = append(out, c.Action)
+	}
+	return out
+}
+
+func okData(v any) func(wire.MemberCall) (wire.AppCallResult, error) {
+	return func(c wire.MemberCall) (wire.AppCallResult, error) {
+		b, _ := json.Marshal(v)
+		return wire.AppCallResult{ID: c.ID, Status: wire.AppCallOK, Data: b}, nil
+	}
+}
+
+// api is the routes of an env behind an httptest server.
+type api struct {
+	*env
+	calls  *fakeCaller
+	routes *Routes
+	srv    *httptest.Server
+}
+
+func newAPI(t *testing.T) *api {
+	t.Helper()
+	a := &api{env: newEnv(t), calls: &fakeCaller{}}
+	a.routes = NewRoutes(a.x, a.calls, NewLimiter(20*time.Second, a.clk.now), func() wire.GroupMember { return wire.GroupMember{Machine: "mbp"} })
+	a.routes.freshWait = 20 * time.Millisecond
+	a.srv = httptest.NewServer(a.mux())
+	t.Cleanup(a.srv.Close)
+	return a
+}
+
+func (a *api) mux() http.Handler {
+	mux := http.NewServeMux()
+	for _, r := range a.routes.Routes() {
+		mux.HandleFunc(r.Pattern, r.Handle)
+	}
+	return mux
+}
+
+func (a *api) get(path string) (int, []byte, http.Header) {
+	a.t.Helper()
+	resp, err := http.Get(a.srv.URL + path)
+	if err != nil {
+		a.t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, b, resp.Header
+}
+
+// getJSON expects status want and decodes the body into v.
+func (a *api) getJSON(path string, want int, v any) {
+	a.t.Helper()
+	code, b, _ := a.get(path)
+	if code != want {
+		a.t.Fatalf("GET %s: %d %s, want %d", path, code, b, want)
+	}
+	if v != nil {
+		if err := json.Unmarshal(b, v); err != nil {
+			a.t.Fatalf("GET %s: %v: %s", path, err, b)
+		}
+	}
+}
+
+func (a *api) errText(path string, want int) string {
+	a.t.Helper()
+	var e struct{ Error string }
+	a.getJSON(path, want, &e)
+	return e.Error
 }
