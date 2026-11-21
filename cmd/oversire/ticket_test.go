@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/oversire/cli/config"
+	"github.com/oversire/cli/events"
 	"github.com/oversire/cli/sessions"
 	"github.com/oversire/cli/ticket"
 	"github.com/oversire/cli/wire"
@@ -251,14 +252,17 @@ func TestTicketGroomNoDaemon(t *testing.T) {
 }
 
 // closedPort points the config of c at a loopback port with no listener.
-func closedPort(t *testing.T, c *cli) {
+// It returns the data folder of the config.
+func closedPort(t *testing.T, c *cli) string {
 	t.Helper()
+	dataDir := t.TempDir()
 	ln, _ := net.Listen("tcp", "127.0.0.1:0")
 	port := ln.Addr().(*net.TCPAddr).Port
 	ln.Close()
-	if err := c.paths.SaveConfig(config.Config{Serve: &config.ServeConfig{Port: port}}); err != nil {
+	if err := c.paths.SaveConfig(config.Config{DataDir: dataDir, Serve: &config.ServeConfig{Port: port}}); err != nil {
 		t.Fatal(err)
 	}
+	return dataDir
 }
 
 // fakeDaemon serves h on a loopback port and points the config of c at it.
@@ -305,6 +309,68 @@ func TestTicketAppliedPosts(t *testing.T) {
 	out.Reset()
 	if err := c.ticket([]string{"applied", "groom", "--file", f, "--session", "s1"}); err != nil || !strings.Contains(out.String(), "No daemon answers") {
 		t.Fatal(err, out)
+	}
+}
+
+const appliedTwo = `[{"item":"TREBI-12","summary":"Merged into TREBI-10","payload":{"kind":"merge"}},
+	{"item":"TREBI-14","summary":"Done: shipped","payload":{"kind":"done"}}]`
+
+func TestTicketAppliedSpoolsWhenNoDaemon(t *testing.T) {
+	c, out, _ := testCLI(t, "")
+	dataDir := closedPort(t, c)
+	f := filepath.Join(t.TempDir(), "applied.json")
+	os.WriteFile(f, []byte(appliedTwo), 0o600)
+	if err := c.ticket([]string{"applied", "groom", "--file", f, "--session", "s1"}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "2 event rows wait in the spool") {
+		t.Fatal(out)
+	}
+	raw, err := os.ReadFile(events.SpoolPath(dataDir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(raw)), "\n")
+	if len(lines) != 2 {
+		t.Fatal(string(raw))
+	}
+	for i, item := range []string{"TREBI-12", "TREBI-14"} {
+		var d wire.EventDraft
+		if err := json.Unmarshal([]byte(lines[i]), &d); err != nil {
+			t.Fatal(err)
+		}
+		if d.Item != item || d.Kind != wire.KindGroomApplied || !strings.HasPrefix(d.ID, "cli:groom:s1:"+item+":") {
+			t.Fatalf("%+v", d)
+		}
+	}
+	store, err := events.Open(filepath.Join(t.TempDir(), "events.db"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	if n, err := events.NewSpool(events.SpoolPath(dataDir)).Drain(context.Background(), store); n != 2 || err != nil {
+		t.Fatal(n, err)
+	}
+}
+
+func TestTicketAppliedDoesNotSpoolARefusal(t *testing.T) {
+	c, _, _ := testCLI(t, "")
+	dataDir := t.TempDir()
+	fakeDaemon(t, c, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, `{"error":"bad"}`, http.StatusBadRequest)
+	}))
+	cfg, _, _ := c.paths.LoadConfig()
+	cfg.DataDir = dataDir
+	if err := c.paths.SaveConfig(cfg); err != nil {
+		t.Fatal(err)
+	}
+	f := filepath.Join(t.TempDir(), "applied.json")
+	os.WriteFile(f, []byte(appliedTwo), 0o600)
+	if err := c.ticket([]string{"applied", "groom", "--file", f, "--session", "s1"}); err == nil {
+		t.Fatal("want an error")
+	}
+	if _, err := os.Stat(events.SpoolPath(dataDir)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("a refusal was spooled", err)
 	}
 }
 

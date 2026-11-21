@@ -20,6 +20,7 @@ import (
 
 	"github.com/oversire/cli/config"
 	"github.com/oversire/cli/digest"
+	"github.com/oversire/cli/events"
 	"github.com/oversire/cli/proc"
 	"github.com/oversire/cli/review"
 	"github.com/oversire/cli/ticket"
@@ -492,7 +493,19 @@ func (c *cli) ticketApplied(ctx context.Context, verb, file, project, harness, s
 	}
 	if _, err := d.AppendEvents(ctx, rows); err != nil {
 		if errors.Is(err, ticket.ErrNoDaemon) {
-			fmt.Fprintln(c.out, "No daemon answers: the event rows are not written.")
+			cfg, _, werr := c.paths.LoadConfig()
+			var data string
+			if werr == nil {
+				data, werr = cfg.Data()
+			}
+			if werr == nil {
+				werr = events.NewSpool(events.SpoolPath(data)).Write(rows)
+			}
+			if werr != nil {
+				fmt.Fprintf(c.out, "No daemon answers: the event rows are not written (%v).\n", werr)
+				return nil
+			}
+			fmt.Fprintf(c.out, "No daemon answers: %d event rows wait in the spool. The daemon writes them when it starts.\n", len(rows))
 			return nil
 		}
 		return err

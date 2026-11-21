@@ -18,7 +18,7 @@ const MaxSpool = 5 << 20
 // SpoolPath is <data>/events.spool.
 func SpoolPath(data string) string { return filepath.Join(data, "events.spool") }
 
-// Spool keeps drafts in a JSONL file when the daemon does not answer. The daemon reads it at the start.
+// Spool keeps drafts in a JSONL file when the daemon does not answer. The daemon reads it at the start and each 10 s.
 type Spool struct{ path string }
 
 func NewSpool(path string) *Spool { return &Spool{path: path} }

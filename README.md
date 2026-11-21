@@ -361,7 +361,7 @@ The daemon keeps the events table in `<data>/events.db` (SQLite, OVERSIRE-377). 
 | `GET /v1/items/{key}/events?tree=1&after=&kinds=&limit=` | member | The rows of an item in seq order. `tree=1` adds the rows of its sub-items. `kinds` is a comma list, and `git.*` takes a domain. `limit` is 1 to 1000, default 500. |
 | `GET /v1/events/rows?after=&limit=` | member | All rows in seq order, for a home move. |
 
-The daemon keeps the row and its summary. After 90 days it clears the payload and the text of a private row (`prompt.submitted`). When the daemon does not answer, a writer puts the drafts in `<data>/events.spool` (JSONL). The daemon reads the spool at the start and each 10 s. `POST /v1/group/home` also copies the rows of the old home.
+The daemon keeps the row and its summary. After 90 days it clears the payload and the text of a private row (`prompt.submitted`). When the daemon does not answer, `oversire ticket applied` puts the drafts in `<data>/events.spool` (JSONL). The daemon reads the spool at the start and each 10 s. `POST /v1/group/home` also copies the rows of the old home.
 
 `GET /v1/events` (the ProviderEvent hints) keeps its last 2000 entries in the same file, so the feed lives through a restart.
 
@@ -713,6 +713,7 @@ The `oversire` agent skill (OVERSIRE-434) makes, plans, works and closes tracker
 - The ledger `<config>/tickets/<KEY>.json` keeps the sessions of each ticket on this machine. `work` uses it to print the digest of the last session. When the transcript is on a different machine, it prints the `ssh` command that gets the digest.
 - `plan` with no key or many keys plans a batch: one group brief, at most 5 planners at one time, and one round of questions.
 - `groom` does the Groom of the app in the chat: the same kinds and the same Plane writes, after a yes. `oversire ticket groom` checks the key `groom:<PROJECT>` on the local daemon and lists the busy items. It sets no key, because the app adopts each live `groom:` session.
+- When no daemon answers, `oversire ticket applied` keeps the rows in the events spool, and the daemon writes them at its next start.
 - `sweep` reads the facts from the daemon, the ledger and git. The agent adds the Plane state, sorts the items into buckets and asks one time for each bucket. It does not merge. `stop` ends only the sessions of the `orca` and `oversire` runtimes.
 - `delegate` starts a background Overseer (model sonnet) with a fixed prompt. The Overseer drives a worker through `oversire worker` (see "Workers"): `worker start`, then `worker wait --timeout 8m` in a loop, then one action for each wake. It gives back `READY: ...` or `BLOCKED: ...`. `done` runs `oversire worker stop`, and `oversire ticket done` packs the turns of the worker as `<KEY>-worker-turns` beside the transcript.
 - The skill uses `oversire item` and `oversire project` for the items of each tracker (Plane and Big Timer). It uses `plane-cli` only for the intake, the attachment list and delete, and the created-date scope, on Plane. The CLI makes no tracker calls.
