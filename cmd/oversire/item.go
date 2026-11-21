@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"text/tabwriter"
 
@@ -26,12 +27,14 @@ const itemUsage = `usage:
   oversire item show <KEY> [--project P]
   oversire item create --project P --title T [--body-file F|-] [--status S] [--priority X] [--parent KEY] [--label L]... [--epic E]
   oversire item edit <KEY> [--title T] [--body-file F|-]
-  oversire item status <KEY> <status> [--force]
+  oversire item status <KEY> <status> [--force] [--sub-items]
   oversire item start <KEY>
-  oversire item done <KEY> [--force]
+  oversire item done <KEY> [--force] [--sub-items]
   oversire item reopen <KEY>
   oversire item assign <KEY> --me | PERSON... | --none
   oversire item priority <KEY> <name>
+  oversire item label <KEY> --add|--remove|--set NAME... | --none
+  oversire item areas <KEY> AREA... | --none
   oversire item comment <KEY> --body-file F|-
   oversire item relate <KEY> --blocks|--blocked-by|--relates-to|--duplicate-of OTHER [--remove]
   oversire item parent <KEY> <PARENT|none>
@@ -39,13 +42,19 @@ const itemUsage = `usage:
   oversire item attach <KEY> <FILE> [--name N]
 Each command takes --json, --harness H and --session ID, and --project P for a bare item number.
 The status is an id, a name, or one of todo, progress, review, blocked, done. A group is one of the same words.
+--sub-items sets the open sub-items to the same status. --force closes a parent and keeps its sub-items open.
+An area has at most 32 lower-case letters, digits or hyphens. An item has at most 6 areas.
 --body-file - reads the text from stdin. The text has at most 1 MB. A file has at most 10 MB.
 The app on this Mac runs the command. Exit codes: 0 ok, 1 failed or not allowed, 2 usage, 3 no daemon or no app.`
 
 const (
 	maxBodyBytes   = 1 << 20
 	maxAttachBytes = 10 << 20
+	maxAreas       = 6
 )
+
+// areaName is the pattern of Contract/schema/suggestion.json.
+var areaName = regexp.MustCompile(`^[a-z0-9-]{1,32}$`)
 
 // stringsFlag is a flag that you can repeat.
 type stringsFlag []string
@@ -64,6 +73,7 @@ type itemFlags struct {
 	labels                                          stringsFlag
 	limit                                           int
 	mine, force, me, none, remove                   bool
+	add, set, subItems                              bool
 	// The relate flags by relation kind.
 	relate map[string]*string
 }
@@ -93,6 +103,14 @@ func (it *itemFlags) register(fs *flag.FlagSet, sub string) {
 		fs.StringVar(&it.bodyFile, "body-file", "", "the Markdown comment: a file, or - for stdin")
 	case "status", "done":
 		fs.BoolVar(&it.force, "force", false, "close a parent that has open sub-items")
+		fs.BoolVar(&it.subItems, "sub-items", false, "set the open sub-items to the same status")
+	case "label":
+		fs.BoolVar(&it.add, "add", false, "add the labels and keep the others")
+		fs.BoolVar(&it.remove, "remove", false, "remove the labels and keep the others")
+		fs.BoolVar(&it.set, "set", false, "set exactly these labels")
+		fs.BoolVar(&it.none, "none", false, "remove all labels")
+	case "areas":
+		fs.BoolVar(&it.none, "none", false, "remove all areas")
 	case "assign":
 		fs.BoolVar(&it.me, "me", false, "add yourself and keep the others")
 		fs.BoolVar(&it.none, "none", false, "remove all assignees")
@@ -117,7 +135,7 @@ func (c *cli) item(ctx context.Context, args []string) error {
 	switch args[0] {
 	case "show":
 		return c.itemShow(ctx, args[1:])
-	case "list", "search", "create", "edit", "status", "start", "done", "reopen", "assign", "priority", "comment", "relate", "parent", "link", "attach":
+	case "list", "search", "create", "edit", "status", "start", "done", "reopen", "assign", "priority", "label", "areas", "comment", "relate", "parent", "link", "attach":
 		return c.itemSub(ctx, args[0], args[1:])
 	}
 	return &exitError{2, fmt.Errorf("unknown item command %q\n%s", args[0], itemUsage)}
@@ -275,6 +293,9 @@ func (c *cli) itemSub(ctx context.Context, sub string, args []string) error {
 		}
 		action = "item.setStatus"
 		a["status"], a["force"] = pos[1], it.force
+		if it.subItems {
+			a["subItems"] = true
+		}
 	case "done":
 		if err := want(1, 1); err != nil {
 			return err
@@ -284,6 +305,9 @@ func (c *cli) itemSub(ctx context.Context, sub string, args []string) error {
 		}
 		action = "item.setStatus"
 		a["status"], a["force"] = "done", it.force
+		if it.subItems {
+			a["subItems"] = true
+		}
 	case "start", "reopen":
 		if err := want(1, 1); err != nil {
 			return err
@@ -322,6 +346,64 @@ func (c *cli) itemSub(ctx context.Context, sub string, args []string) error {
 		}
 		action = "item.setPriority"
 		a["priority"] = pos[1]
+	case "label":
+		if err := want(1, 1<<10); err != nil {
+			return err
+		}
+		if err := first(); err != nil {
+			return bad(err)
+		}
+		names := pos[1:]
+		mode := ""
+		for m, on := range map[string]bool{"add": it.add, "remove": it.remove, "set": it.set, "none": it.none} {
+			if !on {
+				continue
+			}
+			if mode != "" {
+				return bad(errors.New("give only one of --add, --remove, --set and --none"))
+			}
+			mode = m
+		}
+		switch {
+		case mode == "":
+			return bad(errors.New("give --add, --remove, --set or --none"))
+		case mode == "none" && len(names) > 0:
+			return bad(errors.New("--none does not go with a label"))
+		case mode != "none" && len(names) == 0:
+			return bad(errors.New("give at least one label"))
+		}
+		action = "item.setLabels"
+		switch mode {
+		case "none":
+			a["labels"] = []string{}
+		case "set":
+			a["labels"] = append([]string{}, names...)
+		default:
+			a[mode] = append([]string{}, names...)
+		}
+	case "areas":
+		if err := want(1, 1<<10); err != nil {
+			return err
+		}
+		if err := first(); err != nil {
+			return bad(err)
+		}
+		areas := pos[1:]
+		switch {
+		case it.none && len(areas) > 0:
+			return bad(errors.New("--none does not go with an area"))
+		case !it.none && len(areas) == 0:
+			return bad(errors.New("give an area or --none"))
+		case len(areas) > maxAreas:
+			return bad(fmt.Errorf("an item has at most %d areas", maxAreas))
+		}
+		for _, n := range areas {
+			if !areaName.MatchString(n) {
+				return bad(fmt.Errorf("the area %q is not valid: use 1 to 32 lower-case letters, digits or hyphens", n))
+			}
+		}
+		action = "item.setAreas"
+		a["areas"] = append([]string{}, areas...)
 	case "comment":
 		if err := want(1, 1); err != nil {
 			return err

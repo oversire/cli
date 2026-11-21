@@ -39,6 +39,12 @@ func (a *fakeApp) last(t *testing.T) wire.AppCall {
 	return a.calls[len(a.calls)-1]
 }
 
+func (a *fakeApp) count() int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return len(a.calls)
+}
+
 func (a *fakeApp) args(t *testing.T) map[string]any {
 	t.Helper()
 	var m map[string]any
@@ -408,6 +414,73 @@ func TestProjectStatusesLabelsPeople(t *testing.T) {
 		}
 	}
 	for _, args := range [][]string{{"project", "statuses"}, {"project", "statuses", "a", "b"}, {"project", "statuses", "a", "--project", "b"}, {"project", "frob"}, {"project"}} {
+		if err := c.dispatch(context.Background(), args); exitCode(err) != 2 {
+			t.Errorf("%v: %v", args, err)
+		}
+	}
+}
+
+func TestProjectLabelsAdd(t *testing.T) {
+	c, out, _ := testCLI(t, "")
+	app := appDaemon(t, c)
+	answerWith(app, wire.AppCallOK, "Label ui is in ACME.", `{"id":"l9"}`)
+	if err := c.dispatch(context.Background(), []string{"project", "labels", "acme", "--add", "ui"}); err != nil {
+		t.Fatal(err)
+	}
+	if call := app.last(t); call.Action != "project.addLabel" || string(call.Args) != `{"color":"#3B82F6","name":"ui","project":"ACME"}` {
+		t.Fatal(call.Action, string(call.Args))
+	}
+	if out.String() != "Label ui is in ACME.\nId: l9\n" {
+		t.Fatalf("got %q", out)
+	}
+	if err := c.dispatch(context.Background(), []string{"project", "labels", "--project", "acme", "--add", "Needs review", "--color", "#00ff00"}); err != nil {
+		t.Fatal(err)
+	}
+	if call := app.last(t); string(call.Args) != `{"color":"#00ff00","name":"Needs review","project":"ACME"}` {
+		t.Fatal(string(call.Args))
+	}
+}
+
+func TestProjectLabelsAddBadColor(t *testing.T) {
+	c, _, _ := testCLI(t, "")
+	appDaemon(t, c)
+	for _, color := range []string{"red", "#fff", "00ff00", "#00ff0g", "#00ff000"} {
+		err := c.dispatch(context.Background(), []string{"project", "labels", "acme", "--add", "ui", "--color", color})
+		if exitCode(err) != 2 {
+			t.Errorf("%s: %v", color, err)
+		}
+	}
+	if err := c.dispatch(context.Background(), []string{"project", "labels", "acme", "--add", " "}); exitCode(err) != 2 {
+		t.Error(err)
+	}
+}
+
+func TestProjectLabelsColorWithoutAdd(t *testing.T) {
+	c, _, _ := testCLI(t, "")
+	app := appDaemon(t, c)
+	err := c.dispatch(context.Background(), []string{"project", "labels", "acme", "--color", "#00ff00"})
+	if exitCode(err) != 2 || app.count() != 0 {
+		t.Fatal(err)
+	}
+}
+
+func TestProjectRefresh(t *testing.T) {
+	c, out, _ := testCLI(t, "")
+	app := appDaemon(t, c)
+	answerWith(app, wire.AppCallOK, "ACME is loaded again.", "")
+	for _, args := range [][]string{{"project", "refresh", "acme"}, {"project", "refresh", "--project", "acme"}} {
+		out.Reset()
+		if err := c.dispatch(context.Background(), args); err != nil {
+			t.Fatal(args, err)
+		}
+		if call := app.last(t); call.Action != "project.refresh" || string(call.Args) != `{"project":"ACME"}` {
+			t.Fatal(args, call)
+		}
+	}
+	if out.String() != "ACME is loaded again.\n" {
+		t.Fatalf("got %q", out)
+	}
+	for _, args := range [][]string{{"project", "refresh"}, {"project", "refresh", "a", "b"}} {
 		if err := c.dispatch(context.Background(), args); exitCode(err) != 2 {
 			t.Errorf("%v: %v", args, err)
 		}

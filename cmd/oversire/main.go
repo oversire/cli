@@ -61,6 +61,8 @@ Usage:
   oversire project north-star --project P [--set TEXT] show or set the north star of a project
   oversire project statuses|labels|people [P] [--project P]
                                                        list the statuses, labels or tracker members of a project
+  oversire project labels [P] --add NAME [--color #RRGGBB]  make a label in the tracker project
+  oversire project refresh [P] [--project P]           load the project from the tracker again
   oversire item list [--project P] [--group G[,G]] [--mine] [--label L] [--text T] [--limit N]
                                                        list the loaded items (the app on this Mac runs each item command)
   oversire item search <text> [--project P] [--limit N]  search the items of the trackers
@@ -68,20 +70,27 @@ Usage:
   oversire item create --project P --title T [--body-file F|-] [--status S] [--priority X] [--parent KEY] [--label L]... [--epic E]
                                                        make an item and print its key
   oversire item edit <KEY> [--title T] [--body-file F|-]  change the title or the description
-  oversire item status <KEY> <status> [--force]        set the status: id, name, todo, progress, review, blocked or done
+  oversire item status <KEY> <status> [--force] [--sub-items]  set the status: id, name, todo, progress, review, blocked or done
   oversire item start <KEY>                            set the item in progress and assign it to you
-  oversire item done <KEY> [--force]                   set the item to done
+  oversire item done <KEY> [--force] [--sub-items]     set the item to done
   oversire item reopen <KEY>                           move a done item back to in progress
   oversire item assign <KEY> --me | PERSON... | --none  add you, set the assignees, or remove all
   oversire item priority <KEY> <name>                  set the priority
+  oversire item label <KEY> --add|--remove|--set NAME... | --none  add, remove or set the labels, by name
+  oversire item areas <KEY> AREA... | --none           set the code areas (at most 6)
   oversire item comment <KEY> --body-file F|-          add a Markdown comment
   oversire item relate <KEY> --blocks|--blocked-by|--relates-to|--duplicate-of OTHER [--remove]
                                                        add or remove a relation
   oversire item parent <KEY> <PARENT|none>             set or remove the parent
   oversire item link <KEY> <URL> [--title T]           add a web link
   oversire item attach <KEY> <FILE> [--name N]         upload a file (at most 10 MB)
+  oversire intake create --project P --title T [--body-file F|-] [--priority X]
+                                                       make an intake item and print its key
+  oversire people list [--project P] [--json]          list the people of the trackers, code hosts and machines
+  oversire activity list [--project P] [--unread] [--limit N] [--json]
+                                                       list the tracker activity, newest first
   oversire app run <action> ['<json args>']            run an action of the allowed list of the app on this Mac
-                                                       epic, project, item, app and vendor take --json, --harness H and --session ID
+                                                       epic, project, item, intake, people, activity, app and vendor take --json, --harness H and --session ID
   oversire vendor ls [--json]                          list the vendor CLIs that the app can run, with the accounts
   oversire vendor run [--project P | --account A] -- <command> [flags]
                                                        run the vendor CLI of the account with the token of the app
@@ -249,6 +258,12 @@ func (c *cli) dispatch(ctx context.Context, args []string) error {
 		return c.project(ctx, rest)
 	case cmd == "item":
 		return c.item(ctx, rest)
+	case cmd == "intake":
+		return c.intake(ctx, rest)
+	case cmd == "people":
+		return c.people(ctx, rest)
+	case cmd == "activity":
+		return c.activity(ctx, rest)
 	case cmd == "app":
 		return c.app(ctx, rest)
 	case cmd == "vendor":

@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -34,6 +35,9 @@ The app on this Mac runs the command. Exit codes: 0 ok, 1 failed or not allowed,
 const projectUsage = `usage:
   oversire project north-star --project P [--set TEXT] [--json]
   oversire project statuses|labels|people [P] [--project P] [--json]
+  oversire project labels [P] --add NAME [--color #RRGGBB]
+  oversire project refresh [P] [--project P]
+--add makes a label in the tracker project. The default color is #3B82F6. refresh loads the project from the tracker again.
 The project is a positional argument or --project. The app on this Mac runs the command.`
 
 const appUsage = "usage: oversire app run <action> ['<args as a JSON object>'] [--json]"
@@ -240,7 +244,10 @@ func (c *cli) epic(ctx context.Context, args []string) error {
 	return c.runApp(ctx, f, action, a, show)
 }
 
-// project runs `oversire project <north-star|statuses|labels|people>`.
+// labelColor is a hex color of a new label.
+var labelColor = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
+
+// project runs `oversire project <north-star|statuses|labels|people|refresh>`.
 func (c *cli) project(ctx context.Context, args []string) error {
 	if len(args) == 0 {
 		return &exitError{2, errors.New(projectUsage)}
@@ -255,19 +262,23 @@ func (c *cli) project(ctx context.Context, args []string) error {
 		"people":   {"project.people", c.printPeople},
 	}
 	read, isRead := reads[sub]
-	if sub != "north-star" && !isRead {
+	if sub != "north-star" && sub != "refresh" && !isRead {
 		return &exitError{2, fmt.Errorf("unknown project command %q\n%s", sub, projectUsage)}
 	}
 	f := newAppFlags("project " + sub)
-	var set string
-	if !isRead {
+	var set, addLabel, color string
+	switch sub {
+	case "north-star":
 		f.fs.StringVar(&set, "set", "", "the new north star")
+	case "labels":
+		f.fs.StringVar(&addLabel, "add", "", "the name of a new label")
+		f.fs.StringVar(&color, "color", "", "the color of the new label, for example #3B82F6")
 	}
 	pos, err := f.parse(args[1:])
 	if err != nil {
 		return f.usage(projectUsage, err)
 	}
-	if len(pos) > 1 || (len(pos) == 1 && !isRead) {
+	if len(pos) > 1 || (len(pos) == 1 && sub == "north-star") {
 		return f.usage(projectUsage, nil)
 	}
 	if len(pos) == 1 {
@@ -280,12 +291,33 @@ func (c *cli) project(ctx context.Context, args []string) error {
 	if err != nil {
 		return f.usage(projectUsage, err)
 	}
+	given := map[string]bool{}
+	f.fs.Visit(func(fl *flag.Flag) { given[fl.Name] = true })
+	if sub == "labels" {
+		if given["color"] && !given["add"] {
+			return f.usage(projectUsage, errors.New("--color goes with --add"))
+		}
+		if given["add"] {
+			name := strings.TrimSpace(addLabel)
+			if name == "" {
+				return f.usage(projectUsage, errors.New("give a label name"))
+			}
+			if color == "" {
+				color = "#3B82F6"
+			}
+			if !labelColor.MatchString(color) {
+				return f.usage(projectUsage, errors.New("the color must look like #3B82F6"))
+			}
+			return c.runApp(ctx, f, "project.addLabel", map[string]any{"project": p, "name": name, "color": color}, c.printID)
+		}
+	}
+	if sub == "refresh" {
+		return c.runApp(ctx, f, "project.refresh", map[string]any{"project": p}, nil)
+	}
 	if isRead {
 		return c.runApp(ctx, f, read.action, map[string]any{"project": p}, read.show)
 	}
-	isSet := false
-	f.fs.Visit(func(fl *flag.Flag) { isSet = isSet || fl.Name == "set" })
-	if isSet {
+	if given["set"] {
 		return c.runApp(ctx, f, "project.setNorthStar", map[string]any{"project": p, "text": set}, nil)
 	}
 	return c.runApp(ctx, f, "project.northStar", map[string]any{"project": p}, nil)

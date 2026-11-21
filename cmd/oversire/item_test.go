@@ -395,3 +395,87 @@ func TestItemCommentSends(t *testing.T) {
 	}
 	wantArgs(t, "item.comment", map[string]any{"key": "ACME-1", "body": "Done in abc123.\n"}, call, got)
 }
+
+func TestItemLabelModes(t *testing.T) {
+	c, _, _ := testCLI(t, "")
+	app := appDaemon(t, c)
+	for _, tc := range []struct {
+		args []string
+		want map[string]any
+	}{
+		{[]string{"item", "label", "acme-1", "--add", "bug", "ui"}, map[string]any{"key": "ACME-1", "add": []string{"bug", "ui"}}},
+		{[]string{"item", "label", "acme-1", "bug", "--remove"}, map[string]any{"key": "ACME-1", "remove": []string{"bug"}}},
+		{[]string{"item", "label", "acme-1", "--set", "Needs review", "bug"}, map[string]any{"key": "ACME-1", "labels": []string{"Needs review", "bug"}}},
+		{[]string{"item", "label", "acme-1", "--none"}, map[string]any{"key": "ACME-1", "labels": []string{}}},
+	} {
+		call, got, err := runItem(t, c, app, tc.args...)
+		if err != nil {
+			t.Fatal(tc.args, err)
+		}
+		wantArgs(t, "item.setLabels", tc.want, call, got)
+	}
+}
+
+func TestItemLabelUsage(t *testing.T) {
+	c, _, _ := testCLI(t, "")
+	appDaemon(t, c)
+	for _, args := range [][]string{
+		{"item", "label", "acme-1", "bug"},
+		{"item", "label", "acme-1", "--add"},
+		{"item", "label", "acme-1", "--set"},
+		{"item", "label", "acme-1", "--none", "bug"},
+		{"item", "label", "acme-1", "--add", "--remove", "bug"},
+		{"item", "label", "acme-1", "--add", "--none"},
+		{"item", "label", "--add", "bug"},
+	} {
+		if err := c.dispatch(context.Background(), args); exitCode(err) != 2 {
+			t.Errorf("%v: %v", args, err)
+		}
+	}
+}
+
+func TestItemAreas(t *testing.T) {
+	c, _, _ := testCLI(t, "")
+	app := appDaemon(t, c)
+	call, got, err := runItem(t, c, app, "item", "areas", "acme-1", "api", "ui-kit", "v2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantArgs(t, "item.setAreas", map[string]any{"key": "ACME-1", "areas": []string{"api", "ui-kit", "v2"}}, call, got)
+	call, got, _ = runItem(t, c, app, "item", "areas", "acme-1", "--none")
+	wantArgs(t, "item.setAreas", map[string]any{"key": "ACME-1", "areas": []string{}}, call, got)
+}
+
+func TestItemAreasBad(t *testing.T) {
+	c, _, _ := testCLI(t, "")
+	appDaemon(t, c)
+	for _, args := range [][]string{
+		{"item", "areas", "acme-1"},
+		{"item", "areas", "acme-1", "--none", "api"},
+		{"item", "areas", "acme-1", "API"},
+		{"item", "areas", "acme-1", "a_b"},
+		{"item", "areas", "acme-1", strings.Repeat("a", 33)},
+		{"item", "areas", "acme-1", "a", "b", "c", "d", "e", "f", "g"},
+	} {
+		if err := c.dispatch(context.Background(), args); exitCode(err) != 2 {
+			t.Errorf("%v: %v", args, err)
+		}
+	}
+	c2, _, _ := testCLI(t, "")
+	app := appDaemon(t, c2)
+	if _, _, err := runItem(t, c2, app, "item", "areas", "acme-1", strings.Repeat("a", 32), "a", "b", "c", "d", "e"); err != nil {
+		t.Fatal("six areas of 32 characters are valid:", err)
+	}
+}
+
+func TestItemDoneSubItems(t *testing.T) {
+	c, _, _ := testCLI(t, "")
+	app := appDaemon(t, c)
+	call, got, err := runItem(t, c, app, "item", "done", "acme-1", "--sub-items")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantArgs(t, "item.setStatus", map[string]any{"key": "ACME-1", "status": "done", "force": false, "subItems": true}, call, got)
+	call, got, _ = runItem(t, c, app, "item", "status", "acme-1", "In Review", "--sub-items")
+	wantArgs(t, "item.setStatus", map[string]any{"key": "ACME-1", "status": "In Review", "force": false, "subItems": true}, call, got)
+}
