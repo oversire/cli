@@ -59,18 +59,44 @@ type Caller interface {
 	Do(ctx context.Context, call wire.MemberCall) (wire.AppCallResult, error)
 }
 
+// app sends member calls to the source app.
+type app struct {
+	calls Caller
+	self  func() wire.GroupMember
+}
+
+// call sends one member call to the source app and gives the data of an ok result.
+func (a app) call(ctx context.Context, action string, args any) (json.RawMessage, error) {
+	b, err := json.Marshal(args)
+	if err != nil {
+		return nil, err
+	}
+	res, err := a.calls.Do(ctx, wire.MemberCall{Action: action, Args: b, From: wire.MemberCaller{Machine: a.self().Machine}, CLI: &wire.MemberCLI{}})
+	if err != nil {
+		return nil, err
+	}
+	if res.Status != wire.AppCallOK {
+		text := res.Summary
+		if text == "" {
+			text = "The OverSire app could not do " + action + "."
+		}
+		return nil, &appError{status: res.Status, summary: text}
+	}
+	return res.Data, nil
+}
+
 // Routes serves GET /v1/ci.
 type Routes struct {
-	x     *Index
-	calls Caller
-	lim   *Limiter
-	self  func() wire.GroupMember
+	app
+	x    *Index
+	logs *Logs
+	lim  *Limiter
 
 	freshWait time.Duration
 }
 
-func NewRoutes(x *Index, calls Caller, lim *Limiter, self func() wire.GroupMember) *Routes {
-	return &Routes{x: x, calls: calls, lim: lim, self: self, freshWait: freshWait}
+func NewRoutes(x *Index, logs *Logs, calls Caller, lim *Limiter, self func() wire.GroupMember) *Routes {
+	return &Routes{app: app{calls: calls, self: self}, x: x, logs: logs, lim: lim, freshWait: freshWait}
 }
 
 func (r *Routes) Routes() []server.Route {
@@ -80,6 +106,7 @@ func (r *Routes) Routes() []server.Route {
 		{Pattern: "GET /v1/ci/runs", Access: server.Member, Handle: r.runs},
 		{Pattern: "GET /v1/ci/runs/{id}", Access: server.Member, Handle: r.run},
 		{Pattern: "GET /v1/ci/runs/{id}/failures", Access: server.Member, Handle: r.failures},
+		{Pattern: "GET /v1/ci/jobs/{id}/log", Access: server.Member, Handle: r.log},
 		{Pattern: "GET /v1/ci/workflows", Access: server.Member, Handle: r.workflows},
 	}
 }
@@ -151,26 +178,6 @@ func (r *Routes) fail(w http.ResponseWriter, err error) {
 	default:
 		server.Fail(w, err)
 	}
-}
-
-// call sends one member call to the source app and gives the data of an ok result.
-func (r *Routes) call(ctx context.Context, action string, args any) (json.RawMessage, error) {
-	b, err := json.Marshal(args)
-	if err != nil {
-		return nil, err
-	}
-	res, err := r.calls.Do(ctx, wire.MemberCall{Action: action, Args: b, From: wire.MemberCaller{Machine: r.self().Machine}, CLI: &wire.MemberCLI{}})
-	if err != nil {
-		return nil, err
-	}
-	if res.Status != wire.AppCallOK {
-		text := res.Summary
-		if text == "" {
-			text = "The OverSire app could not do " + action + "."
-		}
-		return nil, &appError{status: res.Status, summary: text}
-	}
-	return res.Data, nil
 }
 
 // limited runs fetch when the window of key is free. A fetch that fails frees the window.
@@ -485,4 +492,23 @@ func (r *Routes) wait(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 	}
+}
+
+func (r *Routes) log(w http.ResponseWriter, req *http.Request) {
+	q := query{req.URL.Query()}
+	repo, err := q.repo()
+	var lines int
+	if err == nil {
+		lines, err = q.intIn("lines", defaultLines, 1, maxLogLines)
+	}
+	if err != nil {
+		r.fail(w, err)
+		return
+	}
+	view, err := r.logs.Get(req.Context(), repo, req.PathValue("id"), lines, q.flag("fresh"))
+	if err != nil {
+		r.fail(w, err)
+		return
+	}
+	server.WriteJSON(w, http.StatusOK, view)
 }

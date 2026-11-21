@@ -160,13 +160,17 @@ type api struct {
 	*env
 	calls  *fakeCaller
 	routes *Routes
+	logs   *Logs
 	srv    *httptest.Server
 }
 
 func newAPI(t *testing.T) *api {
 	t.Helper()
 	a := &api{env: newEnv(t), calls: &fakeCaller{}}
-	a.routes = NewRoutes(a.x, a.calls, NewLimiter(20*time.Second, a.clk.now), func() wire.GroupMember { return wire.GroupMember{Machine: "mbp"} })
+	self := func() wire.GroupMember { return wire.GroupMember{Machine: "mbp"} }
+	lim := NewLimiter(20*time.Second, a.clk.now)
+	a.logs = NewLogs(a.book, a.x, a.calls, lim, self)
+	a.routes = NewRoutes(a.x, a.logs, a.calls, lim, self)
 	a.routes.freshWait = 20 * time.Millisecond
 	a.srv = httptest.NewServer(a.mux())
 	t.Cleanup(a.srv.Close)
