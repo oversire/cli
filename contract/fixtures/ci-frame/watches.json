@@ -1,0 +1,28 @@
+{
+  "type": "ci",
+  "event": "watches",
+  "watches": [
+    {
+      "id": "oversire/cli@5f3a2b1c9d8e7f60a1b2c3d4e5f60718293a4b5c",
+      "repo": "oversire/cli",
+      "ref": "#86",
+      "sha": "5f3a2b1c9d8e7f60a1b2c3d4e5f60718293a4b5c",
+      "branch": "oversire-540",
+      "pr": 86,
+      "ttl": 1800,
+      "createdAt": "2026-11-21T12:00:00Z",
+      "expiresAt": "2026-11-21T12:30:00Z",
+      "machine": "mba"
+    },
+    {
+      "id": "oversire/oversire@main",
+      "repo": "oversire/oversire",
+      "ref": "main",
+      "branch": "main",
+      "ttl": 600,
+      "createdAt": "2026-11-21T12:05:00Z",
+      "expiresAt": "2026-11-21T12:15:00Z",
+      "machine": "mini"
+    }
+  ]
+}

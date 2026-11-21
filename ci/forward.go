@@ -55,11 +55,11 @@ func (f *Forward) send(w http.ResponseWriter, req *http.Request, base, token, ho
 		server.WriteError(w, http.StatusBadGateway, f.noRoute(home))
 		return
 	}
-	out.URL.RawQuery = req.URL.RawQuery
 	out.ContentLength = req.ContentLength
 	if ct := req.Header.Get("Content-Type"); ct != "" {
 		out.Header.Set("Content-Type", ct)
 	}
+	out.URL.RawQuery = req.URL.RawQuery
 	out.Header.Set("Authorization", "Bearer "+token)
 	out.Header.Set(ForwardedHeader, "1")
 	resp, err := f.client.Do(out)

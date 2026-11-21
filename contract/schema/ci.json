@@ -1048,7 +1048,7 @@
       "additionalProperties": false
     },
     "CIWatch": {
-      "description": "P3. A request to keep the CI data of a ref fresh.",
+      "description": "P3. One commit that an agent waits on. The home daemon keeps the list and sends it to the source app, which polls these commits at the active interval. The daemon always sets `expiresAt`.",
       "type": "object",
       "properties": {
         "repo": {
@@ -1064,12 +1064,145 @@
         },
         "expiresAt": {
           "$ref": "#/$defs/Date"
+        },
+        "id": {
+          "description": "`<repo>@<sha or ref>`.",
+          "type": "string"
+        },
+        "sha": {
+          "type": "string"
+        },
+        "branch": {
+          "type": "string"
+        },
+        "pr": {
+          "type": "integer"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/Date"
+        },
+        "machine": {
+          "description": "The machine that asked.",
+          "type": "string"
         }
       },
       "required": [
         "repo",
         "ref",
         "ttl"
+      ],
+      "additionalProperties": false
+    },
+    "CINotifyTarget": {
+      "description": "P3. The agent session that gets the result of a wait. At least one of `session` and `paneKey`.",
+      "type": "object",
+      "properties": {
+        "session": {
+          "description": "The OVERSIRE_SESSION id.",
+          "type": "string"
+        },
+        "paneKey": {
+          "description": "The ORCA_PANE_KEY of an Orca pane.",
+          "type": "string"
+        },
+        "harness": {
+          "type": "string"
+        },
+        "harnessSession": {
+          "type": "string"
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "session"
+          ]
+        },
+        {
+          "required": [
+            "paneKey"
+          ]
+        }
+      ],
+      "additionalProperties": false
+    },
+    "CIWatchRequest": {
+      "description": "P3. The body of POST /v1/ci/watches. With `notify`, the local daemon sends the result into the agent session (POST /v1/ci/notify).",
+      "type": "object",
+      "properties": {
+        "repo": {
+          "type": "string"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "ttl": {
+          "description": "Seconds. The default is 1800.",
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 7200
+        },
+        "notify": {
+          "$ref": "#/$defs/CINotifyTarget"
+        }
+      },
+      "required": [
+        "repo",
+        "ref"
+      ],
+      "additionalProperties": false
+    },
+    "CIWatchAnswer": {
+      "description": "P3. The answer of POST /v1/ci/watches and POST /v1/ci/notify. `done: true` means the rollup has ended already: the daemon keeps no watch and sends nothing.",
+      "type": "object",
+      "properties": {
+        "watch": {
+          "$ref": "#/$defs/CIWatch"
+        },
+        "rollup": {
+          "$ref": "#/$defs/CIRollup"
+        },
+        "done": {
+          "type": "boolean"
+        },
+        "notify": {
+          "type": "string",
+          "enum": [
+            "queued",
+            "done"
+          ]
+        }
+      },
+      "required": [
+        "done"
+      ],
+      "additionalProperties": false
+    },
+    "CIFrame": {
+      "description": "P3. A frame of GET /v1/connect from the home daemon to the source app. It carries the full watch list, not a delta, so a lost frame does no harm. An unknown `event` is dropped.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "ci"
+        },
+        "event": {
+          "description": "Open for later events.",
+          "type": "string",
+          "enum": [
+            "watches"
+          ]
+        },
+        "watches": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CIWatch"
+          }
+        }
+      },
+      "required": [
+        "type",
+        "event",
+        "watches"
       ],
       "additionalProperties": false
     }

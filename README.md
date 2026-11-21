@@ -163,6 +163,8 @@ The budget of the order has caps: 50 earlier turns, 10 last turns and 20000 char
 | `oversire ci logs RUN\|JOB [--failed] [--lines N] [--fresh] [--json]` | Print the end of a job log. With `--failed`, the argument is a run. |
 | `oversire ci workflows [--fresh] [--json]` | List the workflows of the repo. |
 | `oversire ci wait [REF] [--timeout 30m] [--fail-fast] [--settle 60s] [--workflow W]... [--log-lines 40] [--json\|--events]` | Block until the CI ends. Exit 0: success. 1: failed or cancelled. 2: usage. 3: no daemon, or no app answers. 4: timeout. 5: no run started. |
+| `oversire ci wait [REF] --notify [--timeout 30m] [--harness H] [--session S] [--json]` | End at once. OverSire types the result into this agent session when the runs end. Needs `OVERSIRE_SESSION` or `ORCA_PANE_KEY`. Exit 0: queued. If the runs have ended already, it works as `wait` (exit 0, 1 or 5). 2: usage, or the session cannot take text (a `cli` session). 3: no daemon, or no app answers. `--timeout` is the time to live of the job (1 m to 2 h). |
+| `oversire ci watches [--json]` | List the watches of the group and the notify jobs of this machine. |
 | `oversire orca pair` | Read an Orca runtime pairing link on stdin and pair the live Orca view. The link is never an argument. |
 | `oversire orca unpair` | Forget the Orca pairing. Remove the device in Orca › Settings too. |
 | `oversire orca status [--json]` | Show the state of the live Orca view. |
@@ -465,6 +467,10 @@ The daemon at home answers CI questions from the mirror feed. The feature is `ci
 | `GET /v1/ci/jobs/{id}/log?repo=&lines=&fresh=1` | Answers a `CILogView` with the last `lines` lines (1 to 2000, default 200). A complete log stays in the cache. An open log is good for 20 s. Many callers of one log share one fetch. |
 | `GET /v1/ci/workflows?repo=&fresh=1` | Answers the `CIWorkflows` of the repo. |
 | `POST /v1/ci/runs/{id}/explain` | Body: `CIExplainRequest` (`repo`, `attempt`, `job`, `force`, `agent`). Answers a `CIExplanation` of a failed run. The daemon reads the shared cache (store collection `ai-outputs`, id `ci-explanation:<run url>#<attempt>`) first, also when the app is closed: `source` is `cache`. On a miss it sends the member call `ci.explain` to the source app. The app runs the AI task with the engine of the user and saves the result to the cache: `source` is `ai`. Two requests for one run attempt share one call. `force` skips the cache and is allowed once in 10 min for each run attempt. |
+| `POST /v1/ci/watches` | Body `CIWatchRequest` (`repo`, `ref`, `ttl` 60 to 7200 s, default 1800). Adds or extends the watch of the commit that `ref` names. The source app polls a watched commit at the active interval. Answers `CIWatchAnswer`. If the rollup has ended, `done` is true and there is no watch. The key is `repo@sha` (`repo@branch` before a sha is known), and the later end wins. At most 50 watches: the next one drops the watch that ends first. Home keeps the watches in memory. `wait` adds its watch again at most each 2 min. |
+| `GET /v1/ci/watches` | Answers the list of `CIWatch`. |
+| `POST /v1/ci/notify` | Loopback only. Body `CIWatchRequest` with `notify` (`session` from `OVERSIRE_SESSION`, or `paneKey` from `ORCA_PANE_KEY`). Adds the watch at home and queues a job on this daemon. The job waits for the end of the runs and types a one-line result into the session. It sends no event row. 422: the session is not known, or OverSire cannot send text into it. 429: 20 jobs run already. |
+| `GET /v1/ci/notify` | Loopback only. Answers the notify jobs of this daemon. |
 
 The daemon asks the source app for a log, for the jobs of a run or for the workflows with the member-call actions `ci.log`, `ci.jobs`, `ci.workflows`, `ci.refresh` and `ci.explain`. A `fresh=1` call reaches the app at most one time in 20 s for each repo, run, job or list. An earlier call gives 429 with `Retry-After`. The errors are:
 
@@ -475,6 +481,8 @@ The daemon asks the source app for a log, for the jobs of a run or for the workf
 - 502: the app answered with a failure.
 - 503: no app is connected, or the app sends no CI data.
 - 504: the app did not answer in time. For `explain` the text is "The AI did not answer in 60 s. Ask again in a minute. The answer is then in the cache."
+
+Which sessions get the message: an `oversire` session takes it as a steer turn. An Orca session gets it as typed text, after the session is not `working` (at most 10 min). A plain `cli` session cannot take input. The jobs live in `<data>/ci/notify.json` and start again after a restart of the daemon. A job that ends in the time to live without an end of the runs sends a timeout message. The home daemon sends the watch list as the frame `{"type":"ci","event":"watches","watches":[...]}` on `GET /v1/connect` to the source app.
 
 A member daemon sends each `/v1/ci` request to home with the group token and the header `X-OverSire-Forwarded`. Home answers a forwarded request that it cannot serve with 409 `{"error":"<machine> is home","home":"<machine>"}`. A group with a cloud still has a mirror home, so a member forwards also then.
 

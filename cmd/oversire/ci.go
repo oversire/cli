@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -29,8 +30,12 @@ const ciUsage = `usage:
   oversire ci logs RUN|JOB [--repo R] [--failed] [--lines N] [--fresh] [--json]
   oversire ci workflows [--repo R] [--fresh] [--json]
   oversire ci wait [REF] [--repo R] [--timeout 30m] [--fail-fast] [--settle 60s] [--workflow W]... [--log-lines 40] [--json|--events]
+  oversire ci wait [REF] [--repo R] --notify [--timeout 30m] [--harness H] [--session S] [--json]
+  oversire ci watches [--json]
 REF is a SHA, a branch, #PR, a PR URL or a run URL. The default is HEAD. R is owner/name; the default is the origin of the git folder.
-Exit codes of wait: 0 success, 1 failed or cancelled, 2 usage, 3 no daemon or no app, 4 timeout, 5 no runs.`
+Exit codes of wait: 0 success, 1 failed or cancelled, 2 usage, 3 no daemon or no app, 4 timeout, 5 no runs.
+With --notify, wait ends at once with exit 0 and OverSire types the result into the agent session when the runs end.
+If the runs have ended already, --notify works as a normal wait. It gives exit 2 for a session that cannot take text.`
 
 // Exit codes of ci wait.
 const (
@@ -40,6 +45,8 @@ const (
 	exitCITimeout    = 4
 	exitCINoRuns     = 5
 	maxCIPoll        = 300 * time.Second
+	ciWatchEvery     = 2 * time.Minute
+	ciWatchCall      = 10 * time.Second
 	ciHTTPTimeout    = 330 * time.Second
 	defaultCILogs    = 40
 	defaultCITimeout = 30 * time.Minute
@@ -76,6 +83,8 @@ func (c *cli) ci(ctx context.Context, args []string) error {
 		return c.ciWorkflows(ctx, rest)
 	case "wait":
 		return c.ciWait(ctx, rest)
+	case "watches":
+		return c.ciWatches(ctx, rest)
 	}
 	return ciUsageErr()
 }
@@ -93,28 +102,27 @@ func (cl ciClient) get(ctx context.Context, path string, q url.Values, out any) 
 	if len(q) > 0 {
 		path += "?" + q.Encode()
 	}
-	err := cl.d.call(ctx, http.MethodGet, path, nil, out)
+	return cl.call(ctx, http.MethodGet, path, nil, out)
+}
+
+// post sends a JSON body to a CI route. Errors map as for get, and a 504 gives exit 4.
+func (cl ciClient) post(ctx context.Context, path string, body, out any) error {
+	err := cl.call(ctx, http.MethodPost, path, body, out)
 	var de *daemonError
-	switch {
-	case errors.Is(err, ticket.ErrNoDaemon):
-		return &exitError{exitCINoSource, err}
-	case errors.As(err, &de) && de.Status == http.StatusServiceUnavailable:
-		return &exitError{exitCINoSource, err}
+	if errors.As(err, &de) && de.Status == http.StatusGatewayTimeout {
+		return &exitError{exitCITimeout, err}
 	}
 	return err
 }
 
-// post calls a CI route with a body. A 504 gives exit 4.
-func (cl ciClient) post(ctx context.Context, path string, body, out any) error {
-	err := cl.d.call(ctx, http.MethodPost, path, body, out)
+func (cl ciClient) call(ctx context.Context, method, path string, body, out any) error {
+	err := cl.d.call(ctx, method, path, body, out)
 	var de *daemonError
 	switch {
 	case errors.Is(err, ticket.ErrNoDaemon):
 		return &exitError{exitCINoSource, err}
 	case errors.As(err, &de) && de.Status == http.StatusServiceUnavailable:
 		return &exitError{exitCINoSource, err}
-	case errors.As(err, &de) && de.Status == http.StatusGatewayTimeout:
-		return &exitError{exitCITimeout, err}
 	}
 	return err
 }
@@ -196,6 +204,18 @@ func (cl ciClient) Wait(ctx context.Context, w waitQuery) (r wire.CIRollup, err 
 	}
 	err = cl.get(ctx, "/v1/ci/wait", q, &r)
 	return r, err
+}
+
+// AddWatch asks home to keep the CI data of a ref fresh.
+func (cl ciClient) AddWatch(ctx context.Context, req wire.CIWatchRequest) (a wire.CIWatchAnswer, err error) {
+	err = cl.post(ctx, "/v1/ci/watches", req, &a)
+	return a, err
+}
+
+// Notify asks the local daemon to type the result into the agent session when the CI ends.
+func (cl ciClient) Notify(ctx context.Context, req wire.CIWatchRequest) (a wire.CIWatchAnswer, err error) {
+	err = cl.post(ctx, "/v1/ci/notify", req, &a)
+	return a, err
 }
 
 // gitDir reads the repo and the commit of a git folder. run is injected for tests.
@@ -593,17 +613,20 @@ func (s *stringList) Set(v string) error { *s = append(*s, v); return nil }
 // ciWait blocks until the CI of a ref ends. It prints the progress, and the failures at the end.
 func (c *cli) ciWait(ctx context.Context, args []string) error {
 	var timeout, settle *time.Duration
-	var failFast, events *bool
+	var failFast, events, notify *bool
 	var logLines *int
+	var harness, session *string
 	var workflows stringList
 	_, repoFlag, asJSON, pos, err := c.ciFlags("wait", args, func(fs *flag.FlagSet) {
 		timeout = fs.Duration("timeout", defaultCITimeout, "the longest wait")
 		settle = fs.Duration("settle", time.Minute, "how long to wait for a first run")
 		failFast, events = fs.Bool("fail-fast", false, "end at the first failure"), fs.Bool("events", false, "print one JSON line for each change")
 		logLines = fs.Int("log-lines", defaultCILogs, "log lines for each failed job")
+		notify = fs.Bool("notify", false, "end at once; OverSire types the result into this agent session")
+		harness, session = fs.String("harness", "", "the harness of this agent"), fs.String("session", "", "the harness session id of this agent")
 		fs.Var(&workflows, "workflow", "only this workflow; repeat for more")
 	})
-	if err != nil || *timeout <= 0 || *settle < 0 || *logLines < 0 || *asJSON && *events {
+	if err != nil || *timeout <= 0 || *settle < 0 || *logLines < 0 || *asJSON && *events || *notify && (*events || *failFast || len(workflows) > 0) {
 		return ciUsageErr()
 	}
 	ref, err := c.ciRef(ctx, pos)
@@ -616,7 +639,38 @@ func (c *cli) ciWait(ctx context.Context, args []string) error {
 	}
 	w := ciWaiter{cl: cl, c: c, repo: repo, ref: ref, timeout: *timeout, settle: *settle, failFast: *failFast,
 		workflows: workflows, logLines: *logLines, json: *asJSON, events: *events, pr: c.ciPrinter()}
+	if *notify {
+		return w.notify(ctx, *harness, *session)
+	}
 	return w.run(ctx)
+}
+
+// ciWatches lists the watches of the group and the notify jobs of this machine.
+func (c *cli) ciWatches(ctx context.Context, args []string) error {
+	_, _, asJSON, pos, err := c.ciFlags("watches", args, nil)
+	if err != nil || len(pos) > 0 {
+		return ciUsageErr()
+	}
+	d, err := c.daemonClient()
+	if err != nil {
+		return err
+	}
+	cl := newCIClient(d)
+	out := struct {
+		Watches []wire.CIWatch `json:"watches"`
+		Notify  []ci.NotifyJob `json:"notify"`
+	}{[]wire.CIWatch{}, []ci.NotifyJob{}}
+	if err := cl.get(ctx, "/v1/ci/watches", nil, &out.Watches); err != nil {
+		return err
+	}
+	if err := cl.get(ctx, "/v1/ci/notify", nil, &out.Notify); err != nil {
+		return err
+	}
+	if *asJSON {
+		return c.ciJSON(out)
+	}
+	c.ciPrinter().Watches(out.Watches, out.Notify)
+	return nil
 }
 
 // ciWaiter holds the state of one ci wait.
@@ -632,6 +686,70 @@ type ciWaiter struct {
 	pr              ciPrinter
 	prev            *wire.CIRollup
 	staleSince      time.Time
+	watched         time.Time
+}
+
+// watch asks home to keep the CI data of the ref fresh. It repeats at most each ciWatchEvery, so a restart of home does no harm.
+// An error is ignored: an old home has no route.
+func (w *ciWaiter) watch(ctx context.Context, deadline time.Time) {
+	if !w.watched.IsZero() && time.Since(w.watched) < ciWatchEvery {
+		return
+	}
+	w.watched = time.Now()
+	ttl := min(max(int(time.Until(deadline).Round(time.Second)/time.Second)+60, 60), 7200)
+	ctx, cancel := context.WithTimeout(ctx, ciWatchCall)
+	defer cancel()
+	_, _ = w.cl.AddWatch(ctx, wire.CIWatchRequest{Repo: w.repo, Ref: w.ref, TTL: ttl})
+}
+
+// notify queues the result for this agent session. If the CI has ended, it works as a wait.
+func (w *ciWaiter) notify(ctx context.Context, harness, session string) error {
+	target := &wire.CINotifyTarget{Session: os.Getenv("OVERSIRE_SESSION"), PaneKey: os.Getenv("ORCA_PANE_KEY"), Harness: harness, HarnessSession: session}
+	if target.Session == "" && target.PaneKey == "" {
+		return &exitError{exitCIUsage, errors.New("This is not an agent session of OverSire. Use oversire ci wait without --notify.")}
+	}
+	if target.HarnessSession == "" {
+		if target.HarnessSession = os.Getenv("CLAUDE_CODE_SESSION_ID"); target.HarnessSession != "" && target.Harness == "" {
+			target.Harness = "claude"
+		}
+	}
+	ttl := int(w.timeout / time.Second)
+	if ttl < 60 || ttl > 7200 {
+		return &exitError{exitCIUsage, errors.New("With --notify, give --timeout from 1m to 2h.")}
+	}
+	ans, err := w.cl.Notify(ctx, wire.CIWatchRequest{Repo: w.repo, Ref: w.ref, TTL: ttl, Notify: target})
+	var de *daemonError
+	if errors.As(err, &de) && de.Status == http.StatusUnprocessableEntity {
+		return &exitError{exitCIUsage, err}
+	}
+	if err != nil {
+		return err
+	}
+	if ans.Done && ans.Rollup != nil {
+		if w.json {
+			if err := w.c.ciJSON(ans); err != nil {
+				return err
+			}
+			return ciExit(*ans.Rollup, w.ref)
+		}
+		return w.finish(ctx, *ans.Rollup)
+	}
+	if w.json {
+		return w.c.ciJSON(ans)
+	}
+	fmt.Fprintln(w.c.out, "OverSire sends the result into this session when the runs end. Do other work now.")
+	return nil
+}
+
+// ciExit gives the exit code for a rollup that has ended.
+func ciExit(r wire.CIRollup, ref string) error {
+	switch r.State {
+	case wire.CISuccess:
+		return nil
+	case wire.CINone:
+		return &exitError{exitCINoRuns, errors.New("No CI run started for " + ref + ".")}
+	}
+	return &exitError{exitCIFailed, errSilent}
 }
 
 func (w *ciWaiter) run(ctx context.Context) error {
@@ -643,6 +761,7 @@ func (w *ciWaiter) run(ctx context.Context) error {
 		if left <= 0 {
 			return w.timedOut()
 		}
+		w.watch(ctx, deadline)
 		poll := min(maxCIPoll, max(left.Round(time.Second), time.Second))
 		if !w.staleSince.IsZero() {
 			poll = min(poll, ciStalePoll)
@@ -888,6 +1007,39 @@ func (p ciPrinter) Fresh(f wire.CIFreshness) {
 	if f.Degraded {
 		fmt.Fprintln(p.w, "The GitHub quota is low. OverSire fetches less.")
 	}
+}
+
+// Watches prints the watches of the group and the notify jobs of this machine.
+func (p ciPrinter) Watches(ws []wire.CIWatch, jobs []ci.NotifyJob) {
+	if len(ws) == 0 && len(jobs) == 0 {
+		fmt.Fprintln(p.w, "No watches and no notify jobs.")
+		return
+	}
+	for _, x := range ws {
+		name := x.Branch
+		if x.SHA != "" {
+			name = short(x.SHA)
+		}
+		line := fmt.Sprintf("watch %s  %s", x.Repo, name)
+		if x.PR > 0 {
+			line += fmt.Sprintf("  #%d", x.PR)
+		}
+		if x.Machine != "" {
+			line += "  " + x.Machine
+		}
+		fmt.Fprintln(p.w, line+p.ends(x.ExpiresAt))
+	}
+	for _, j := range jobs {
+		exp := j.ExpiresAt
+		fmt.Fprintf(p.w, "notify %s  %s  session %s%s\n", j.Request.Repo, j.Request.Ref, j.Session, p.ends(&exp))
+	}
+}
+
+func (p ciPrinter) ends(t *time.Time) string {
+	if t == nil {
+		return ""
+	}
+	return fmt.Sprintf("  ends in %d min", max(int(t.Sub(p.now())/time.Minute), 0))
 }
 
 func ciDuration(s int) string {

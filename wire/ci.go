@@ -309,10 +309,47 @@ type CIExplanation struct {
 	Source     string    `json:"source"`
 }
 
-// CIWatch asks to keep the CI data of a ref fresh (later phase).
+// CIWatch is one commit that an agent waits on. The home daemon keeps the list and sends it to the source app.
 type CIWatch struct {
 	Repo      string     `json:"repo"`
 	Ref       string     `json:"ref"`
 	TTL       int        `json:"ttl"`
 	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
+	ID        string     `json:"id,omitempty"`
+	SHA       string     `json:"sha,omitempty"`
+	Branch    string     `json:"branch,omitempty"`
+	PR        int        `json:"pr,omitempty"`
+	CreatedAt *time.Time `json:"createdAt,omitempty"`
+	Machine   string     `json:"machine,omitempty"`
+}
+
+// CINotifyTarget is the agent session that gets the result of a wait.
+type CINotifyTarget struct {
+	Session        string `json:"session,omitempty"`
+	PaneKey        string `json:"paneKey,omitempty"`
+	Harness        string `json:"harness,omitempty"`
+	HarnessSession string `json:"harnessSession,omitempty"`
+}
+
+// CIWatchRequest is the body of POST /v1/ci/watches and POST /v1/ci/notify.
+type CIWatchRequest struct {
+	Repo   string          `json:"repo"`
+	Ref    string          `json:"ref"`
+	TTL    int             `json:"ttl,omitempty"`
+	Notify *CINotifyTarget `json:"notify,omitempty"`
+}
+
+// CIWatchAnswer is the answer of POST /v1/ci/watches and POST /v1/ci/notify.
+type CIWatchAnswer struct {
+	Watch  *CIWatch  `json:"watch,omitempty"`
+	Rollup *CIRollup `json:"rollup,omitempty"`
+	Done   bool      `json:"done"`
+	Notify string    `json:"notify,omitempty"`
+}
+
+// CIFrame is a frame of GET /v1/connect with the full watch list.
+type CIFrame struct {
+	Type    string    `json:"type"`
+	Event   string    `json:"event"`
+	Watches []CIWatch `json:"watches"`
 }

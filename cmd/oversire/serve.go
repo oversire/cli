@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	goruntime "runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -215,11 +217,19 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	members.Log = c.log
 	srv.Handle(members.Routes()...)
 	ciLimit := ci.NewLimiter(20*time.Second, time.Now)
-	ciFwd := ci.NewForward(store, &http.Client{Timeout: 330 * time.Second})
+	ciClient := &http.Client{Timeout: 330 * time.Second}
+	ciFwd := ci.NewForward(store, ciClient)
 	srv.Handle(ci.NewRoutes(ciIndex, ci.NewLogs(ciBook, ciIndex, members, ciLimit, store.Self), members, ciLimit, ciFwd, store.Self).Routes()...)
 	srv.Handle(ci.NewExplainer(ciIndex, oplog, members, ci.NewLimiter(10*time.Minute, time.Now), store.Self).Routes(ciFwd)...)
+	ciWatches := ci.NewWatches(ciIndex, srv.DeliverTo, mirrors, time.Now)
+	ciWatches.Self = func() string { return store.Self().Machine }
+	srv.Handle(ciWatches.Routes(ciFwd)...)
 	asker := ask.NewAsker(book, screen, reg, time.Now)
 	srv.Handle(asker.Routes()...)
+	ciHome := ci.NewHomeClient(store, "http://"+net.JoinHostPort("127.0.0.1", strconv.Itoa(serveCfg.ListenPort())), ciClient)
+	ciNotify := ci.NewNotifier(book, asker, ciHome, ciHome, filepath.Join(data, "ci"), time.Now)
+	ciNotify.Log = c.log
+	srv.Handle(ciNotify.Routes()...)
 	srv.Handle(installer.Routes(hooks.NewSettings(c.paths))...)
 	srv.Handle(updates.Routes()...)
 	runtimeAPI := runtime.NewAPI(reg, filepath.Join(data, "files"), time.Now)
@@ -283,7 +293,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 			}
 		}
 	}
-	return []func(context.Context) error{srv.Run, book.Run, watcher.Run, syncer.Run, asks.Run, drain, c.pruneStore(oplog), c.pruneMirror(mirrors), ciIndex.Run, c.pruneCI(ciBook), runbooks.Run, reviews.Run, workers.Run,
+	return []func(context.Context) error{srv.Run, book.Run, watcher.Run, syncer.Run, asks.Run, drain, c.pruneStore(oplog), c.pruneMirror(mirrors), ciIndex.Run, ciWatches.Run, ciNotify.Resume, c.pruneCI(ciBook), runbooks.Run, reviews.Run, workers.Run,
 		outbox.Run, hints.Run, capt.Run, gitRows.Run, func(ctx context.Context) error { return rows.RunRetention(ctx, c.log) }}, nil
 }
 

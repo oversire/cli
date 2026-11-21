@@ -18,6 +18,9 @@ func TestCIFixtures(t *testing.T) {
 	roundTrip[CIWatch](t, "ci-watch")
 	roundTrip[CIExplainRequest](t, "ci-explain-request")
 	roundTrip[CIExplanation](t, "ci-explanation")
+	roundTrip[CIWatchRequest](t, "ci-watch-request")
+	roundTrip[CIWatchAnswer](t, "ci-watch-answer")
+	roundTrip[CIFrame](t, "ci-frame")
 }
 
 func TestCIRepoStateHas(t *testing.T) {

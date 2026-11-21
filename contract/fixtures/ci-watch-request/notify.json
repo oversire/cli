@@ -1,0 +1,11 @@
+{
+  "repo": "oversire/cli",
+  "ref": "#86",
+  "ttl": 1800,
+  "notify": {
+    "session": "s-4f2a",
+    "paneKey": "tab-7:0",
+    "harness": "claude",
+    "harnessSession": "9c1e0d52-7a43-4b6e-8f10-2d5b3a9e6c71"
+  }
+}

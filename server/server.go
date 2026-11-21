@@ -490,7 +490,8 @@ func (s *Server) hook(w http.ResponseWriter, r *http.Request) {
 }
 
 // connect is the WebSocket of the app. It speaks the frames of the cloud hub: "ping" gets "pong", and JSON frames
-// {"type":"poke"} and {"type":"store"} tell the client to read again.
+// {"type":"poke"} and {"type":"store"} tell the client to read again. The frame {"type":"ci","event":"watches","watches":[…]}
+// gives the source app the full list of CI watches.
 func (s *Server) connect(w http.ResponseWriter, r *http.Request) {
 	caller, _ := CallerFrom(r.Context())
 	conn, err := websocket.Accept(w, r, nil)
