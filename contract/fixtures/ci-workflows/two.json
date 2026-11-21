@@ -1,0 +1,11 @@
+{
+  "repo": "oversire/cli",
+  "workflows": [
+    { "id": "1201", "name": "test", "path": ".github/workflows/test.yml", "state": "active" },
+    { "id": "1202", "name": "release", "path": ".github/workflows/release.yml" }
+  ],
+  "asOf": "2026-11-21T14:04:12Z",
+  "source": "poll",
+  "stale": false,
+  "degraded": false
+}

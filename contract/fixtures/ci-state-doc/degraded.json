@@ -1,0 +1,19 @@
+{
+  "asOf": "2026-11-21T14:20:00Z",
+  "source": "poll",
+  "degraded": true,
+  "budget": { "limit": 5000, "remaining": 312, "resetAt": "2026-11-21T15:00:00Z" },
+  "repos": [
+    {
+      "repo": "oversire/cli",
+      "ci": "GitHub Actions",
+      "capabilities": ["logs", "rerun", "rerunJob", "cancel", "annotations"],
+      "polledAt": "2026-11-21T14:12:30Z"
+    },
+    {
+      "repo": "oversire/cloud",
+      "ci": "GitHub Actions",
+      "capabilities": ["logs", "rerun", "cancel"]
+    }
+  ]
+}

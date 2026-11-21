@@ -1,0 +1,30 @@
+{
+  "run": {
+    "id": "9001",
+    "attempt": 1,
+    "name": "test",
+    "workflow": "test",
+    "status": "in_progress",
+    "branch": "oversire-542",
+    "sha": "9d1e07a2c4b85f10e3a6d7b9c1f2e4a8b0d3c5e7",
+    "event": "pull_request",
+    "url": "https://github.com/oversire/cli/actions/runs/9001",
+    "startedAt": "2026-11-21T14:02:45Z",
+    "updatedAt": "2026-11-21T14:04:12Z",
+    "durationS": 87,
+    "etaS": 180,
+    "jobs": [
+      {
+        "id": "70001",
+        "name": "go test",
+        "status": "in_progress",
+        "url": "https://github.com/oversire/cli/actions/runs/9001/job/70001",
+        "startedAt": "2026-11-21T14:02:50Z"
+      }
+    ]
+  },
+  "asOf": "2026-11-21T14:04:12Z",
+  "source": "webhook",
+  "stale": false,
+  "degraded": false
+}

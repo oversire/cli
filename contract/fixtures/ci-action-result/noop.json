@@ -1,0 +1,17 @@
+{
+  "ok": true,
+  "noop": true,
+  "summary": "The attempt is still running. Nothing to rerun.",
+  "run": {
+    "id": "9001",
+    "attempt": 1,
+    "name": "test",
+    "status": "in_progress",
+    "branch": "oversire-542",
+    "sha": "9d1e07a2c4b85f10e3a6d7b9c1f2e4a8b0d3c5e7",
+    "event": "pull_request",
+    "url": "https://github.com/oversire/cli/actions/runs/9001",
+    "updatedAt": "2026-11-21T14:04:12Z"
+  },
+  "url": "https://github.com/oversire/cli/actions/runs/9001"
+}

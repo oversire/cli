@@ -1,0 +1,7 @@
+{
+  "repo": "oversire/cli",
+  "run": "8980",
+  "failedOnly": true,
+  "comment": "The test is flaky.",
+  "agent": "claude s1"
+}

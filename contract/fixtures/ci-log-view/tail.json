@@ -1,0 +1,18 @@
+{
+  "repo": "oversire/cli",
+  "jobId": "69950",
+  "run": "8980",
+  "lines": [
+    "--- FAIL: TestMergePartialFail (0.04s)",
+    "    merge_test.go:88: want 2 conflicts, got 1",
+    "FAIL",
+    "FAIL\tgithub.com/oversire/cli/merge\t0.512s"
+  ],
+  "complete": true,
+  "truncated": true,
+  "cached": false,
+  "asOf": "2026-11-21T12:14:45Z",
+  "source": "poll",
+  "stale": false,
+  "degraded": false
+}

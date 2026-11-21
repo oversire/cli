@@ -1,0 +1,34 @@
+{
+  "repo": "oversire/cli",
+  "run": "9001",
+  "attempt": 1,
+  "status": "in_progress",
+  "workflow": "test",
+  "headSha": "9d1e07a2c4b85f10e3a6d7b9c1f2e4a8b0d3c5e7",
+  "headBranch": "oversire-542",
+  "event": "pull_request",
+  "url": "https://github.com/oversire/cli/actions/runs/9001",
+  "jobs": [
+    {
+      "id": "70001",
+      "name": "go test",
+      "status": "in_progress",
+      "url": "https://github.com/oversire/cli/actions/runs/9001/job/70001",
+      "startedAt": "2026-11-21T14:02:50Z",
+      "runnerName": "GitHub Actions 12",
+      "steps": [
+        { "name": "Set up job", "status": "completed", "conclusion": "success", "startedAt": "2026-11-21T14:02:50Z", "completedAt": "2026-11-21T14:02:52Z" },
+        { "name": "go test ./...", "status": "in_progress", "startedAt": "2026-11-21T14:02:52Z" }
+      ]
+    },
+    {
+      "id": "70002",
+      "name": "go vet",
+      "status": "queued",
+      "url": "https://github.com/oversire/cli/actions/runs/9001/job/70002"
+    }
+  ],
+  "failures": [],
+  "final": false,
+  "fetchedAt": "2026-11-21T14:04:12Z"
+}

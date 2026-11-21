@@ -1,0 +1,14 @@
+{
+  "asOf": "2026-11-21T14:04:12Z",
+  "source": "webhook",
+  "degraded": false,
+  "budget": { "limit": 5000, "remaining": 4210, "resetAt": "2026-11-21T15:00:00Z" },
+  "repos": [
+    {
+      "repo": "oversire/cli",
+      "ci": "GitHub Actions",
+      "capabilities": ["logs", "rerun", "rerunJob", "cancel", "annotations"],
+      "polledAt": "2026-11-21T14:04:00Z"
+    }
+  ]
+}

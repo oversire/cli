@@ -55,6 +55,12 @@ type MemberCall struct {
 	Action string          `json:"action"`
 	Args   json.RawMessage `json:"args"`
 	From   MemberCaller    `json:"from"`
+	CLI    *MemberCLI      `json:"cli,omitempty"`
+}
+
+// MemberCLI is the oversire command that sent a member call. Agent is empty when a human ran it.
+type MemberCLI struct {
+	Agent string `json:"agent,omitempty"`
 }
 
 // FrameMemberCall is the type of MemberCallFrame on GET /v1/connect.

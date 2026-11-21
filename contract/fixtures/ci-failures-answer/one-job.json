@@ -1,0 +1,23 @@
+{
+  "repo": "oversire/cli",
+  "run": "8980",
+  "attempt": 2,
+  "failures": [
+    {
+      "job": "go test",
+      "jobId": "69950",
+      "step": "go test ./...",
+      "messages": ["Process completed with exit code 1."],
+      "logTail": [
+        "--- FAIL: TestMergePartialFail (0.04s)",
+        "    merge_test.go:88: want 2 conflicts, got 1",
+        "FAIL"
+      ],
+      "url": "https://github.com/oversire/cli/actions/runs/8980/job/69950"
+    }
+  ],
+  "asOf": "2026-11-21T12:14:45Z",
+  "source": "poll",
+  "stale": false,
+  "degraded": false
+}

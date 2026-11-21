@@ -2,13 +2,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://oversire.dev/contract/mirror.json",
   "title": "OverSire mirror feed",
-  "description": "The mirror feed of the home daemon (OVERSIRE-525). The app that holds the automations lease (the source) puts the provider data in the feed. Each other app (a client) reads it with a cursor. The daemon does not read the bodies. Routes: GET /v1/mirror (MirrorHead), GET /v1/mirror/docs (MirrorPage), GET /v1/mirror/index (MirrorIndex, apps only), PUT /v1/mirror/docs (MirrorPut, apps only). All routes are on the home daemon, also when the group has a cloud. A daemon that is not home answers 409 with error and home. The daemon advertises the feature mirror in DaemonInfo.features.",
+  "description": "The mirror feed of the home daemon (OVERSIRE-525). The app that holds the automations lease (the source) puts the provider data in the feed. Each other app (a client) reads it with a cursor. The daemon reads only the bodies named in MirrorDoc.body. Routes: GET /v1/mirror (MirrorHead), GET /v1/mirror/docs (MirrorPage), GET /v1/mirror/index (MirrorIndex, apps only), PUT /v1/mirror/docs (MirrorPut, apps only). All routes are on the home daemon, also when the group has a cloud. A daemon that is not home answers 409 with error and home. The daemon advertises the feature mirror in DaemonInfo.features. Without `with=ci`, the answer of the page and index routes leaves out the docs of the kinds `ciJobs`, `ciChecks` and `ciState`. An app that does not know these kinds thus works. The head `seq` values stay the same, so a page can have gaps in `seq`. The daemon advertises the feature mirror-ci for these kinds (ci.json).",
   "x-oversire-schema": 1,
   "$defs": {
     "Date": { "type": "string", "format": "date-time" },
-    "MirrorKind": { "enum": ["project", "item", "runs", "prs", "activity", "settings", "catalog"] },
+    "MirrorKind": { "enum": ["project", "item", "runs", "prs", "activity", "settings", "catalog", "ciJobs", "ciChecks", "ciState"] },
     "MirrorDoc": {
-      "description": "One doc of the feed. id by kind: project is <storeKey>, item is <storeKey>/<itemId>, runs and prs are <owner>/<repo>, activity is the entry id, settings and catalog are home. v is the version of the body type: a reader skips a higher v. The source does not set seq or hash. The daemon sets hash (sha256 of the body bytes, hex) and seq. A deleted doc is a tombstone and has no body.",
+      "description": "One doc of the feed. id by kind: project is <storeKey>, item is <storeKey>/<itemId>, runs and prs are <owner>/<repo>, activity is the entry id, settings and catalog are home, ciJobs is <owner>/<repo>/<run>/<attempt>, ciChecks is <owner>/<repo>/<sha>, ciState is home. v is the version of the body type: a reader skips a higher v. The source does not set seq or hash. The daemon sets hash (sha256 of the body bytes, hex) and seq. A deleted doc is a tombstone and has no body.",
       "type": "object",
       "properties": {
         "kind": { "$ref": "#/$defs/MirrorKind" },
@@ -18,7 +18,7 @@
         "seq": { "description": "The place of the last change of the doc in the feed.", "type": "integer", "minimum": 0 },
         "at": { "description": "When the source made the doc.", "$ref": "#/$defs/Date" },
         "deleted": { "type": "boolean" },
-        "body": { "type": "object" }
+        "body": { "description": "The daemon reads the bodies of `runs`, `prs` (only CIPullRef), `ciJobs`, `ciChecks` and `ciState` (ci.json). It does not read the other bodies.", "type": "object" }
       },
       "required": ["kind", "id", "v", "hash", "seq", "at"],
       "additionalProperties": false

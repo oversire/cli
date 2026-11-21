@@ -1,0 +1,24 @@
+{
+  "seq": 134,
+  "id": "ci:oversire/cli:2250:1:approved",
+  "at": "2026-10-29T15:35:12Z",
+  "seenAt": "2026-10-29T15:35:13Z",
+  "kind": "ci.approved",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "repo": "oversire/cli",
+  "machine": "mba",
+  "actorType": "agent",
+  "actor": "claude s1",
+  "via": "cli",
+  "summary": "release #2250 approved for production",
+  "payload": {
+    "workflow": "release",
+    "run": 2250,
+    "attempt": 1,
+    "branch": "main",
+    "headSha": "7c3d55b1",
+    "environments": ["production"]
+  }
+}

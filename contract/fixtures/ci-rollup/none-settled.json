@@ -1,0 +1,13 @@
+{
+  "repo": "oversire/site",
+  "ref": "docs-typo",
+  "state": "none",
+  "done": true,
+  "rev": "r2:0",
+  "runs": [],
+  "checks": [],
+  "asOf": "2026-11-21T14:20:00Z",
+  "source": "poll",
+  "stale": true,
+  "degraded": true
+}

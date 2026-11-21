@@ -1,0 +1,7 @@
+{
+  "repo": "oversire/cli",
+  "workflow": "test",
+  "ref": "oversire-542",
+  "inputs": { "verbose": "true", "target": "./wire/..." },
+  "agent": "claude s1"
+}

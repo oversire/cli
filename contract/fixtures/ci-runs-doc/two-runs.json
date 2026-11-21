@@ -1,0 +1,38 @@
+{
+  "runs": [
+    {
+      "id": "9001",
+      "name": "test",
+      "displayTitle": "Add the CI ops contract",
+      "status": "in_progress",
+      "headBranch": "oversire-542",
+      "headSha": "9d1e07a2c4b85f10e3a6d7b9c1f2e4a8b0d3c5e7",
+      "event": "pull_request",
+      "url": "https://github.com/oversire/cli/actions/runs/9001",
+      "updatedAt": "2026-11-21T14:04:12Z",
+      "createdAt": "2026-11-21T14:02:40Z",
+      "startedAt": "2026-11-21T14:02:45Z",
+      "number": 2243,
+      "workflowName": "test",
+      "actorLogin": "flarco",
+      "attempt": 1
+    },
+    {
+      "id": "8990",
+      "name": "test",
+      "displayTitle": "Keep the order of the client frames",
+      "status": "completed",
+      "conclusion": "success",
+      "headBranch": "main",
+      "headSha": "8cb7af8e1d2a3b4c5d6e7f8091a2b3c4d5e6f708",
+      "event": "push",
+      "url": "https://github.com/oversire/cli/actions/runs/8990",
+      "updatedAt": "2026-11-21T13:41:03Z",
+      "createdAt": "2026-11-21T13:36:50Z",
+      "startedAt": "2026-11-21T13:36:55Z",
+      "number": 2242,
+      "workflowName": "test",
+      "actorLogin": "flarco"
+    }
+  ]
+}

@@ -1379,7 +1379,8 @@
       "domain": "ci",
       "actorTypes": [
         "provider",
-        "human"
+        "human",
+        "agent"
       ],
       "private": false,
       "summary": "the attempt",
@@ -1405,6 +1406,137 @@
           },
           "url": {
             "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "workflow",
+          "run",
+          "attempt"
+        ]
+      }
+    },
+    {
+      "kind": "ci.cancelled",
+      "domain": "ci",
+      "actorTypes": [
+        "human",
+        "agent"
+      ],
+      "private": false,
+      "summary": "the cancelled run",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "workflow": {
+            "type": "string"
+          },
+          "run": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "attempt": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "branch": {
+            "type": "string"
+          },
+          "headSha": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "workflow",
+          "run",
+          "attempt"
+        ]
+      }
+    },
+    {
+      "kind": "ci.dispatched",
+      "domain": "ci",
+      "actorTypes": [
+        "human",
+        "agent"
+      ],
+      "private": false,
+      "summary": "the workflow and the ref",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "workflow": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "inputKeys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "run": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "attempt": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "workflow",
+          "ref"
+        ]
+      }
+    },
+    {
+      "kind": "ci.approved",
+      "domain": "ci",
+      "actorTypes": [
+        "human",
+        "agent"
+      ],
+      "private": false,
+      "summary": "the run and the environments",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "workflow": {
+            "type": "string"
+          },
+          "run": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "attempt": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "branch": {
+            "type": "string"
+          },
+          "headSha": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "environments": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "additionalProperties": false,

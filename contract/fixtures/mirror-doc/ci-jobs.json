@@ -1,0 +1,22 @@
+{
+  "kind": "ciJobs",
+  "id": "oversire/cli/9001/1",
+  "v": 1,
+  "hash": "c3a1e5f7092b4d6c8e0a2f4b6d8c0e1a3b5d7f9021436587a9bacdcfe1f30415",
+  "seq": 21,
+  "at": "2026-11-21T14:04:12Z",
+  "body": {
+    "repo": "oversire/cli",
+    "run": "9001",
+    "attempt": 1,
+    "status": "in_progress",
+    "headSha": "9d1e07a2c4b85f10e3a6d7b9c1f2e4a8b0d3c5e7",
+    "headBranch": "oversire-542",
+    "event": "pull_request",
+    "url": "https://github.com/oversire/cli/actions/runs/9001",
+    "jobs": [],
+    "failures": [],
+    "final": false,
+    "fetchedAt": "2026-11-21T14:04:12Z"
+  }
+}

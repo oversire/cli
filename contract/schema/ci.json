@@ -1,0 +1,995 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oversire.dev/contract/ci.json",
+  "title": "OverSire CI ops",
+  "description": "The CI data for the agents (OVERSIRE-542). The app writes the `ciJobs`, `ciChecks` and `ciState` docs and the `runs` doc into the mirror feed (mirror.json). The home daemon reads these bodies and answers GET /v1/ci with the answer types below. The daemon makes no vendor call. The app serves the app-call actions ci.* (app-call.json). The daemon advertises the features mirror-ci and ci in DaemonInfo.features. Times are ISO 8601 text. The types marked P2 and P3 belong to later phases of the CI ops epic.",
+  "x-oversire-schema": 1,
+  "$defs": {
+    "Date": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "CIRun": {
+      "description": "One run, as the Swift Run. The app decodes `id` from a string or a number and writes a string. Times are ISO 8601 text. The app may write more fields later.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "displayTitle": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/CIRunStatus"
+        },
+        "conclusion": {
+          "type": "string"
+        },
+        "headBranch": {
+          "type": "string"
+        },
+        "headSha": {
+          "type": "string"
+        },
+        "event": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "startedAt": {
+          "type": "string"
+        },
+        "number": {
+          "type": "integer"
+        },
+        "workflowName": {
+          "type": "string"
+        },
+        "actorLogin": {
+          "type": "string"
+        },
+        "attempt": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "displayTitle",
+        "status",
+        "headBranch",
+        "headSha",
+        "event",
+        "url",
+        "updatedAt",
+        "createdAt",
+        "number"
+      ],
+      "additionalProperties": true
+    },
+    "CIRunStatus": {
+      "description": "The raw value of RunStatus: queued, in_progress or completed. A vendor state that the adapter does not map passes through.",
+      "type": "string"
+    },
+    "CIRunsDoc": {
+      "description": "The body of a `runs` mirror doc (Swift MirrorRuns). At most RUNS_PER_REPO runs for each repo. The default is 10. The setting runsPerRepo allows 1 to 100.",
+      "type": "object",
+      "properties": {
+        "runs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CIRun"
+          }
+        }
+      },
+      "required": [
+        "runs"
+      ],
+      "additionalProperties": false
+    },
+    "CIPullRef": {
+      "description": "The fields of a ChangeRequest in a `prs` doc that the daemon reads to resolve #123. The doc has more fields.",
+      "type": "object",
+      "properties": {
+        "number": {
+          "type": "integer"
+        },
+        "headRefName": {
+          "type": "string"
+        },
+        "headSha": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "number",
+        "headRefName",
+        "url"
+      ],
+      "additionalProperties": true
+    },
+    "CIPRsDoc": {
+      "description": "The body of a `prs` mirror doc, as the daemon reads it. It has no fixture folder: a fixture with only these fields does not decode as Swift MirrorPRs.",
+      "type": "object",
+      "properties": {
+        "prs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CIPullRef"
+          }
+        }
+      },
+      "required": [
+        "prs"
+      ],
+      "additionalProperties": true
+    },
+    "CIStep": {
+      "description": "Same as Swift Step.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "conclusion": {
+          "type": "string"
+        },
+        "startedAt": {
+          "type": "string"
+        },
+        "completedAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "CIJob": {
+      "description": "Same as Swift Job. The app may write more fields later.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "conclusion": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "startedAt": {
+          "type": "string"
+        },
+        "completedAt": {
+          "type": "string"
+        },
+        "runnerName": {
+          "type": "string"
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CIStep"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "additionalProperties": true
+    },
+    "CIFailureView": {
+      "description": "Why a job failed: the failed step, the annotations and the tail of the log.",
+      "type": "object",
+      "properties": {
+        "job": {
+          "type": "string"
+        },
+        "jobId": {
+          "type": "string"
+        },
+        "step": {
+          "type": "string"
+        },
+        "messages": {
+          "description": "The annotation texts.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "logTail": {
+          "description": "At most 40 lines. The app strips the time stamps of GitHub Actions with CILog.clean. The lines of other vendors pass through.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 40
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "job",
+        "jobId",
+        "messages"
+      ],
+      "additionalProperties": false
+    },
+    "CIJobsDoc": {
+      "description": "The body of a `ciJobs` mirror doc. The id is <owner>/<repo>/<run>/<attempt>.",
+      "type": "object",
+      "properties": {
+        "repo": {
+          "type": "string"
+        },
+        "run": {
+          "type": "string"
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "status": {
+          "$ref": "#/$defs/CIRunStatus"
+        },
+        "conclusion": {
+          "type": "string"
+        },
+        "workflow": {
+          "type": "string"
+        },
+        "headSha": {
+          "type": "string"
+        },
+        "headBranch": {
+          "type": "string"
+        },
+        "event": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "jobs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CIJob"
+          }
+        },
+        "failures": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CIFailureView"
+          }
+        },
+        "final": {
+          "description": "True when the attempt is completed and the jobs, the failures and the log tails are complete. The app does not fetch a final attempt again.",
+          "type": "boolean"
+        },
+        "fetchedAt": {
+          "$ref": "#/$defs/Date"
+        }
+      },
+      "required": [
+        "repo",
+        "run",
+        "attempt",
+        "status",
+        "headSha",
+        "headBranch",
+        "event",
+        "url",
+        "jobs",
+        "failures",
+        "final",
+        "fetchedAt"
+      ],
+      "additionalProperties": false
+    },
+    "CICheckKind": {
+      "enum": [
+        "checkRun",
+        "status"
+      ]
+    },
+    "CICheckState": {
+      "enum": [
+        "pending",
+        "running",
+        "success",
+        "failure",
+        "cancelled",
+        "neutral",
+        "skipped"
+      ]
+    },
+    "CICheck": {
+      "description": "A check that is not Actions: a check run of another app, or a commit status (for example Vercel). It is read only.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "app": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/CICheckKind"
+        },
+        "state": {
+          "$ref": "#/$defs/CICheckState"
+        },
+        "conclusion": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "startedAt": {
+          "type": "string"
+        },
+        "completedAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "kind",
+        "state"
+      ],
+      "additionalProperties": false
+    },
+    "CIChecksDoc": {
+      "description": "The body of a `ciChecks` mirror doc. The id is <owner>/<repo>/<sha>.",
+      "type": "object",
+      "properties": {
+        "repo": {
+          "type": "string"
+        },
+        "sha": {
+          "type": "string"
+        },
+        "prs": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CICheck"
+          }
+        },
+        "final": {
+          "description": "True when each check is completed.",
+          "type": "boolean"
+        },
+        "fetchedAt": {
+          "$ref": "#/$defs/Date"
+        }
+      },
+      "required": [
+        "repo",
+        "sha",
+        "prs",
+        "checks",
+        "final",
+        "fetchedAt"
+      ],
+      "additionalProperties": false
+    },
+    "CISource": {
+      "description": "How the app gets the CI data: webhook (live events from the cloud) or poll.",
+      "enum": [
+        "webhook",
+        "poll"
+      ]
+    },
+    "CIBudget": {
+      "description": "Same as Swift RateBudget.",
+      "type": "object",
+      "properties": {
+        "limit": {
+          "type": "integer"
+        },
+        "remaining": {
+          "type": "integer"
+        },
+        "resetAt": {
+          "$ref": "#/$defs/Date"
+        }
+      },
+      "required": [
+        "limit",
+        "remaining",
+        "resetAt"
+      ],
+      "additionalProperties": false
+    },
+    "CIRepoState": {
+      "description": "The CI state of one tracked repo.",
+      "type": "object",
+      "properties": {
+        "repo": {
+          "type": "string"
+        },
+        "ci": {
+          "description": "The display name of the CI provider, for example GitHub Actions. The daemon uses it in the 422 text \"<CI> has no X.\".",
+          "type": "string"
+        },
+        "capabilities": {
+          "description": "The raw values of Capability, for example logs, rerun, rerunJob, cancel, annotations.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "polledAt": {
+          "description": "The time of the last good runs fetch of the repo.",
+          "$ref": "#/$defs/Date"
+        }
+      },
+      "required": [
+        "repo",
+        "ci",
+        "capabilities"
+      ],
+      "additionalProperties": false
+    },
+    "CIStateDoc": {
+      "description": "The body of the one `ciState` mirror doc. The id is home.",
+      "type": "object",
+      "properties": {
+        "asOf": {
+          "description": "The time of the last change of the CI data in the app.",
+          "$ref": "#/$defs/Date"
+        },
+        "source": {
+          "$ref": "#/$defs/CISource"
+        },
+        "degraded": {
+          "description": "True when the remaining quota is below 10 % of the limit.",
+          "type": "boolean"
+        },
+        "budget": {
+          "$ref": "#/$defs/CIBudget"
+        },
+        "repos": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CIRepoState"
+          }
+        }
+      },
+      "required": [
+        "asOf",
+        "source",
+        "degraded",
+        "repos"
+      ],
+      "additionalProperties": false
+    },
+    "CIRollupState": {
+      "enum": [
+        "pending",
+        "running",
+        "success",
+        "failure",
+        "cancelled",
+        "none"
+      ]
+    },
+    "CIRunView": {
+      "description": "One run in an answer.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "attempt": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "workflow": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/CIRunStatus"
+        },
+        "conclusion": {
+          "type": "string"
+        },
+        "branch": {
+          "type": "string"
+        },
+        "sha": {
+          "type": "string"
+        },
+        "event": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "startedAt": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        },
+        "durationS": {
+          "type": "integer"
+        },
+        "etaS": {
+          "type": "integer"
+        },
+        "jobs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CIJob"
+          }
+        },
+        "failures": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CIFailureView"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "attempt",
+        "name",
+        "status",
+        "branch",
+        "sha",
+        "event",
+        "url",
+        "updatedAt"
+      ],
+      "additionalProperties": false
+    },
+    "CIRollup": {
+      "description": "The answer of GET /v1/ci/status and GET /v1/ci/wait. Each answer type repeats the freshness fields (asOf, source, stale, degraded).",
+      "type": "object",
+      "properties": {
+        "repo": {
+          "type": "string"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "sha": {
+          "type": "string"
+        },
+        "pr": {
+          "type": "integer"
+        },
+        "state": {
+          "$ref": "#/$defs/CIRollupState"
+        },
+        "done": {
+          "description": "True when no run or check can change the state.",
+          "type": "boolean"
+        },
+        "rev": {
+          "description": "Opaque text. It changes when the rollup changes. `wait` uses it as `since`.",
+          "type": "string"
+        },
+        "runs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CIRunView"
+          }
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CICheck"
+          }
+        },
+        "asOf": {
+          "description": "The time of the last change of the CI data in the app.",
+          "$ref": "#/$defs/Date"
+        },
+        "source": {
+          "$ref": "#/$defs/CISource"
+        },
+        "stale": {
+          "description": "True when the data may be out of date.",
+          "type": "boolean"
+        },
+        "degraded": {
+          "description": "True when the remaining quota is below 10 % of the limit.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "repo",
+        "ref",
+        "state",
+        "done",
+        "rev",
+        "runs",
+        "checks",
+        "asOf",
+        "source",
+        "stale",
+        "degraded"
+      ],
+      "additionalProperties": false
+    },
+    "CIRunsPage": {
+      "description": "The answer of a list of runs.",
+      "type": "object",
+      "properties": {
+        "repo": {
+          "type": "string"
+        },
+        "runs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CIRunView"
+          }
+        },
+        "asOf": {
+          "description": "The time of the last change of the CI data in the app.",
+          "$ref": "#/$defs/Date"
+        },
+        "source": {
+          "$ref": "#/$defs/CISource"
+        },
+        "stale": {
+          "description": "True when the data may be out of date.",
+          "type": "boolean"
+        },
+        "degraded": {
+          "description": "True when the remaining quota is below 10 % of the limit.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "repo",
+        "runs",
+        "asOf",
+        "source",
+        "stale",
+        "degraded"
+      ],
+      "additionalProperties": false
+    },
+    "CIRunAnswer": {
+      "description": "The answer for one run.",
+      "type": "object",
+      "properties": {
+        "run": {
+          "$ref": "#/$defs/CIRunView"
+        },
+        "asOf": {
+          "description": "The time of the last change of the CI data in the app.",
+          "$ref": "#/$defs/Date"
+        },
+        "source": {
+          "$ref": "#/$defs/CISource"
+        },
+        "stale": {
+          "description": "True when the data may be out of date.",
+          "type": "boolean"
+        },
+        "degraded": {
+          "description": "True when the remaining quota is below 10 % of the limit.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "run",
+        "asOf",
+        "source",
+        "stale",
+        "degraded"
+      ],
+      "additionalProperties": false
+    },
+    "CIFailuresAnswer": {
+      "description": "The failures of one attempt.",
+      "type": "object",
+      "properties": {
+        "repo": {
+          "type": "string"
+        },
+        "run": {
+          "type": "string"
+        },
+        "attempt": {
+          "type": "integer"
+        },
+        "failures": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CIFailureView"
+          }
+        },
+        "asOf": {
+          "description": "The time of the last change of the CI data in the app.",
+          "$ref": "#/$defs/Date"
+        },
+        "source": {
+          "$ref": "#/$defs/CISource"
+        },
+        "stale": {
+          "description": "True when the data may be out of date.",
+          "type": "boolean"
+        },
+        "degraded": {
+          "description": "True when the remaining quota is below 10 % of the limit.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "repo",
+        "run",
+        "attempt",
+        "failures",
+        "asOf",
+        "source",
+        "stale",
+        "degraded"
+      ],
+      "additionalProperties": false
+    },
+    "CILogView": {
+      "description": "The tail of a job log.",
+      "type": "object",
+      "properties": {
+        "repo": {
+          "type": "string"
+        },
+        "jobId": {
+          "type": "string"
+        },
+        "run": {
+          "type": "string"
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "complete": {
+          "description": "True when the job is completed and the log will not change.",
+          "type": "boolean"
+        },
+        "truncated": {
+          "description": "True when the log has more lines than the answer.",
+          "type": "boolean"
+        },
+        "cached": {
+          "type": "boolean"
+        },
+        "asOf": {
+          "description": "The time of the last change of the CI data in the app.",
+          "$ref": "#/$defs/Date"
+        },
+        "source": {
+          "$ref": "#/$defs/CISource"
+        },
+        "stale": {
+          "description": "True when the data may be out of date.",
+          "type": "boolean"
+        },
+        "degraded": {
+          "description": "True when the remaining quota is below 10 % of the limit.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "repo",
+        "jobId",
+        "lines",
+        "complete",
+        "truncated",
+        "cached",
+        "asOf",
+        "source",
+        "stale",
+        "degraded"
+      ],
+      "additionalProperties": false
+    },
+    "CIWorkflow": {
+      "description": "A workflow or a pipeline definition.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "description": "From Swift Pipeline.path. Empty when the vendor gives none.",
+          "type": "string"
+        },
+        "state": {
+          "description": "The app does not read the workflow state now.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "CIWorkflows": {
+      "description": "The workflows of a repo.",
+      "type": "object",
+      "properties": {
+        "repo": {
+          "type": "string"
+        },
+        "workflows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CIWorkflow"
+          }
+        },
+        "asOf": {
+          "description": "The time of the last change of the CI data in the app.",
+          "$ref": "#/$defs/Date"
+        },
+        "source": {
+          "$ref": "#/$defs/CISource"
+        },
+        "stale": {
+          "description": "True when the data may be out of date.",
+          "type": "boolean"
+        },
+        "degraded": {
+          "description": "True when the remaining quota is below 10 % of the limit.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "repo",
+        "workflows",
+        "asOf",
+        "source",
+        "stale",
+        "degraded"
+      ],
+      "additionalProperties": false
+    },
+    "CIActionRequest": {
+      "description": "P2. The args of the write actions ci.rerun, ci.rerunJob, ci.cancel, ci.dispatch and ci.approve.",
+      "type": "object",
+      "properties": {
+        "repo": {
+          "type": "string"
+        },
+        "run": {
+          "type": "string"
+        },
+        "job": {
+          "type": "string"
+        },
+        "failedOnly": {
+          "type": "boolean"
+        },
+        "workflow": {
+          "type": "string"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "inputs": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "environments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "comment": {
+          "type": "string"
+        },
+        "agent": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo"
+      ],
+      "additionalProperties": false
+    },
+    "CIActionResult": {
+      "description": "P2. The data of an ok result of a write action.",
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean"
+        },
+        "noop": {
+          "description": "True when the action had nothing to do, for example a rerun of a running attempt.",
+          "type": "boolean"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "run": {
+          "$ref": "#/$defs/CIRunView"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "ok",
+        "noop",
+        "summary"
+      ],
+      "additionalProperties": false
+    },
+    "CIWatch": {
+      "description": "P3. A request to keep the CI data of a ref fresh.",
+      "type": "object",
+      "properties": {
+        "repo": {
+          "type": "string"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "ttl": {
+          "description": "Seconds.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "expiresAt": {
+          "$ref": "#/$defs/Date"
+        }
+      },
+      "required": [
+        "repo",
+        "ref",
+        "ttl"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

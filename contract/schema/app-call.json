@@ -10,7 +10,7 @@
       "type": "object",
       "properties": {
         "id": { "description": "The id of the call. The daemon makes it.", "type": "string", "minLength": 1 },
-        "action": { "type": "string", "minLength": 1 },
+        "action": { "description": "A free string, an id of the action catalog. The CI actions are below (ci.json). A `ci.*` read action on a repo that OverSire does not track answers notAllowed.\n\nci.log: args {repo, jobId, lines?} (lines 1 to 2000, default 200), data CILogView (P1).\nci.jobs: args {repo, runId, attempt?, fresh?}, data CIJobsDoc (P1).\nci.workflows: args {repo}, data CIWorkflows (P1).\nci.refresh: args {repo}, no data. The app fetches the runs of the repo once (P1).\nci.rerun, ci.rerunJob, ci.cancel, ci.dispatch, ci.approve: args CIActionRequest, data CIActionResult (P2).", "type": "string", "minLength": 1 },
         "args": { "type": "object" },
         "agent": { "description": "For example codex or claude. Absent: a human ran the command.", "type": "string", "minLength": 1 }
       },
@@ -71,7 +71,15 @@
         "id": { "description": "The id of the call. The daemon makes it.", "type": "string", "minLength": 1 },
         "action": { "type": "string", "minLength": 1 },
         "args": { "type": "object" },
-        "from": { "$ref": "#/$defs/MemberCaller" }
+        "from": { "$ref": "#/$defs/MemberCaller" },
+        "cli": {
+          "description": "Set when an oversire command sends the call through a daemon. The app names the agent as the actor, via cli@<machine>. Absent: a click of a client app.",
+          "type": "object",
+          "properties": {
+            "agent": { "description": "<harness> <session>, as AppCall.agent. Absent: a human ran the command.", "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        }
       },
       "required": ["id", "action", "args", "from"],
       "additionalProperties": false

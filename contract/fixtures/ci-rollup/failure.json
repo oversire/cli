@@ -1,0 +1,40 @@
+{
+  "repo": "oversire/cli",
+  "ref": "oversire-540",
+  "sha": "5f3a2b1c9d8e7f60a1b2c3d4e5f60718293a4b5c",
+  "pr": 86,
+  "state": "failure",
+  "done": true,
+  "rev": "r9:4",
+  "runs": [
+    {
+      "id": "8980",
+      "attempt": 2,
+      "name": "test",
+      "workflow": "test",
+      "status": "completed",
+      "conclusion": "failure",
+      "branch": "oversire-540",
+      "sha": "5f3a2b1c9d8e7f60a1b2c3d4e5f60718293a4b5c",
+      "event": "pull_request",
+      "url": "https://github.com/oversire/cli/actions/runs/8980/attempts/2",
+      "startedAt": "2026-11-21T12:10:05Z",
+      "updatedAt": "2026-11-21T12:14:40Z",
+      "durationS": 275,
+      "failures": [
+        {
+          "job": "go test",
+          "jobId": "69950",
+          "step": "go test ./...",
+          "messages": ["Process completed with exit code 1."],
+          "logTail": ["--- FAIL: TestMergePartialFail (0.04s)", "FAIL"]
+        }
+      ]
+    }
+  ],
+  "checks": [],
+  "asOf": "2026-11-21T12:14:45Z",
+  "source": "poll",
+  "stale": false,
+  "degraded": false
+}

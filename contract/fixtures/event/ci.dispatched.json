@@ -1,0 +1,21 @@
+{
+  "seq": 133,
+  "id": "ci:oversire/cli:test:oversire-374:dispatched:1",
+  "at": "2026-10-29T15:34:12Z",
+  "seenAt": "2026-10-29T15:34:13Z",
+  "kind": "ci.dispatched",
+  "item": "OVERSIRE-374",
+  "parentItem": "OVERSIRE-371",
+  "project": "oversire",
+  "repo": "oversire/cli",
+  "machine": "mba",
+  "actorType": "agent",
+  "actor": "claude s1",
+  "via": "cli",
+  "summary": "test on oversire-374",
+  "payload": {
+    "workflow": "test",
+    "ref": "oversire-374",
+    "inputKeys": ["verbose", "target"]
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "id": "m-5b21c1",
+  "action": "ci.rerun",
+  "args": {
+    "repo": "oversire/cli",
+    "run": "8980",
+    "failedOnly": true
+  },
+  "from": {
+    "machine": "mba",
+    "name": "OverSire on mba",
+    "device": "dev-9c41e2"
+  },
+  "cli": {
+    "agent": "claude s1"
+  }
+}

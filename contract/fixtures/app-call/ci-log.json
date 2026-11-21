@@ -1,0 +1,10 @@
+{
+  "id": "c-7f3a93",
+  "action": "ci.log",
+  "args": {
+    "repo": "oversire/cli",
+    "jobId": "69950",
+    "lines": 100
+  },
+  "agent": "claude s1"
+}

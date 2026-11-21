@@ -1,0 +1,26 @@
+{
+  "repo": "oversire/site",
+  "sha": "3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f",
+  "prs": [41],
+  "checks": [
+    {
+      "name": "Vercel",
+      "app": "vercel",
+      "kind": "status",
+      "state": "pending",
+      "url": "https://vercel.com/oversire/site/deployments"
+    },
+    {
+      "name": "lint",
+      "app": "github-actions",
+      "kind": "checkRun",
+      "state": "success",
+      "conclusion": "success",
+      "url": "https://github.com/oversire/site/runs/5501",
+      "startedAt": "2026-11-21T14:01:00Z",
+      "completedAt": "2026-11-21T14:01:40Z"
+    }
+  ],
+  "final": false,
+  "fetchedAt": "2026-11-21T14:04:12Z"
+}
