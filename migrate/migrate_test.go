@@ -133,7 +133,7 @@ func TestMigrateOldLayout(t *testing.T) {
 
 	f.run.calls = nil
 	r, err = f.migrator("linux").Run(context.Background())
-	if err != nil || r.Changed() {
+	if err != nil || changed(r) {
 		t.Fatalf("second run %+v %v", r, err)
 	}
 }
@@ -141,7 +141,7 @@ func TestMigrateOldLayout(t *testing.T) {
 func TestMigrateNothing(t *testing.T) {
 	f := setup(t)
 	r, err := f.migrator("darwin").Run(context.Background())
-	if err != nil || r.Changed() || len(r.Notes) != 0 {
+	if err != nil || changed(r) || len(r.Notes) != 0 {
 		t.Fatalf("%+v %v", r, err)
 	}
 	if b, _ := os.ReadFile(f.appConfig); string(b) != f.appContents {
@@ -193,3 +193,5 @@ func hasCall(f *fakeRun, words ...string) bool {
 	}
 	return false
 }
+
+func changed(r Report) bool { return r.Config || r.Data || r.Token || r.Service || r.Binary }

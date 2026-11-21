@@ -1,6 +1,7 @@
 package capture
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"path/filepath"
@@ -98,7 +99,7 @@ func TestSessionRows(t *testing.T) {
 	s := wire.DaemonSession{ID: "s2", Key: "work:OVERSIRE-12", Harness: "codex", Runtime: "orca", Sources: []string{"orca"}, StartedAt: &t0}
 	step := func(min int, phase wire.SessionPhase, reason wire.SessionReason, action string) {
 		s.State, s.Reason, s.StateSince = phase, reason, t0.Add(time.Duration(min)*time.Minute)
-		r.OnSend(s, cmpOr(action, string(phase)), s.StateSince)
+		r.OnSend(s, cmp.Or(action, string(phase)), s.StateSince)
 	}
 	step(0, wire.PhaseWorking, "", "")
 	step(5, wire.PhaseWaiting, wire.ReasonPermission, "")

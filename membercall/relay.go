@@ -5,8 +5,6 @@ package membercall
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -269,9 +267,7 @@ func isObject(b json.RawMessage) bool {
 }
 
 func newID() string {
-	b := make([]byte, 8)
-	_, _ = rand.Read(b)
-	return "m-" + hex.EncodeToString(b)
+	return "m-" + wire.RandomHex(8)
 }
 
 func reply(w http.ResponseWriter, code int, v any) {

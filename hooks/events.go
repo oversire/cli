@@ -1,6 +1,7 @@
 package hooks
 
 import (
+	"cmp"
 	"encoding/json"
 	"regexp"
 	"strconv"
@@ -167,7 +168,7 @@ func (r *recorder) rows(ev Event, p payload, session string, reason wire.Session
 		if s.model != "" {
 			pl["model"] = s.model
 		}
-		if cwd := cmpOr(p.Cwd, ev.Env.WorktreePath); cwd != "" {
+		if cwd := cmp.Or(p.Cwd, ev.Env.WorktreePath); cwd != "" {
 			pl["cwd"] = cwd
 		}
 		if ev.Env.PaneKey != "" {
@@ -321,11 +322,4 @@ func secs(d time.Duration) int {
 		return 0
 	}
 	return int(d.Round(time.Second) / time.Second)
-}
-
-func cmpOr(a, b string) string {
-	if a != "" {
-		return a
-	}
-	return b
 }

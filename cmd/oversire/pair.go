@@ -21,7 +21,6 @@ type pairResult struct {
 	Token     string `json:"token"`
 	DeviceID  string `json:"deviceId"`
 	Role      string `json:"role"`
-	Account   string `json:"account"`
 	HookRoute string `json:"hookRoute"`
 }
 
@@ -92,7 +91,7 @@ func (c *cli) pair(ctx context.Context, args []string) error {
 		return fmt.Errorf("store the token: %w", err)
 	}
 	cfg := old
-	cfg.Hub, cfg.Device, cfg.Account, cfg.Name = *hub, res.DeviceID, res.Account, *name
+	cfg.Hub, cfg.Device, cfg.Name = *hub, res.DeviceID, *name
 	if !cfg.Has(config.RoleServe) && len(cfg.Roles) == 0 {
 		cfg.Roles = []string{config.RoleServe}
 	}

@@ -736,3 +736,16 @@ func option(row string) (int, string, bool) {
 	}
 	return n, strings.TrimSpace(t[dot+1:]), true
 }
+
+func TestQuestionEventDefaultsToCLI(t *testing.T) {
+	r := newRig(t)
+	r.ch.event(wire.DaemonSession{ID: "s1", Machine: "mbp", Cwd: "/w/app", State: wire.PhaseWaiting}, "q1", t0)
+	if r.log.count() != 1 {
+		t.Fatalf("events: %d", r.log.count())
+	}
+	ev := r.log.all[0]
+	want := wire.AccountID{Provider: wire.RuntimeCLI, ID: "mbp"}
+	if ev.Provider != wire.RuntimeCLI || ev.Account != want || ev.Kind != "session" || ev.Action != "question" {
+		t.Fatalf("event: %+v", ev)
+	}
+}

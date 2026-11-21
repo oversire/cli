@@ -1,7 +1,9 @@
 package config
 
 import (
+	"bytes"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -29,6 +31,43 @@ func TestConfigKeepsSessionFields(t *testing.T) {
 	c, ok, err := p.LoadConfig()
 	if err != nil || !ok || c.MaxSessions != 3 || c.DataDir != "/data" {
 		t.Fatal(c, ok, err)
+	}
+}
+
+func TestLoadConfigIgnoresAccount(t *testing.T) {
+	p := Paths{Dir: t.TempDir()}
+	if err := os.WriteFile(p.Config(), []byte(`{"hub":"h","account":"acc"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c, ok, err := p.LoadConfig()
+	if err != nil || !ok || c.Hub != "h" {
+		t.Fatal(c, ok, err)
+	}
+}
+
+func TestWriteFile(t *testing.T) {
+	for _, perm := range []os.FileMode{0o600, 0o644} {
+		path := filepath.Join(t.TempDir(), "a", "b", "f.json")
+		if err := WriteFile(path, []byte("x"), perm); err != nil {
+			t.Fatal(err)
+		}
+		got, err := os.ReadFile(path)
+		if err != nil || string(got) != "x" {
+			t.Fatal(string(got), err)
+		}
+		if fi, _ := os.Stat(path); fi.Mode().Perm() != perm {
+			t.Fatalf("mode %v want %v", fi.Mode().Perm(), perm)
+		}
+		if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
+			t.Fatal("temp file left", err)
+		}
+	}
+	path := filepath.Join(t.TempDir(), "j.json")
+	if err := WriteJSON(path, map[string]int{"a": 1}); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(path); !bytes.HasSuffix(b, []byte("}\n")) {
+		t.Fatalf("%q", b)
 	}
 }
 

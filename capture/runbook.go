@@ -1,6 +1,7 @@
 package capture
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"sync"
@@ -25,7 +26,7 @@ func NewRunbookRows(w *Writer) *RunbookRows {
 func (r *RunbookRows) OnChange(run wire.RunbookRun) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	book := cmpOr(run.Runbook.Name, run.Runbook.ID)
+	book := cmp.Or(run.Runbook.Name, run.Runbook.ID)
 	base := wire.EventDraft{Item: run.Item.Key, Repo: run.Repo, Machine: run.Machine,
 		ActorType: wire.ActorSystem, Actor: "oversire", Via: "runbook"}
 	if r.once(run.ID) {

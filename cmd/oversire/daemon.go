@@ -152,7 +152,7 @@ var sessionStopWait = 30 * time.Second
 // Stop ends a daemon session with a sessionStop order and waits for its result.
 func (d daemonClient) Stop(ctx context.Context, s wire.DaemonSession) error {
 	now := time.Now().UTC()
-	ref := wire.SessionRef{Workspace: wire.WorkspaceRef{Account: wire.AccountID{Provider: s.Runtime, ID: "local"}, ID: s.Workspace}, ID: s.ID}
+	ref := s.Ref()
 	if s.Terminal != "" {
 		ref.ID = s.Terminal
 	}

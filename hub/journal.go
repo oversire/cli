@@ -3,10 +3,10 @@ package hub
 import (
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"slices"
 	"sync"
 
+	"github.com/oversire/cli/config"
 	"github.com/oversire/cli/wire"
 )
 
@@ -126,18 +126,7 @@ func (j *Journal) save() {
 		return // a newer state is in the file
 	}
 	j.written = v
-	_ = writeFile(j.path, b)
-}
-
-func writeFile(path string, b []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	_ = config.WriteFile(j.path, b, 0o600)
 }
 
 // readOnly tells an op that changes nothing.

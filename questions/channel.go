@@ -1,11 +1,11 @@
 package questions
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"reflect"
 	"sort"
 	"strconv"
@@ -520,25 +520,8 @@ func (c *Channel) event(s wire.DaemonSession, question string, now time.Time) {
 	if question != "" {
 		id = fmt.Sprintf("daemon-%s-%s-question-%s-%d", s.Machine, s.ID, question, now.UnixNano())
 	}
-	runtime := s.Runtime
-	if runtime == "" {
-		runtime = wire.RuntimeCLI
-	}
-	acct := wire.AccountID{Provider: runtime, ID: s.Machine}
-	ws := s.Workspace
-	if ws == "" {
-		ws = s.Cwd
-	}
-	title := s.Repo
-	if title == "" && s.Cwd != "" {
-		title = filepath.Base(s.Cwd)
-	}
-	c.log.Append(wire.ProviderEvent{
-		ID: id, Schema: 1, Provider: runtime, Account: acct, Kind: "session", Action: "question",
-		Subject: wire.SessionSubject(wire.SessionRef{Workspace: wire.WorkspaceRef{Account: acct, ID: ws}, ID: s.ID}),
-		At:      now,
-		Summary: &wire.EventSummary{Title: title, Status: string(s.State), Actor: s.Harness},
-	})
+	s.Runtime = cmp.Or(s.Runtime, wire.RuntimeCLI)
+	c.log.Append(s.Event(id, s.Machine, "question", now))
 }
 
 func (c *Channel) kick(session string) {

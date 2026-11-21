@@ -39,7 +39,7 @@ func (s *session) ask(p *agentwire.Permission, at time.Time) {
 	if s.overseer != "" {
 		timeout = s.rt.opts.OverseenTimeout
 	}
-	op := &openPermission{at: at.UTC(), prompt: wire.PermissionPrompt{ID: p.ID, Tool: tool, Text: clip(text, maxText), ExpiresAt: at.Add(timeout).UTC()}}
+	op := &openPermission{at: at.UTC(), prompt: wire.PermissionPrompt{ID: p.ID, Tool: tool, Text: wire.ClipWithEllipsis(text, maxText), ExpiresAt: at.Add(timeout).UTC()}}
 	s.permissions = append(s.permissions, op)
 	s.log.add("? " + tool + ": " + op.prompt.Text)
 	if s.live {

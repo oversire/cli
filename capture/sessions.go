@@ -1,6 +1,7 @@
 package capture
 
 import (
+	"cmp"
 	"encoding/json"
 	"slices"
 	"strconv"
@@ -68,7 +69,7 @@ func (r *SessionRows) rows(s wire.DaemonSession, action string, at time.Time) []
 		if s.StartedAt != nil {
 			started = *s.StartedAt
 		}
-		pl := map[string]any{"harness": cmpOr(s.Harness, "agent"), "runtime": s.Runtime}
+		pl := map[string]any{"harness": cmp.Or(s.Harness, "agent"), "runtime": s.Runtime}
 		if s.Model != "" {
 			pl["model"] = s.Model
 		}

@@ -1,6 +1,7 @@
 package agentsecret
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -271,7 +272,7 @@ func (h *Home) Resolve(ctx context.Context, in wire.AgentSecretResolve) (wire.Ag
 	if in.Order != "" {
 		pl["order"] = in.Order
 	}
-	h.add(wire.DaemonSession{Key: in.Order}, wire.EventDraft{ID: "secret:resolve:" + cmpOr(in.Order, in.Machine) + ":" + strconv.FormatInt(now.UnixMilli(), 10),
+	h.add(wire.DaemonSession{Key: in.Order}, wire.EventDraft{ID: "secret:resolve:" + cmp.Or(in.Order, in.Machine) + ":" + strconv.FormatInt(now.UnixMilli(), 10),
 		At: now, Kind: "secret.resolved", ActorType: wire.ActorSystem, Actor: "agent-secrets", Via: "daemon",
 		Summary: fmt.Sprintf("%s got %d %s of %s", in.Machine, len(keys), noun, agent), Payload: mustJSON(pl)})
 	h.Log.Info("agent secrets resolved", "machine", in.Machine, "order", in.Order, "keys", keys)
@@ -320,13 +321,6 @@ func (h *Home) add(s wire.DaemonSession, d wire.EventDraft) {
 
 func mustJSON(v any) json.RawMessage {
 	b, _ := json.Marshal(v)
-	return b
-}
-
-func cmpOr(a, b string) string {
-	if a != "" {
-		return a
-	}
 	return b
 }
 

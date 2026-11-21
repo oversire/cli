@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -112,7 +113,6 @@ func (s ServeConfig) UseTailscale() bool { return s.Tailscale == nil || *s.Tails
 type Config struct {
 	Hub       string   `json:"hub,omitempty"`
 	Device    string   `json:"device,omitempty"`
-	Account   string   `json:"account,omitempty"`
 	Name      string   `json:"name,omitempty"`
 	Roles     []string `json:"roles,omitempty"`
 	KeepAwake bool     `json:"keepAwake,omitempty"`
@@ -230,18 +230,23 @@ func (p Paths) LoadConfig() (c Config, ok bool, err error) {
 
 func (p Paths) SaveConfig(c Config) error { return WriteJSON(p.Config(), c) }
 
-// WriteJSON writes v with mode 0600 through a temporary file and a rename.
+// WriteFile writes data through a temporary file and a rename, so a crash never leaves half a file.
+func WriteFile(path string, data []byte, perm fs.FileMode) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, perm); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
+}
+
+// WriteJSON writes v and a newline with mode 0600 through WriteFile.
 func WriteJSON(path string, v any) error {
 	b, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, append(b, '\n'), 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	return WriteFile(path, append(b, '\n'), 0o600)
 }

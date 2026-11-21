@@ -323,3 +323,18 @@ func TestRecordAndOnApply(t *testing.T) {
 		t.Fatalf("on apply = %+v", got)
 	}
 }
+
+func TestApplyHeadIsTheLastSeq(t *testing.T) {
+	l := openLog(t)
+	put := func(id string, ms int64) wire.StoreOp {
+		return wire.StoreOp{Schema: 1, Collection: "c", ID: id, Op: wire.StorePut, Record: json.RawMessage(`{}`), HLC: hlc(ms, 0, "d1"), Device: "d1"}
+	}
+	res := mustApply(t, l, put("a", 100), put("b", 101), put("c", 102))
+	if len(res.Accepted) != 3 || res.Head != 3 || l.Head() != 3 {
+		t.Fatalf("head %d, stored %d, accepted %d", res.Head, l.Head(), len(res.Accepted))
+	}
+	res = mustApply(t, l, put("a", 50))
+	if len(res.Accepted) != 0 || res.Head != 3 || l.Head() != 3 {
+		t.Fatalf("an old op: %+v, stored %d", res, l.Head())
+	}
+}

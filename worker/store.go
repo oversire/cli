@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/oversire/cli/config"
 )
 
 // Record is what the daemon keeps for one worker session. Key is the start key, for example work:OVERSIRE-12.
@@ -95,7 +97,7 @@ func (s *Store) Load(session string) (Record, error) {
 	return r, nil
 }
 
-// Save writes the record to a temp file, then renames it, so a crash never leaves half a file.
+// Save writes the record.
 func (s *Store) Save(r Record) error {
 	path, err := s.path(r.Session)
 	if err != nil {
@@ -105,14 +107,7 @@ func (s *Store) Save(r Record) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(s.dir, 0o700); err != nil {
-		return err
-	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	return config.WriteFile(path, data, 0o600)
 }
 
 // List gives all records. A bad file is skipped.

@@ -3,6 +3,7 @@ package wire
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -110,6 +111,46 @@ const (
 	MaxSessionPrompt      = 2000
 	MaxSessionLastMessage = 4000
 )
+
+// Clip gives s, or its first n runes when s is longer.
+func Clip(s string, n int) string {
+	if r := []rune(s); len(r) > n {
+		return string(r[:n])
+	}
+	return s
+}
+
+// ClipWithEllipsis gives s, or its first n-1 runes and "…" when s is longer than n runes. n must be 1 or more.
+func ClipWithEllipsis(s string, n int) string {
+	if r := []rune(s); len(r) > n {
+		return string(r[:n-1]) + "…"
+	}
+	return s
+}
+
+// Ref is the runtime reference of the session. The account is the local machine.
+func (s DaemonSession) Ref() SessionRef {
+	return SessionRef{Workspace: WorkspaceRef{Account: AccountID{Provider: s.Runtime, ID: "local"}, ID: s.Workspace}, ID: s.ID}
+}
+
+// Event is the hint row of a change of the session on a machine.
+func (s DaemonSession) Event(id, machine, action string, at time.Time) ProviderEvent {
+	acct := AccountID{Provider: s.Runtime, ID: machine}
+	ws := s.Workspace
+	if ws == "" {
+		ws = s.Cwd
+	}
+	title := s.Repo
+	if title == "" && s.Cwd != "" {
+		title = filepath.Base(s.Cwd)
+	}
+	return ProviderEvent{
+		ID: id, Schema: 1, Provider: s.Runtime, Account: acct, Kind: "session", Action: action,
+		Subject: SessionSubject(SessionRef{Workspace: WorkspaceRef{Account: acct, ID: ws}, ID: s.ID}),
+		At:      at,
+		Summary: &EventSummary{Title: title, Status: string(s.State), Actor: s.Harness},
+	}
+}
 
 // DaemonSessionsPage is the answer of GET /v1/sessions.
 type DaemonSessionsPage struct {

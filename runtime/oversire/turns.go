@@ -76,7 +76,7 @@ func (l *turnLog) tool(ev *agentwire.ToolEvent, at time.Time) {
 	}
 	tool := *t.Tool
 	if ev.Input != "" {
-		tool.Input = clip(ev.Input, maxToolInput)
+		tool.Input = wire.ClipWithEllipsis(ev.Input, maxToolInput)
 	}
 	switch ev.Status {
 	case "completed":
@@ -87,7 +87,7 @@ func (l *turnLog) tool(ev *agentwire.ToolEvent, at time.Time) {
 		tool.Status = wire.ToolRunning
 	}
 	if ev.Output != "" {
-		tool.Summary = clip(ev.Output, maxToolSummary)
+		tool.Summary = wire.ClipWithEllipsis(ev.Output, maxToolSummary)
 	}
 	t.Tool = &tool
 	if tool.Status == wire.ToolRunning && ev.ID != "" {

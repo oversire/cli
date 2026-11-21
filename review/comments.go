@@ -365,7 +365,7 @@ func checkText(text string, n int) error {
 // commentID is c_ and 8 hex digits, unique in the records. Call it with e.mu held.
 func (e *Engine) commentID() string {
 	for {
-		cid := "c_" + randomHex(4)
+		cid := "c_" + wire.RandomHex(4)
 		taken := false
 		for _, r := range e.recs {
 			taken = taken || slices.ContainsFunc(r.Comments, func(c wire.ReviewComment) bool { return c.ID == cid })

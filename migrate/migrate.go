@@ -58,8 +58,6 @@ type Report struct {
 	Notes                                []string
 }
 
-func (r Report) Changed() bool { return r.Config || r.Data || r.Token || r.Service || r.Binary }
-
 func (m *Migrator) Run(ctx context.Context) (Report, error) {
 	var r Report
 	var err error

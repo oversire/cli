@@ -150,10 +150,8 @@ func (j *Joins) Request(r wire.JoinRequest) (wire.JoinPending, error) {
 	if r.Kind == "" {
 		r.Kind = wire.DeviceDaemon
 	}
-	id := make([]byte, 4)
-	rand.Read(id)
 	n, _ := rand.Int(rand.Reader, big.NewInt(10000))
-	q := &request{JoinRequest: r, id: "r-" + hex.EncodeToString(id), confirm: fmt.Sprintf("%04d", n.Int64()),
+	q := &request{JoinRequest: r, id: "r-" + wire.RandomHex(4), confirm: fmt.Sprintf("%04d", n.Int64()),
 		expires: j.clock().Add(RequestTTL).UTC(), state: StatusPending}
 	j.requests[q.id] = q
 	j.mu.Unlock()

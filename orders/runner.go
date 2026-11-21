@@ -2,6 +2,7 @@
 package orders
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -187,7 +188,7 @@ func (r *Runner) start(ctx context.Context, o wire.WorkOrder) (*wire.WorkOrderRe
 		unlock := r.lockKey(p.Key)
 		defer unlock()
 		if s, ok := r.keys.ByKey(o.Runtime, p.Key); ok {
-			ref := wire.SessionRef{Workspace: wire.WorkspaceRef{Account: wire.AccountID{Provider: s.Runtime, ID: "local"}, ID: s.Workspace}, ID: s.ID}
+			ref := s.Ref()
 			if s.Terminal != "" {
 				ref.ID = s.Terminal
 			}
@@ -197,7 +198,7 @@ func (r *Runner) start(ctx context.Context, o wire.WorkOrder) (*wire.WorkOrderRe
 			return &wire.WorkOrderResult{Session: &ref, PaneKey: s.ID, Reused: true}, nil
 		}
 	}
-	filled, err := r.fill(ctx, cmpOr(p.Key, o.ID), p)
+	filled, err := r.fill(ctx, cmp.Or(p.Key, o.ID), p)
 	if err != nil {
 		return nil, err
 	}
@@ -232,13 +233,6 @@ func (r *Runner) fill(ctx context.Context, order string, p wire.LaunchRequest) (
 		return p, nil
 	}
 	return r.env.Fill(ctx, order, p)
-}
-
-func cmpOr(a, b string) string {
-	if a != "" {
-		return a
-	}
-	return b
 }
 
 // nonEmpty is nil for "", so the patch keeps the field.

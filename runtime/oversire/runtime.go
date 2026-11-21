@@ -9,8 +9,6 @@ package oversire
 import (
 	"bufio"
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -72,11 +70,6 @@ const restartPrompt = "The machine or the session host restarted during your tur
 type Reporter interface {
 	Report(s wire.RunnerSession)
 }
-
-// ReportFunc is a Reporter.
-type ReportFunc func(s wire.RunnerSession)
-
-func (f ReportFunc) Report(s wire.RunnerSession) { f(s) }
 
 // PathsReporter receives the changed paths of the worktree of an item session after each turn.
 // A Reporter can also be a PathsReporter. ReportPaths must not block.
@@ -372,7 +365,7 @@ func (rt *Runtime) Start(ctx context.Context, o runtime.Order, r wire.LaunchRequ
 	if err != nil {
 		return none, err
 	}
-	id := "s-" + randomHex(8)
+	id := "s-" + wire.RandomHex(8)
 	ref := sessionRef(repo, key, id)
 	now := rt.now().UTC()
 	s := newSession(rt, wire.RunnerSession{ID: id, Runner: rt.opts.Runner, Session: ref, Order: o.ID, Agent: r.Agent, Repo: r.Repo, Branch: w.Branch, Item: r.Item,
@@ -632,15 +625,6 @@ func (t *transcript) tail(n int) []string {
 	return append([]string{}, lines...)
 }
 
-// clip keeps the first n characters of text.
-func clip(text string, n int) string {
-	if utf8.RuneCountInString(text) <= n {
-		return text
-	}
-	r := []rune(text)
-	return string(r[:n-1]) + "…"
-}
-
 // tail keeps the last n characters of text.
 func tail(text string, n int) string {
 	if utf8.RuneCountInString(text) <= n {
@@ -648,12 +632,4 @@ func tail(text string, n int) string {
 	}
 	r := []rune(text)
 	return "…" + string(r[len(r)-n+1:])
-}
-
-func randomHex(n int) string {
-	b := make([]byte, n)
-	if _, err := rand.Read(b); err != nil {
-		panic(errors.New("oversire: no random bytes"))
-	}
-	return hex.EncodeToString(b)
 }

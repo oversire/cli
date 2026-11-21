@@ -180,12 +180,7 @@ func toolInputText(raw json.RawMessage) string {
 }
 
 func clip(s string) string {
-	s = strings.TrimSpace(s)
-	r := []rune(s)
-	if len(r) <= maxToolInput {
-		return s
-	}
-	return string(r[:maxToolInput-1]) + "…"
+	return wire.ClipWithEllipsis(strings.TrimSpace(s), maxToolInput)
 }
 
 func ptr[T any](v T) *T { return &v }

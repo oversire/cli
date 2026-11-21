@@ -2,8 +2,6 @@ package runbook
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -212,7 +210,7 @@ func (e *Engine) Done(run, step string, d wire.StepDone) (wire.RunbookRun, error
 	}
 	live := sr.State.Live()
 	now := e.now()
-	sr.State, sr.Note, sr.Ended = state, clip(strings.TrimSpace(d.Note), MaxNote), &now
+	sr.State, sr.Note, sr.Ended = state, wire.Clip(strings.TrimSpace(d.Note), MaxNote), &now
 	if live && r.Runtime == wire.RuntimeOversire && sr.Session != nil {
 		e.stop(r.Runtime, *sr.Session, e.grace)
 	}
@@ -646,7 +644,7 @@ func (e *Engine) stop(rt string, s wire.SessionRef, wait time.Duration) {
 }
 
 func (e *Engine) order(kind string) runtime.Order {
-	return runtime.Order{ID: "runbook-" + kind + "-" + randomHex(8), ExpiresAt: e.clock().Add(launchTTL)}
+	return runtime.Order{ID: "runbook-" + kind + "-" + wire.RandomHex(8), ExpiresAt: e.clock().Add(launchTTL)}
 }
 
 func (e *Engine) request(r *wire.RunbookRun, step string, round int) wire.LaunchRequest {
@@ -760,17 +758,4 @@ func clone(r *wire.RunbookRun) wire.RunbookRun {
 	return out
 }
 
-func clip(s string, n int) string {
-	if r := []rune(s); len(r) > n {
-		return string(r[:n])
-	}
-	return s
-}
-
-func newID() string { return "rb_" + randomHex(4) }
-
-func randomHex(n int) string {
-	b := make([]byte, n)
-	_, _ = rand.Read(b)
-	return hex.EncodeToString(b)
-}
+func newID() string { return "rb_" + wire.RandomHex(4) }

@@ -7,13 +7,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"reflect"
 	"slices"
 	"sort"
 	"sync"
 	"time"
 
+	"github.com/oversire/cli/config"
 	"github.com/oversire/cli/wire"
 )
 
@@ -188,12 +188,12 @@ func (e *entry) merge(p Patch) {
 	set(&e.tool, p.Tool)
 	set(&e.toolInput, p.ToolInput)
 	if p.Prompt != nil {
-		e.s.Prompt = clip(*p.Prompt, wire.MaxSessionPrompt)
+		e.s.Prompt = wire.Clip(*p.Prompt, wire.MaxSessionPrompt)
 	}
 	if p.LastMessage != nil {
-		e.s.LastMessage = clip(*p.LastMessage, wire.MaxSessionLastMessage)
+		e.s.LastMessage = wire.Clip(*p.LastMessage, wire.MaxSessionLastMessage)
 	}
-	if p.Source != "" && !containsStr(e.s.Sources, string(p.Source)) {
+	if p.Source != "" && !slices.Contains(e.s.Sources, string(p.Source)) {
 		e.s.Sources = append(e.s.Sources, string(p.Source))
 		sort.Strings(e.s.Sources)
 	}
@@ -286,21 +286,7 @@ func (b *Book) send(s wire.DaemonSession, action string, now time.Time) {
 	case "removed":
 		id += "-removed"
 	}
-	acct := wire.AccountID{Provider: s.Runtime, ID: b.machine}
-	ws := s.Workspace
-	if ws == "" {
-		ws = s.Cwd
-	}
-	title := s.Repo
-	if title == "" && s.Cwd != "" {
-		title = filepath.Base(s.Cwd)
-	}
-	b.log.Append(wire.ProviderEvent{
-		ID: id, Schema: 1, Provider: s.Runtime, Account: acct, Kind: "session", Action: action,
-		Subject: wire.SessionSubject(wire.SessionRef{Workspace: wire.WorkspaceRef{Account: acct, ID: ws}, ID: s.ID}),
-		At:      now,
-		Summary: &wire.EventSummary{Title: title, Status: string(s.State), Actor: s.Harness},
-	})
+	b.log.Append(s.Event(id, b.machine, action, now))
 }
 
 // Prune removes expired sessions: done or failed for DoneTTL, ended cli sessions after CLIEndTTL,
@@ -419,14 +405,7 @@ func (b *Book) Save(force bool) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(b.path), 0o700); err != nil {
-		return err
-	}
-	tmp := b.path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, b.path)
+	return config.WriteFile(b.path, data, 0o600)
 }
 
 // load reads the sessions file. The next hook or Orca poll corrects a stale session.
@@ -449,7 +428,7 @@ func (b *Book) load() {
 		s.Machine = b.machine
 		e := &entry{s: s, sent: s}
 		// Give the first Orca poll time to report the session again.
-		if containsStr(s.Sources, string(SourceOrca)) {
+		if slices.Contains(s.Sources, string(SourceOrca)) {
 			e.lastOrca = b.clock()
 		}
 		b.byID[s.ID] = e
@@ -460,21 +439,4 @@ func copySession(s wire.DaemonSession) wire.DaemonSession {
 	s.Sources = append([]string{}, s.Sources...)
 	s.EnvKeys = slices.Clone(s.EnvKeys)
 	return s
-}
-
-func clip(s string, n int) string {
-	r := []rune(s)
-	if len(r) <= n {
-		return s
-	}
-	return string(r[:n])
-}
-
-func containsStr(list []string, s string) bool {
-	for _, x := range list {
-		if x == s {
-			return true
-		}
-	}
-	return false
 }

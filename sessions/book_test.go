@@ -2,6 +2,7 @@ package sessions
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -221,6 +222,9 @@ func TestPersistence(t *testing.T) {
 	b.Apply(Patch{ID: "s", Source: SourceOrca, At: at(time.Second), Repo: ptr("app"), Branch: ptr("main")})
 	if err := b.Save(true); err != nil {
 		t.Fatal(err)
+	}
+	if raw, _ := os.ReadFile(path); len(raw) == 0 || raw[len(raw)-1] == '\n' {
+		t.Fatalf("the file has a trailing newline: %q", raw[max(0, len(raw)-5):])
 	}
 	c, _ := newBook(path)
 	got, ok := c.Get("s")

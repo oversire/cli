@@ -124,7 +124,7 @@ func (k *Asker) Ask(ctx context.Context, id string, a wire.SessionAsk) (code int
 			if at.Before(sentAt) {
 				at = k.clock()
 			}
-			return http.StatusOK, wire.SessionAskReply{Reply: clip(s.LastMessage, wire.MaxAskReply), TurnEndedAt: &at,
+			return http.StatusOK, wire.SessionAskReply{Reply: wire.Clip(s.LastMessage, wire.MaxAskReply), TurnEndedAt: &at,
 				ScreenTail: k.screenTail(ctx, s)}
 		}
 		select {
@@ -195,7 +195,7 @@ func (k *Asker) Deliver(ctx context.Context, s wire.DaemonSession, text string) 
 	if s.Runtime == wire.RuntimeOrca {
 		return k.screen.Send(ctx, s.Terminal, text, true)
 	}
-	_, err := k.runtimes.Do(ctx, k.order(s, wire.SendPayload{Session: ref(s), Text: text}))
+	_, err := k.runtimes.Do(ctx, k.order(s, wire.SendPayload{Session: s.Ref(), Text: text}))
 	return err
 }
 
@@ -206,7 +206,7 @@ func (k *Asker) screenTail(ctx context.Context, s wire.DaemonSession) string {
 	case s.Runtime == wire.RuntimeOrca && k.screen != nil && s.Terminal != "":
 		lines, _ = k.screen.Read(ctx, s.Terminal, ScreenLines)
 	case s.Runtime == wire.RuntimeOversire && k.runtimes != nil:
-		if res, err := k.runtimes.Do(ctx, k.order(s, wire.ReadPayload{Session: ref(s), Lines: ScreenLines})); err == nil && res != nil {
+		if res, err := k.runtimes.Do(ctx, k.order(s, wire.ReadPayload{Session: s.Ref(), Lines: ScreenLines})); err == nil && res != nil {
 			lines = res.Lines
 		}
 	}
@@ -216,18 +216,6 @@ func (k *Asker) screenTail(ctx context.Context, s wire.DaemonSession) string {
 func (k *Asker) order(s wire.DaemonSession, p wire.Payload) wire.WorkOrder {
 	now := k.clock()
 	return wire.WorkOrder{ID: "ask-" + s.ID, Runtime: s.Runtime, CreatedAt: now, State: wire.StateQueued, Payload: p}
-}
-
-func ref(s wire.DaemonSession) wire.SessionRef {
-	return wire.SessionRef{Workspace: wire.WorkspaceRef{Account: wire.AccountID{Provider: s.Runtime}, ID: s.Workspace}, ID: s.ID}
-}
-
-func clip(s string, n int) string {
-	r := []rune(s)
-	if len(r) <= n {
-		return s
-	}
-	return string(r[:n])
 }
 
 func tail(s string, n int) string {

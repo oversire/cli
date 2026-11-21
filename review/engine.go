@@ -5,8 +5,6 @@ package review
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -630,12 +628,6 @@ func clone[T any](v T) T {
 	b, _ := json.Marshal(v)
 	_ = json.Unmarshal(b, &out)
 	return out
-}
-
-func randomHex(n int) string {
-	b := make([]byte, n)
-	_, _ = rand.Read(b)
-	return hex.EncodeToString(b)
 }
 
 // readLines gives the lines from..to of a file, for an excerpt outside the diff.

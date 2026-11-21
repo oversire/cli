@@ -507,15 +507,12 @@ func TestSlots(t *testing.T) {
 	}
 }
 
-func TestClipAndTail(t *testing.T) {
+func TestTail(t *testing.T) {
 	long := strings.Repeat("é", 600)
-	if c := clip(long, 500); len([]rune(c)) != 500 || !strings.HasSuffix(c, "…") {
-		t.Fatal(len([]rune(c)))
-	}
 	if c := tail(long+"end", 500); len([]rune(c)) != 500 || !strings.HasPrefix(c, "…") || !strings.HasSuffix(c, "end") {
 		t.Fatal(c)
 	}
-	if clip("ok", 500) != "ok" || tail("ok", 500) != "ok" {
+	if tail("ok", 500) != "ok" {
 		t.Fatal("short text changed")
 	}
 }

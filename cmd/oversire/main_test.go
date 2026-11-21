@@ -64,7 +64,7 @@ func TestPairFromStdin(t *testing.T) {
 		t.Fatalf("body %v", body)
 	}
 	cfg, ok, _ := c.paths.LoadConfig()
-	if !ok || cfg.Hub != srv.URL || cfg.Device != "DEV1" || cfg.Account != "acc" || cfg.Name != "mini" {
+	if !ok || cfg.Hub != srv.URL || cfg.Device != "DEV1" || cfg.Name != "mini" {
 		t.Fatalf("config %#v", cfg)
 	}
 	if tok, _ := c.secrets.Get(context.Background(), "DEV1"); tok != "abc123" {

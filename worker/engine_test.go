@@ -256,14 +256,6 @@ func (r *rig) got() []Change {
 	return append([]Change(nil), r.changes...)
 }
 
-func (r *rig) kinds() []string {
-	var out []string
-	for _, c := range r.got() {
-		out = append(out, c.Kind)
-	}
-	return out
-}
-
 func newRig(t *testing.T, history []wire.SessionTurn, ss ...wire.DaemonSession) *rig {
 	t.Helper()
 	dir := t.TempDir()

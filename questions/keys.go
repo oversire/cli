@@ -1,6 +1,7 @@
 package questions
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 
@@ -117,7 +118,7 @@ func FormKeys(q wire.DaemonQuestion, a wire.QuestionAnswer, page bool) []Step {
 			}
 			boxes := map[int]bool{}
 			for k := 1; k <= rows; k++ {
-				boxes[k] = contains(on, k)
+				boxes[k] = slices.Contains(on, k)
 			}
 			last := "Next"
 			if page {
@@ -198,13 +199,4 @@ func labelIndex(item wire.DaemonQuestionItem, label string) int {
 		}
 	}
 	return 0
-}
-
-func contains(list []int, n int) bool {
-	for _, x := range list {
-		if x == n {
-			return true
-		}
-	}
-	return false
 }

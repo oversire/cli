@@ -2,8 +2,6 @@ package orders
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -207,7 +205,7 @@ func (d *Direct) answered(s wire.RunnerSession, now time.Time) {
 }
 
 func (d *Direct) sendOrder(s wire.RunnerSession, now, expires time.Time, p wire.SendPayload) wire.WorkOrder {
-	return wire.WorkOrder{ID: "wo-" + randomHex(8), Runner: s.Runner, Runtime: s.Session.Workspace.Account.Provider,
+	return wire.WorkOrder{ID: "wo-" + wire.RandomHex(4), Runner: s.Runner, Runtime: s.Session.Workspace.Account.Provider,
 		Suggestion: s.Order, CreatedAt: now, ExpiresAt: expires, State: wire.StateQueued, Payload: p}
 }
 
@@ -288,10 +286,4 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 
 func writeError(w http.ResponseWriter, code int, msg string) {
 	writeJSON(w, code, map[string]string{"error": msg})
-}
-
-func randomHex(n int) string {
-	b := make([]byte, n/2)
-	_, _ = rand.Read(b)
-	return hex.EncodeToString(b)
 }

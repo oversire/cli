@@ -307,7 +307,7 @@ func (e *Engine) header(ctx context.Context, ses wire.DaemonSession, rec Record,
 		switch ses.Reason {
 		case wire.ReasonPermission:
 			tool, input := e.sessions.Tool(ses.ID)
-			h.Request = clip(strings.TrimSpace("permission "+tool+" "+input), maxRequest)
+			h.Request = wire.Clip(strings.TrimSpace("permission "+tool+" "+input), maxRequest)
 		case wire.ReasonQuestion:
 			h.Request = strings.TrimSpace("question " + ses.Question)
 		}
@@ -343,20 +343,13 @@ func (e *Engine) inspect(ctx context.Context, ses wire.DaemonSession) (runtime.I
 func requestOf(s wire.RunnerSession) string {
 	switch {
 	case s.Permission != nil:
-		return strings.TrimSpace("permission " + s.Permission.ID + " " + clip(strings.TrimSpace(s.Permission.Tool+" "+s.Permission.Text), maxRequest))
+		return strings.TrimSpace("permission " + s.Permission.ID + " " + wire.Clip(strings.TrimSpace(s.Permission.Tool+" "+s.Permission.Text), maxRequest))
 	case s.Question != nil && len(s.Question.Items) > 0:
-		return strings.TrimSpace("question " + s.Question.ID + " " + clip(s.Question.Items[0].Text, maxRequest))
+		return strings.TrimSpace("question " + s.Question.ID + " " + wire.Clip(s.Question.Items[0].Text, maxRequest))
 	case s.Question != nil:
 		return "question " + s.Question.ID
 	}
 	return ""
-}
-
-func clip(s string, n int) string {
-	if r := []rune(s); len(r) > n {
-		return string(r[:n])
-	}
-	return s
 }
 
 // WakeReason tells why Wait returned.
@@ -575,7 +568,7 @@ func (e *Engine) Brief(ctx context.Context, ref string) (Brief, error) {
 		case t.Role == wire.RoleUser && !planned:
 			b.Plan, planned = t.Text, true
 		case t.Role == wire.RoleUser && t.Origin != wire.OriginSystem:
-			t.Text = clip(t.Text, maxNote)
+			t.Text = wire.Clip(t.Text, maxNote)
 			b.Notes = append(b.Notes, t)
 		case t.Role == wire.RoleAssistant && t.Tool == nil && strings.TrimSpace(t.Text) != "":
 			b.Last = t.Text

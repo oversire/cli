@@ -14,7 +14,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unicode/utf8"
 
 	"github.com/oversire/cli/wire"
 	_ "modernc.org/sqlite"
@@ -127,12 +126,7 @@ func upperKey(k string) string {
 
 // Clip gives s on one line, with at most MaxEventSummary code points.
 func Clip(s string) string {
-	s = strings.Join(strings.Fields(s), " ")
-	if utf8.RuneCountInString(s) <= wire.MaxEventSummary {
-		return s
-	}
-	r := []rune(s)
-	return string(r[:wire.MaxEventSummary-1]) + "…"
+	return wire.ClipWithEllipsis(strings.Join(strings.Fields(s), " "), wire.MaxEventSummary)
 }
 
 // QueueWhen sets the rule that sends new rows to the outbox (Outbox.Member).
@@ -152,11 +146,20 @@ func (s *Store) Append(ctx context.Context, drafts []wire.EventDraft) ([]wire.Ev
 }
 
 func (s *Store) add(ctx context.Context, drafts []wire.EventDraft, queue bool) ([]wire.Event, error) {
+	out, err := s.insert(ctx, drafts, queue)
+	if err == nil && len(out) > 0 {
+		s.publish(out)
+	}
+	return out, err
+}
+
+// insert writes the drafts in one transaction. The caller publishes the rows after the lock is released.
+func (s *Store) insert(ctx context.Context, drafts []wire.EventDraft, queue bool) ([]wire.Event, error) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	now := s.clock().UTC().Truncate(time.Millisecond)
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		s.mu.Unlock()
 		return nil, err
 	}
 	defer tx.Rollback()
@@ -164,7 +167,6 @@ func (s *Store) add(ctx context.Context, drafts []wire.EventDraft, queue bool) (
 	for _, raw := range drafts {
 		d, err := Normalize(raw)
 		if err != nil {
-			s.mu.Unlock()
 			return nil, err
 		}
 		if d.Item != "" && d.ParentItem == "" {
@@ -184,24 +186,17 @@ func (s *Store) add(ctx context.Context, drafts []wire.EventDraft, queue bool) (
 			continue
 		}
 		if err != nil {
-			s.mu.Unlock()
 			return nil, err
 		}
 		if queue {
 			if _, err := tx.ExecContext(ctx, "INSERT INTO outbox (seq) VALUES (?)", seq); err != nil {
-				s.mu.Unlock()
 				return nil, err
 			}
 		}
 		out = append(out, wire.Event{Seq: seq, SeenAt: now, EventDraft: d})
 	}
 	if err := tx.Commit(); err != nil {
-		s.mu.Unlock()
 		return nil, err
-	}
-	s.mu.Unlock()
-	if len(out) > 0 {
-		s.publish(out)
 	}
 	return out, nil
 }

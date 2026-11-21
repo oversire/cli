@@ -1,8 +1,6 @@
 package runtime
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -201,9 +199,7 @@ func (a *API) writeFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.prune()
-	b := make([]byte, 8)
-	_, _ = rand.Read(b)
-	dir := filepath.Join(a.files, hex.EncodeToString(b))
+	dir := filepath.Join(a.files, wire.RandomHex(8))
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

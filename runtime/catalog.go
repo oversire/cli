@@ -126,7 +126,7 @@ func (r *Registry) oversight(s wire.DaemonSession) (Oversight, wire.SessionRef, 
 	if !ok {
 		return nil, wire.SessionRef{}, ErrUnsupported
 	}
-	ref := wire.SessionRef{Workspace: wire.WorkspaceRef{Account: wire.AccountID{Provider: s.Runtime, ID: "local"}, ID: s.Workspace}, ID: s.ID}
+	ref := s.Ref()
 	return o, ref, nil
 }
 

@@ -4,6 +4,7 @@ package gitwatch
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/oversire/cli/config"
 	"github.com/oversire/cli/events"
 	"github.com/oversire/cli/wire"
 )
@@ -301,14 +303,14 @@ func (w *Watcher) row(ctx context.Context, r repo, ref string, e entry) bool {
 		return false
 	}
 	wt := r.worktreeOf(branch)
-	dir := cmpOr(wt, r.gitdir)
+	dir := cmp.Or(wt, r.gitdir)
 	body, _ := w.git.Run(ctx, dir, "log", "-1", "--format=%B", e.new)
 	subject, _, _ := strings.Cut(strings.TrimSpace(body), "\n")
 	if subject != "" {
 		p["subject"] = subject
 	}
 	if summary == "" {
-		summary = cmpOr(subject, "Commit on "+branch)
+		summary = cmp.Or(subject, "Commit on "+branch)
 	}
 	if wt != "" {
 		p["worktree"] = wt
@@ -434,12 +436,7 @@ func (w *Watcher) save() {
 	if err != nil {
 		return
 	}
-	tmp := w.path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
-		w.log.Warn("gitwatch: save the cursors", "err", err)
-		return
-	}
-	if err := os.Rename(tmp, w.path); err != nil {
+	if err := config.WriteFile(w.path, b, 0o600); err != nil {
 		w.log.Warn("gitwatch: save the cursors", "err", err)
 	}
 }
@@ -461,11 +458,4 @@ func short(sha string) string {
 		return sha[:7]
 	}
 	return sha
-}
-
-func cmpOr(a, b string) string {
-	if a != "" {
-		return a
-	}
-	return b
 }

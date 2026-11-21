@@ -3,6 +3,7 @@
 package capture
 
 import (
+	"cmp"
 	"context"
 	"log/slog"
 	"os"
@@ -96,7 +97,7 @@ func (w *Writer) Add(session string, d wire.EventDraft) {
 // AddFor is Add with the session in hand. It does not call the book.
 func (w *Writer) AddFor(s wire.DaemonSession, d wire.EventDraft) {
 	if d.Session == "" {
-		d.Session = cmpOr(s.Key, s.ID)
+		d.Session = cmp.Or(s.Key, s.ID)
 	}
 	if d.Repo == "" {
 		d.Repo = s.Repo
@@ -128,7 +129,7 @@ func (w *Writer) AddFor(s wire.DaemonSession, d wire.EventDraft) {
 		}
 	}
 	select {
-	case w.queue <- queued{d, events.Hint{SessionKey: cmpOr(s.Key, d.Session), Path: s.Cwd, Branch: s.Branch}}:
+	case w.queue <- queued{d, events.Hint{SessionKey: cmp.Or(s.Key, d.Session), Path: s.Cwd, Branch: s.Branch}}:
 	default:
 		w.log.Warn("capture: the queue is full; a row is dropped", "kind", d.Kind)
 	}
@@ -136,7 +137,7 @@ func (w *Writer) AddFor(s wire.DaemonSession, d wire.EventDraft) {
 
 // AgentActor gives harness/model, or the harness alone.
 func AgentActor(harness, model string) string {
-	harness = cmpOr(harness, "agent")
+	harness = cmp.Or(harness, "agent")
 	if model == "" {
 		return harness
 	}
@@ -195,11 +196,4 @@ func (w *Writer) flush(ctx context.Context, batch []queued) {
 // ID makes the id of a row: <source>:<parts joined by colons>.
 func ID(source string, parts ...string) string {
 	return source + ":" + strings.Join(parts, ":")
-}
-
-func cmpOr(a, b string) string {
-	if a != "" {
-		return a
-	}
-	return b
 }

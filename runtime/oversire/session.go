@@ -295,7 +295,7 @@ func (s *session) handle(ev agentwire.Event, at time.Time) {
 			break
 		}
 		if ev.Tool.Status == "started" {
-			s.log.add("· " + ev.Tool.Name + " " + clip(ev.Tool.Input, 200))
+			s.log.add("· " + ev.Tool.Name + " " + wire.ClipWithEllipsis(ev.Tool.Input, 200))
 		}
 		s.turns.tool(ev.Tool, at.UTC())
 	case agentwire.EventPermission:

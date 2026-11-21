@@ -206,6 +206,7 @@ func (l *OpLog) apply(ops []wire.StoreOp) (wire.StoreApplyResult, error) {
 	}
 	defer tx.Rollback()
 	accepted := []wire.StoreOp{}
+	var head int
 	for _, op := range ops {
 		var cur string
 		err := tx.QueryRow("SELECT hlc FROM records WHERE collection = ? AND id = ?", op.Collection, op.ID).Scan(&cur)
@@ -234,15 +235,21 @@ func (l *OpLog) apply(ops []wire.StoreOp) (wire.StoreApplyResult, error) {
 			op.Collection, op.ID, seq, op.HLC, op.Device, string(op.Op), record, now, op.Schema); err != nil {
 			return wire.StoreApplyResult{}, err
 		}
-		if err := setMeta(tx, "head", seq); err != nil {
+		head = seq
+		accepted = append(accepted, op)
+	}
+	if len(accepted) > 0 {
+		if err := setMeta(tx, "head", head); err != nil {
 			return wire.StoreApplyResult{}, err
 		}
-		accepted = append(accepted, op)
 	}
 	if err := tx.Commit(); err != nil {
 		return wire.StoreApplyResult{}, err
 	}
-	return wire.StoreApplyResult{Accepted: accepted, Head: l.Head()}, nil
+	if len(accepted) == 0 {
+		head = l.Head()
+	}
+	return wire.StoreApplyResult{Accepted: accepted, Head: head}, nil
 }
 
 // Head is the last seq. It does not go back when the log is pruned.

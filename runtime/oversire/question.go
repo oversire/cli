@@ -59,7 +59,7 @@ func parseAsk(p *agentwire.Permission, round int, at time.Time) (*openQuestion, 
 	oq := &openQuestion{input: raw}
 	for i, x := range in.Questions {
 		item := wire.RunnerQuestionItem{
-			ID: fmt.Sprintf("q%d", i+1), Header: x.Header, Text: clip(x.Question, 2000), Kind: wire.QuestionSingle,
+			ID: fmt.Sprintf("q%d", i+1), Header: x.Header, Text: wire.ClipWithEllipsis(x.Question, 2000), Kind: wire.QuestionSingle,
 			Options: []wire.QuestionOption{}, AllowsOther: true,
 		}
 		if x.MultiSelect {

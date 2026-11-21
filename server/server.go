@@ -81,7 +81,6 @@ type Server struct {
 	port    int
 	nets    map[netip.Addr]*http.Server
 	clients map[*client]struct{}
-	acks    map[string]int64
 }
 
 // NewServer makes the server with the built-in routes. v is nil before the machine has a group:
@@ -91,7 +90,7 @@ func NewServer(cfg config.ServeConfig, info func() wire.DaemonInfo, v Verifier, 
 		Log: slog.Default(), cfg: cfg, info: info, verifier: v, events: events, sessions: sessions, hooks: hooks,
 		tailnet: NewTailnet(proc.Local{}), now: time.Now,
 		loopMux: http.NewServeMux(), netMux: http.NewServeMux(),
-		nets: map[netip.Addr]*http.Server{}, clients: map[*client]struct{}{}, acks: map[string]int64{},
+		nets: map[netip.Addr]*http.Server{}, clients: map[*client]struct{}{},
 	}
 	s.started = s.now()
 	s.Handle(
@@ -196,14 +195,6 @@ func (s *Server) Listen() wire.DaemonListen {
 		l.Tailscale = netip.AddrPortFrom(addrs[0], uint16(s.port)).String()
 	}
 	return l
-}
-
-// Cursor gives the last acked seq of a device. The loopback device is "loopback".
-func (s *Server) Cursor(device string) (int64, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	seq, ok := s.acks[device]
-	return seq, ok
 }
 
 // Run binds 127.0.0.1 and [::1], and the tailnet addresses when Tailscale is on. It blocks until ctx is done.
@@ -459,13 +450,6 @@ func (s *Server) ack(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bad seq")
 		return
 	}
-	device := "loopback"
-	if c, _ := CallerFrom(r.Context()); !c.Loopback {
-		device = c.DeviceID
-	}
-	s.mu.Lock()
-	s.acks[device] = max(s.acks[device], *body.Seq)
-	s.mu.Unlock()
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 

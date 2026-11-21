@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/oversire/cli/config"
 	"github.com/oversire/cli/wire"
 )
 
@@ -104,19 +105,11 @@ func (s *Store) Roots() ([]string, error) {
 
 func (s *Store) SaveRoots(roots []string) error { return s.write("roots.json", roots) }
 
-// write writes v to a temp file, then renames it, so a crash never leaves half a file.
+// write writes v as JSON to the file name.
 func (s *Store) write(name string, v any) error {
 	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(s.dir, 0o700); err != nil {
-		return err
-	}
-	path := filepath.Join(s.dir, name)
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	return config.WriteFile(filepath.Join(s.dir, name), data, 0o600)
 }

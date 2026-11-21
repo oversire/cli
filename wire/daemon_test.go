@@ -113,3 +113,57 @@ func TestSessionAsk(t *testing.T) {
 		}
 	}
 }
+
+func TestClip(t *testing.T) {
+	if Clip("ok", 5) != "ok" {
+		t.Fatal("short text changed")
+	}
+	if c := Clip(strings.Repeat("é", 6), 5); len([]rune(c)) != 5 || strings.Contains(c, "…") {
+		t.Fatal(c)
+	}
+	if s := strings.Repeat("é", 5); Clip(s, 5) != s {
+		t.Fatal("text of n runes changed")
+	}
+}
+
+func TestClipWithEllipsis(t *testing.T) {
+	c := ClipWithEllipsis(strings.Repeat("é", 600), 500)
+	if len([]rune(c)) != 500 || !strings.HasSuffix(c, "…") {
+		t.Fatal(len([]rune(c)))
+	}
+	if ClipWithEllipsis("ok", 500) != "ok" {
+		t.Fatal("short text changed")
+	}
+	if s := strings.Repeat("é", 500); ClipWithEllipsis(s, 500) != s {
+		t.Fatal("text of n runes changed")
+	}
+}
+
+func TestDaemonSessionRef(t *testing.T) {
+	r := DaemonSession{Runtime: "orca", Workspace: "w", ID: "t", Terminal: "h"}.Ref()
+	if r.Workspace.Account != (AccountID{Provider: "orca", ID: "local"}) || r.Workspace.ID != "w" || r.ID != "t" {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestDaemonSessionEvent(t *testing.T) {
+	at := time.Date(2026, 11, 1, 9, 0, 0, 0, time.UTC)
+	s := DaemonSession{ID: "s1", Runtime: "orca", Harness: "claude", Cwd: "/x/app", State: PhaseWaiting}
+	ev := s.Event("e1", "mini", "changed", at)
+	acct := AccountID{Provider: "orca", ID: "mini"}
+	if ev.ID != "e1" || ev.Schema != 1 || ev.Provider != "orca" || ev.Account != acct || ev.Kind != "session" || ev.Action != "changed" || !ev.At.Equal(at) {
+		t.Fatalf("%+v", ev)
+	}
+	if *ev.Summary != (EventSummary{Title: "app", Status: "waiting", Actor: "claude"}) {
+		t.Fatalf("%+v", ev.Summary)
+	}
+	want := SessionSubject(SessionRef{Workspace: WorkspaceRef{Account: acct, ID: "/x/app"}, ID: "s1"})
+	if string(ev.Subject.Ref) != string(want.Ref) || ev.Subject.Kind != "session" {
+		t.Fatalf("%s", ev.Subject.Ref)
+	}
+	s.Workspace, s.Repo = "wt", "cloud"
+	ev = s.Event("e2", "mini", "changed", at)
+	if ev.Summary.Title != "cloud" || !strings.Contains(string(ev.Subject.Ref), `"id":"wt"`) {
+		t.Fatalf("%+v %s", ev.Summary, ev.Subject.Ref)
+	}
+}

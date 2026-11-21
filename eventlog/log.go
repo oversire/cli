@@ -5,8 +5,6 @@ package eventlog
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"log/slog"
 	"sync"
 
@@ -49,9 +47,7 @@ func New(capacity int) *Log {
 	if capacity <= 0 {
 		capacity = DefaultCapacity
 	}
-	b := make([]byte, 8)
-	_, _ = rand.Read(b)
-	return &Log{cap: capacity, epoch: hex.EncodeToString(b), subs: map[int]chan struct{}{}}
+	return &Log{cap: capacity, epoch: wire.RandomHex(8), subs: map[int]chan struct{}{}}
 }
 
 // Keep reads the last hints of k into the log and writes each new event to k.

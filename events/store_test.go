@@ -379,3 +379,23 @@ func TestResolver(t *testing.T) {
 		t.Fatalf("%s %s", item, parent)
 	}
 }
+
+func TestAppendAfterABadDraft(t *testing.T) {
+	s, ctx := open(t), context.Background()
+	if _, err := s.Append(ctx, []wire.EventDraft{{ID: "bad"}}); err == nil {
+		t.Fatal("a bad draft passed")
+	}
+	done := make(chan []wire.Event, 1)
+	go func() {
+		rows, _ := s.Append(ctx, []wire.EventDraft{draft("hook:ok", "turn.ended", "OVERSIRE-1")})
+		done <- rows
+	}()
+	select {
+	case rows := <-done:
+		if len(rows) != 1 {
+			t.Fatalf("rows: %+v", rows)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Append blocks after an error")
+	}
+}

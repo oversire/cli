@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/oversire/cli/config"
 	"github.com/oversire/cli/wire"
 )
 
@@ -15,21 +16,13 @@ type Store struct{ dir string }
 
 func NewStore(dir string) *Store { return &Store{dir: dir} }
 
-// Save writes the run to a temp file, then renames it, so a crash never leaves half a file.
+// Save writes the run.
 func (s *Store) Save(r wire.RunbookRun) error {
 	data, err := json.MarshalIndent(r, "", "  ")
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(s.dir, 0o700); err != nil {
-		return err
-	}
-	path := filepath.Join(s.dir, r.ID+".json")
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	return config.WriteFile(filepath.Join(s.dir, r.ID+".json"), data, 0o600)
 }
 
 // Load reads each run file. A bad file is in the error, and the other runs load.

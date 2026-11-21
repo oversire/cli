@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/oversire/cli/config"
 	"github.com/oversire/cli/secret"
 	"github.com/oversire/cli/wire"
 )
@@ -182,12 +183,5 @@ func (s *Store) saveLocked() error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
-		return err
-	}
-	tmp := s.path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, s.path)
+	return config.WriteFile(s.path, data, 0o600)
 }

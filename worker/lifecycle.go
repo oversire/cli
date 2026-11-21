@@ -2,8 +2,6 @@ package worker
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -64,9 +62,7 @@ type Answer struct {
 
 // order makes a new order id for each call, because a runner gives the old result for an id that it saw.
 func (e *Engine) order(op string) runtime.Order {
-	b := make([]byte, 8)
-	_, _ = rand.Read(b)
-	return runtime.Order{ID: "worker-" + op + "-" + hex.EncodeToString(b), ExpiresAt: e.now().Add(orderTTL)}
+	return runtime.Order{ID: "worker-" + op + "-" + wire.RandomHex(8), ExpiresAt: e.now().Add(orderTTL)}
 }
 
 // mapErr gives the refusals of the runtime as the kinds of this package.
@@ -80,10 +76,6 @@ func mapErr(err error) error {
 		return refuse(Conflict, "%v", err)
 	}
 	return err
-}
-
-func refOf(s wire.DaemonSession) wire.SessionRef {
-	return wire.SessionRef{Workspace: wire.WorkspaceRef{Account: wire.AccountID{Provider: s.Runtime, ID: "local"}, ID: s.Workspace}, ID: s.ID}
 }
 
 // update loads the record of ses, applies fn, saves it and gives the copy.
@@ -186,7 +178,7 @@ func (e *Engine) Done(ctx context.Context, ref string, verdict, note string) (Re
 	if err != nil {
 		return Record{}, err
 	}
-	note = clip(strings.TrimSpace(note), maxDoneNote)
+	note = wire.Clip(strings.TrimSpace(note), maxDoneNote)
 	rec, err := e.update(ses, func(r *Record) { r.State, r.Verdict, r.Note = state, verdict, note })
 	if err != nil {
 		return Record{}, err
@@ -205,7 +197,7 @@ func (e *Engine) Send(ctx context.Context, ref, text string) error {
 	if err != nil {
 		return err
 	}
-	if err := e.orders.Send(ctx, ses.Runtime, e.order("send"), wire.SendPayload{Session: refOf(ses), Text: text, Origin: wire.OriginOverseer}); err != nil {
+	if err := e.orders.Send(ctx, ses.Runtime, e.order("send"), wire.SendPayload{Session: ses.Ref(), Text: text, Origin: wire.OriginOverseer}); err != nil {
 		return mapErr(err)
 	}
 	return e.acted(ses, func(r *Record) { r.State = StateWorking }, wire.KindWorkerNudged, map[string]any{"how": "send"})
@@ -217,7 +209,7 @@ func (e *Engine) Answer(ctx context.Context, ref string, a Answer) error {
 	if err != nil {
 		return err
 	}
-	p := wire.SendPayload{Session: refOf(ses), Origin: wire.OriginOverseer}
+	p := wire.SendPayload{Session: ses.Ref(), Origin: wire.OriginOverseer}
 	payload := map[string]any{}
 	switch {
 	case a.Permission != "" && a.Question == "":
@@ -290,7 +282,7 @@ func (e *Engine) Stop(ctx context.Context, ref string) error {
 	if err != nil {
 		return err
 	}
-	if err := e.orders.Stop(ctx, ses.Runtime, e.order("stop"), refOf(ses)); err != nil {
+	if err := e.orders.Stop(ctx, ses.Runtime, e.order("stop"), ses.Ref()); err != nil {
 		return mapErr(err)
 	}
 	e.mu.Lock()

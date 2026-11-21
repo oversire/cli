@@ -2,8 +2,6 @@ package orca
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"slices"
@@ -28,9 +26,7 @@ type Live struct {
 }
 
 func newLive(p *Pairing, terminal string) *Live {
-	b := make([]byte, 8)
-	_, _ = rand.Read(b)
-	return &Live{pair: p, terminal: terminal, client: "oversire-" + hex.EncodeToString(b)}
+	return &Live{pair: p, terminal: terminal, client: "oversire-" + wire.RandomHex(8)}
 }
 
 func (l *Live) Caps() term.Caps {

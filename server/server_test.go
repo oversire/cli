@@ -269,9 +269,6 @@ func TestRoutes(t *testing.T) {
 		t.Fatal(code)
 	}
 	call(t, "POST", f.net.URL+"/v1/ack", `{"seq":1}`, "Authorization", "Bearer good")
-	if seq, ok := f.s.Cursor("D1"); !ok || seq != 2 {
-		t.Fatal("cursor", seq, ok)
-	}
 	if code, _ := call(t, "POST", f.loop.URL+"/v1/ack", `{"seq":-1}`, "Content-Type", jsonCT); code != 400 {
 		t.Fatal(code)
 	}
