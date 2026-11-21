@@ -230,9 +230,18 @@ func (s *Store) Self() wire.GroupMember {
 // HomeEndpoint gives the base URL of the home daemon and the token to call it (events.Home).
 // self is true when this machine is home, has no group, or the cloud holds the group.
 func (s *Store) HomeEndpoint() (base, token string, self bool) {
+	if g, ok := s.Snapshot(); ok && g.Cloud != nil {
+		return "", "", true
+	}
+	return s.MirrorHome()
+}
+
+// MirrorHome is HomeEndpoint for the mirror and the CI routes. The mirror home is g.Home also when the group has a cloud.
+// self is true when this machine is home, has no group, or has no route to home.
+func (s *Store) MirrorHome() (base, token string, self bool) {
 	g, ok := s.Snapshot()
 	me := s.Self().Machine
-	if !ok || g.Cloud != nil || g.Home == "" || g.Home == me {
+	if !ok || g.Home == "" || g.Home == me {
 		return "", "", true
 	}
 	for _, m := range g.Members {

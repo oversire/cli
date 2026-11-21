@@ -312,3 +312,31 @@ func TestSelfName(t *testing.T) {
 		t.Fatalf("got %q with no file", got)
 	}
 }
+
+func TestMirrorHomeWithCloud(t *testing.T) {
+	s, _ := newTestStore(t, newClock(), "mbp")
+	if base, _, self := s.MirrorHome(); base != "" || !self {
+		t.Fatalf("home is this machine: %q %v", base, self)
+	}
+	if _, err := s.Admit(wire.JoinRequest{Machine: "mba", Host: "mba", Addrs: []string{"100.64.0.2"}, Port: 7690, Kind: wire.DeviceDaemon, Nonce: "n"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetHome("mba"); err != nil {
+		t.Fatal(err)
+	}
+	base, token, self := s.MirrorHome()
+	if base != "http://100.64.0.2:7690" || token == "" || self {
+		t.Fatalf("%q %q %v", base, token, self)
+	}
+	g, _ := s.Snapshot()
+	g.Cloud, g.Version = &wire.GroupCloud{Hub: "hub.example", Account: "acct"}, g.Version+1
+	if _, err := s.Merge("mba", g); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, self := s.HomeEndpoint(); !self {
+		t.Fatal("HomeEndpoint with a cloud is not self")
+	}
+	if b, _, self := s.MirrorHome(); b != base || self {
+		t.Fatalf("MirrorHome with a cloud: %q %v", b, self)
+	}
+}

@@ -91,16 +91,18 @@ type Routes struct {
 	x    *Index
 	logs *Logs
 	lim  *Limiter
+	fwd  *Forward
 
 	freshWait time.Duration
 }
 
-func NewRoutes(x *Index, logs *Logs, calls Caller, lim *Limiter, self func() wire.GroupMember) *Routes {
-	return &Routes{app: app{calls: calls, self: self}, x: x, logs: logs, lim: lim, freshWait: freshWait}
+func NewRoutes(x *Index, logs *Logs, calls Caller, lim *Limiter, fwd *Forward, self func() wire.GroupMember) *Routes {
+	return &Routes{app: app{calls: calls, self: self}, x: x, logs: logs, lim: lim, fwd: fwd, freshWait: freshWait}
 }
 
+// Routes gives the routes. A member daemon sends each request to home.
 func (r *Routes) Routes() []server.Route {
-	return []server.Route{
+	routes := []server.Route{
 		{Pattern: "GET /v1/ci/status", Access: server.Member, Handle: r.status},
 		{Pattern: "GET /v1/ci/wait", Access: server.Member, Handle: r.wait},
 		{Pattern: "GET /v1/ci/runs", Access: server.Member, Handle: r.runs},
@@ -109,6 +111,10 @@ func (r *Routes) Routes() []server.Route {
 		{Pattern: "GET /v1/ci/jobs/{id}/log", Access: server.Member, Handle: r.log},
 		{Pattern: "GET /v1/ci/workflows", Access: server.Member, Handle: r.workflows},
 	}
+	for i := range routes {
+		routes[i].Handle = r.fwd.Wrap(routes[i].Handle)
+	}
+	return routes
 }
 
 // query reads the parameters of a request.

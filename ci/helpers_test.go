@@ -170,7 +170,7 @@ func newAPI(t *testing.T) *api {
 	self := func() wire.GroupMember { return wire.GroupMember{Machine: "mbp"} }
 	lim := NewLimiter(20*time.Second, a.clk.now)
 	a.logs = NewLogs(a.book, a.x, a.calls, lim, self)
-	a.routes = NewRoutes(a.x, a.logs, a.calls, lim, self)
+	a.routes = NewRoutes(a.x, a.logs, a.calls, lim, NewForward(homeIs{machine: "mbp", home: "mbp"}, http.DefaultClient), self)
 	a.routes.freshWait = 20 * time.Millisecond
 	a.srv = httptest.NewServer(a.mux())
 	t.Cleanup(a.srv.Close)
@@ -218,3 +218,12 @@ func (a *api) errText(path string, want int) string {
 }
 
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }
+
+// homeIs is a HomeFinder. An empty base means that this machine is home.
+type homeIs struct {
+	machine, home, base, token string
+}
+
+func (h homeIs) MirrorHome() (string, string, bool) { return h.base, h.token, h.base == "" }
+func (h homeIs) Info() (string, string)             { return "g", h.home }
+func (h homeIs) Self() wire.GroupMember             { return wire.GroupMember{Machine: h.machine} }
