@@ -1,0 +1,13 @@
+{
+  "seq": 272,
+  "id": "app:mba:-:vendor-removed:plane:1795200120000",
+  "at": "2026-11-20T14:02:00Z",
+  "seenAt": "2026-11-20T14:02:01Z",
+  "kind": "vendor.removed",
+  "machine": "mba",
+  "actorType": "human",
+  "actor": "flarco@gmail.com",
+  "via": "app@mba",
+  "summary": "Removed plane-cli 0.2.2",
+  "payload": { "vendor": "plane", "binary": "plane-cli", "version": "0.2.2" }
+}

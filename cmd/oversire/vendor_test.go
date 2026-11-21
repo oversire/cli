@@ -139,6 +139,10 @@ func TestVendorRunUsage(t *testing.T) {
 		{"vendor", "ls", "extra"},
 		{"vendor", "skill"},
 		{"vendor", "skill", "a", "b"},
+		{"vendor", "install"},
+		{"vendor", "install", "plane", "bigtimer"},
+		{"vendor", "remove"},
+		{"vendor", "install", "--bogus", "plane"},
 	} {
 		if err := c.dispatch(context.Background(), args); exitCode(err) != 2 {
 			t.Errorf("%v: %v", args, err)
@@ -247,7 +251,7 @@ func TestVendorListTable(t *testing.T) {
 PROVIDER  BINARY     VERSION  SOURCE  STATE    PATH                      ACCOUNTS     PROJECTS
 plane     plane-cli  0.2.2    path    ok       /usr/local/bin/plane-cli  plane:ocral  OVERSIRE,SLING
 github    gh         -        -       missing  -                         -            -
-github: gh is not installed. Run ` + "`oversire vendor install github`." + `
+github: gh is not installed. Install gh with Homebrew: ` + "`brew install gh`." + `
 `
 	if out.String() != want {
 		t.Fatalf("got\n%s", out)
@@ -331,5 +335,110 @@ func TestSplitDash(t *testing.T) {
 	}
 	if _, _, ok := splitDash([]string{"a", "b"}); ok {
 		t.Fatal("ok without --")
+	}
+}
+
+func changeOut(t *testing.T, ch wire.VendorChange) string {
+	t.Helper()
+	b, err := json.Marshal(ch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func TestVendorInstallSendsVendor(t *testing.T) {
+	c, out, _, app := vendorCLI(t)
+	answerWith(app, wire.AppCallOK, "Installed plane-cli 0.2.2 in ~/.config/oversire/vendors/plane/0.2.2.",
+		changeOut(t, wire.VendorChange{Vendor: "plane", Binary: "plane-cli", Action: "installed", Version: "0.2.2"}))
+	if err := c.dispatch(context.Background(), []string{"vendor", "install", "Plane"}); err != nil {
+		t.Fatal(err)
+	}
+	call := app.last(t)
+	if call.Action != "vendor.install" || string(call.Args) != `{"vendor":"plane"}` {
+		t.Fatal(call.Action, string(call.Args))
+	}
+	if out.String() != "Installed plane-cli 0.2.2 in ~/.config/oversire/vendors/plane/0.2.2.\n" {
+		t.Fatalf("%q", out)
+	}
+}
+
+func TestVendorRemoveSendsVendor(t *testing.T) {
+	c, out, _, app := vendorCLI(t)
+	answerWith(app, wire.AppCallOK, "OverSire has no copy of plane-cli. Nothing to remove.",
+		changeOut(t, wire.VendorChange{Vendor: "plane", Binary: "plane-cli", Action: "unchanged"}))
+	if err := c.dispatch(context.Background(), []string{"vendor", "remove", "plane"}); err != nil {
+		t.Fatal(err)
+	}
+	if call := app.last(t); call.Action != "vendor.remove" || string(call.Args) != `{"vendor":"plane"}` {
+		t.Fatal(call.Action, string(call.Args))
+	}
+	if !strings.HasPrefix(out.String(), "OverSire has no copy") {
+		t.Fatal(out)
+	}
+}
+
+func TestVendorInstallUsage(t *testing.T) {
+	c, _, _, app := vendorCLI(t)
+	for _, args := range [][]string{{"vendor", "install"}, {"vendor", "install", "plane", "bigtimer"}, {"vendor", "remove", "a", "b"}} {
+		if err := c.dispatch(context.Background(), args); exitCode(err) != 2 {
+			t.Errorf("%v: %v", args, err)
+		}
+	}
+	if app.count() != 0 {
+		t.Fatal("a usage error makes no call")
+	}
+}
+
+func TestVendorInstallFailedExit1(t *testing.T) {
+	c, _, _, app := vendorCLI(t)
+	msg := "The install of plane-cli goes on in the app. Run `oversire vendor ls` in one minute."
+	answerWith(app, wire.AppCallFailed, msg, "")
+	err := c.dispatch(context.Background(), []string{"vendor", "install", "plane"})
+	if exitCode(err) != 1 || err.Error() != msg {
+		t.Fatal(err)
+	}
+	answerWith(app, wire.AppCallNotAllowed, "OverSire does not install gh. Install it with Homebrew: `brew install gh`. gh keeps its own login.", "")
+	if err := c.dispatch(context.Background(), []string{"vendor", "install", "github"}); exitCode(err) != 1 {
+		t.Fatal(err)
+	}
+}
+
+func TestVendorInstallJSON(t *testing.T) {
+	c, out, _, app := vendorCLI(t)
+	answerWith(app, wire.AppCallOK, "Updated plane-cli from 0.2.1 to 0.2.2.",
+		changeOut(t, wire.VendorChange{Vendor: "plane", Binary: "plane-cli", Action: "updated", Version: "0.2.2", Previous: "0.2.1"}))
+	if err := c.dispatch(context.Background(), []string{"vendor", "install", "plane", "--json"}); err != nil {
+		t.Fatal(err)
+	}
+	var res struct {
+		Status string            `json:"status"`
+		Data   wire.VendorChange `json:"data"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &res); err != nil {
+		t.Fatal(err, out)
+	}
+	if res.Status != "ok" || res.Data.Previous != "0.2.1" || res.Data.Action != "updated" {
+		t.Fatalf("%+v", res)
+	}
+}
+
+func TestVendorListShowsJob(t *testing.T) {
+	c, out, _, app := vendorCLI(t)
+	rows := []wire.VendorCLIRow{
+		{Provider: "bigtimer", Vendor: "Big Timer", Binary: "big-timer-cli", MinVersion: "1.0.12", State: "missing", Job: "installing",
+			Accounts: []string{"bigtimer:bt"}, Projects: []string{}},
+		{Provider: "plane", Vendor: "Plane", Binary: "plane-cli", Path: "/usr/local/bin/plane-cli", Version: "0.2.2", MinVersion: "0.2.2",
+			Source: "path", State: "ok", OwnVersion: "0.2.1", Accounts: []string{"plane:ocral"}, Projects: []string{}},
+	}
+	b, _ := json.Marshal(rows)
+	answerWith(app, wire.AppCallOK, "2 vendor CLIs.", string(b))
+	if err := c.dispatch(context.Background(), []string{"vendor", "ls"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range []string{"missing (installing)", "path (oversire 0.2.1 old)"} {
+		if !strings.Contains(out.String(), s) {
+			t.Fatalf("no %q in\n%s", s, out)
+		}
 	}
 }

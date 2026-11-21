@@ -1,0 +1,13 @@
+{
+  "provider": "plane",
+  "vendor": "Plane",
+  "binary": "plane-cli",
+  "path": "/Users/fritz/.config/oversire/vendors/plane/0.2.2/plane-cli",
+  "version": "0.2.2",
+  "minVersion": "0.2.2",
+  "source": "oversire",
+  "state": "ok",
+  "accounts": ["plane:ocral"],
+  "projects": ["OVERSIRE"],
+  "ownVersion": "0.2.2"
+}

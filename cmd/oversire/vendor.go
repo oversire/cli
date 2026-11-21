@@ -16,6 +16,8 @@ const vendorUsage = `usage:
   oversire vendor ls [--json]
   oversire vendor run [--project P | --account A] [--json] -- <command of the vendor CLI> [its flags]
   oversire vendor skill <vendor> [--json]
+  oversire vendor install <vendor> [--json]
+  oversire vendor remove <vendor> [--json]
 The app on this Mac runs the vendor CLI of the account (plane-cli, big-timer-cli or gh) with the token of its Keychain.
 --project picks the tracker account of the project. --account is <provider>:<id> or <id>, for example github:oversire.
 vendor ls shows the version, the source (oversire or path) and the state (ok, old, missing) of each vendor CLI.
@@ -25,9 +27,13 @@ config commands, and the stream commands. The output has at most 1 MB. The vendo
 On Plane the app sets the workspace, and with --project the project: do not give -w, or -p with --project.
 <vendor> is the PROVIDER of vendor ls: plane, bigtimer or github. vendor skill prints how to use the vendor CLI
 through OverSire. Run it before the first vendor run for a vendor.
+vendor install puts the newest checked vendor CLI in ~/.config/oversire/vendors/<vendor>/<version>/ (plane from
+the signed Trebi catalog, bigtimer from its GitHub release). vendor run then uses that copy first. Install gh with
+Homebrew. vendor remove deletes only the OverSire copy. An install waits at most 50 s. A longer install goes on in
+the app: run oversire vendor ls later.
 Exit codes: 0 ok, 1 failed, refused, or a vendor exit that is not 0, 2 usage, 3 no daemon or no app.`
 
-// vendor runs `oversire vendor ls|run|skill`.
+// vendor runs `oversire vendor ls|run|skill|install|remove`.
 func (c *cli) vendor(ctx context.Context, args []string) error {
 	if len(args) == 0 {
 		return &exitError{2, errors.New(vendorUsage)}
@@ -39,6 +45,8 @@ func (c *cli) vendor(ctx context.Context, args []string) error {
 		return c.vendorRun(ctx, args[1:])
 	case "skill":
 		return c.vendorSkill(ctx, args[1:])
+	case "install", "remove":
+		return c.vendorChange(ctx, "vendor."+args[0], args[1:])
 	}
 	return &exitError{2, errors.New(vendorUsage)}
 }
@@ -74,6 +82,19 @@ func (c *cli) printVendorSkill(data json.RawMessage) error {
 	}
 	fmt.Fprint(c.out, "\n"+strings.TrimRight(out.Markdown, "\n")+"\n")
 	return nil
+}
+
+// vendorChange runs `oversire vendor install|remove <vendor>`.
+func (c *cli) vendorChange(ctx context.Context, action string, args []string) error {
+	f := newAppFlags(strings.Replace(action, ".", " ", 1))
+	pos, err := f.parse(args)
+	if err != nil {
+		return f.usage(vendorUsage, err)
+	}
+	if len(pos) != 1 || pos[0] == "" {
+		return f.usage(vendorUsage, errors.New("give one vendor, for example plane"))
+	}
+	return c.runApp(ctx, f, action, map[string]any{"vendor": strings.ToLower(pos[0])}, nil)
 }
 
 // vendorRun writes the stdout and the stderr of the vendor CLI as they are. A vendor exit that is not 0 gives exit 1.
@@ -169,8 +190,15 @@ func (c *cli) printVendors(data json.RawMessage) error {
 	tw := tabwriter.NewWriter(c.out, 0, 2, 2, ' ', 0)
 	fmt.Fprintln(tw, "PROVIDER\tBINARY\tVERSION\tSOURCE\tSTATE\tPATH\tACCOUNTS\tPROJECTS")
 	for _, r := range rows {
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", r.Provider, r.Binary, dash(r.Version), dash(r.Source),
-			dash(r.State), dash(r.Path), dash(strings.Join(r.Accounts, ",")), dash(strings.Join(r.Projects, ",")))
+		source, state := dash(r.Source), dash(r.State)
+		if r.Source == "path" && r.OwnVersion != "" {
+			source = "path (oversire " + r.OwnVersion + " old)"
+		}
+		if r.Job != "" {
+			state += " (" + r.Job + ")"
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", r.Provider, r.Binary, dash(r.Version), source,
+			state, dash(r.Path), dash(strings.Join(r.Accounts, ",")), dash(strings.Join(r.Projects, ",")))
 	}
 	if err := tw.Flush(); err != nil {
 		return err

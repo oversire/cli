@@ -2252,6 +2252,79 @@
       }
     },
     {
+      "kind": "vendor.installed",
+      "domain": "system",
+      "actorTypes": [
+        "human",
+        "agent"
+      ],
+      "private": false,
+      "summary": "the vendor CLI and the new version, and the old version on an update",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "vendor": {
+            "type": "string"
+          },
+          "binary": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "previous": {
+            "type": "string"
+          },
+          "release": {
+            "enum": [
+              "trebi-catalog",
+              "github-release"
+            ]
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "vendor",
+          "binary",
+          "version"
+        ]
+      }
+    },
+    {
+      "kind": "vendor.removed",
+      "domain": "system",
+      "actorTypes": [
+        "human",
+        "agent"
+      ],
+      "private": false,
+      "summary": "the vendor CLI and the removed version",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "vendor": {
+            "type": "string"
+          },
+          "binary": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "vendor",
+          "binary",
+          "version"
+        ]
+      }
+    },
+    {
       "kind": "epic.closed",
       "domain": "tracker",
       "actorTypes": [

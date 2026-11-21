@@ -1,0 +1,6 @@
+{
+  "vendor": "plane",
+  "binary": "plane-cli",
+  "action": "removed",
+  "version": "0.2.2"
+}

@@ -66,6 +66,8 @@ func (a Action) checkHint() string {
 		return "oversire item list" + project + ` --text "` + shellQuoter.Replace(title) + `"`
 	case a.Name == "vendor.run":
 		return "a read command of the vendor CLI, with oversire vendor run"
+	case a.Name == "vendor.install" || a.Name == "vendor.remove":
+		return "oversire vendor ls"
 	case a.Name == "epic.create":
 		return "oversire epic list" + project
 	case safeWord.MatchString(args.Key):

@@ -33,12 +33,33 @@ type VendorCLIRow struct {
 	State      string   `json:"state,omitempty"`
 	Accounts   []string `json:"accounts"`
 	Projects   []string `json:"projects"`
+	OwnVersion string   `json:"ownVersion,omitempty"`
+	Job        string   `json:"job,omitempty"`
+}
+
+// VendorActionArgs is the args of the app calls vendor.install and vendor.remove (app-call.json VendorActionArgs).
+type VendorActionArgs struct {
+	Vendor string `json:"vendor"`
+}
+
+// VendorChange is the data of a vendor.install or vendor.remove result (app-call.json VendorChange).
+type VendorChange struct {
+	Vendor   string `json:"vendor"`
+	Binary   string `json:"binary"`
+	Action   string `json:"action"`
+	Version  string `json:"version,omitempty"`
+	Previous string `json:"previous,omitempty"`
+	Path     string `json:"path,omitempty"`
+	Release  string `json:"release,omitempty"`
 }
 
 // Problem tells why the app does not run the binary, or "" for state ok and for no state.
 // The texts are those of VendorBinary.problem in the app.
 func (r VendorCLIRow) Problem() string {
 	hint := "Run `oversire vendor install " + r.Provider + "`."
+	if r.Binary == "gh" {
+		hint = "Install gh with Homebrew: `brew install gh`."
+	}
 	switch r.State {
 	case "missing":
 		return r.Binary + " is not installed. " + hint

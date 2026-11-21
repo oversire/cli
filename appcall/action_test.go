@@ -54,3 +54,12 @@ func TestVendorRunTimeoutMessage(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+func TestVendorInstallTimeoutMessage(t *testing.T) {
+	for _, name := range []string{"vendor.install", "vendor.remove"} {
+		a := Action{Name: name, Args: json.RawMessage(`{"vendor":"plane"}`)}
+		if got := a.TimeoutMessage("The app"); !a.Changes() || !strings.Contains(got, "with: oversire vendor ls.") {
+			t.Fatal(name, got)
+		}
+	}
+}

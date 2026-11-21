@@ -1,0 +1,9 @@
+{
+  "vendor": "bigtimer",
+  "binary": "big-timer-cli",
+  "action": "updated",
+  "version": "1.0.12",
+  "previous": "1.0.11",
+  "path": "/Users/fritz/.config/oversire/vendors/bigtimer/1.0.12/big-timer-cli",
+  "release": "github-release"
+}

@@ -1,0 +1,13 @@
+{
+  "seq": 271,
+  "id": "app:mba:-:vendor-updated:plane:1795200060000",
+  "at": "2026-11-20T14:01:00Z",
+  "seenAt": "2026-11-20T14:01:01Z",
+  "kind": "vendor.installed",
+  "machine": "mba",
+  "actorType": "agent",
+  "actor": "claude s1",
+  "via": "app@mba",
+  "summary": "Updated plane-cli from 0.2.1 to 0.2.2",
+  "payload": { "vendor": "plane", "binary": "plane-cli", "version": "0.2.2", "previous": "0.2.1", "release": "trebi-catalog", "sha256": "72f7a1c2d3e4f5061728394a5b6c7d8e9f00112233445566778899aabbccddee" }
+}

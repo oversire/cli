@@ -10,7 +10,7 @@
       "type": "object",
       "properties": {
         "id": { "description": "The id of the call. The daemon makes it.", "type": "string", "minLength": 1 },
-        "action": { "description": "A free string, an id of the action catalog. The CI actions are below (ci.json). A `ci.*` read action on a repo that OverSire does not track answers notAllowed.\n\nci.log: args {repo, jobId, lines?} (lines 1 to 2000, default 200), data CILogView (P1).\nci.jobs: args {repo, runId, attempt?, fresh?}, data CIJobsDoc (P1).\nci.workflows: args {repo}, data CIWorkflows (P1).\nci.refresh: args {repo}, no data. The app fetches the runs of the repo once (P1).\nci.rerun, ci.rerunJob, ci.cancel, ci.dispatch, ci.approve: args CIActionRequest, data CIActionResult (P2).\nci.explain: args CIExplainRequest plus runId, data CIExplanation (P3). The app runs the AI task on a cache miss.", "type": "string", "minLength": 1 },
+        "action": { "description": "A free string, an id of the action catalog. The CI actions are below (ci.json). A `ci.*` read action on a repo that OverSire does not track answers notAllowed.\n\nci.log: args {repo, jobId, lines?} (lines 1 to 2000, default 200), data CILogView (P1).\nci.jobs: args {repo, runId, attempt?, fresh?}, data CIJobsDoc (P1).\nci.workflows: args {repo}, data CIWorkflows (P1).\nci.refresh: args {repo}, no data. The app fetches the runs of the repo once (P1).\nci.rerun, ci.rerunJob, ci.cancel, ci.dispatch, ci.approve: args CIActionRequest, data CIActionResult (P2).\nci.explain: args CIExplainRequest plus runId, data CIExplanation (P3). The app runs the AI task on a cache miss.\n\nvendor.install, vendor.remove: args VendorActionArgs, data VendorChange. Local CLI only.", "type": "string", "minLength": 1 },
         "args": { "type": "object" },
         "agent": { "description": "For example codex or claude. Absent: a human ran the command.", "type": "string", "minLength": 1 }
       },
@@ -136,7 +136,9 @@
         "source": { "type": "string", "enum": ["oversire", "path"] },
         "state": { "type": "string", "enum": ["ok", "old", "missing"] },
         "accounts": { "type": "array", "items": { "type": "string" } },
-        "projects": { "type": "array", "items": { "type": "string" } }
+        "projects": { "type": "array", "items": { "type": "string" } },
+        "ownVersion": { "description": "The version of the OverSire copy in ~/.config/oversire/vendors, also when the PATH copy wins.", "type": "string", "minLength": 1 },
+        "job": { "description": "An install or a remove that runs now.", "type": "string", "enum": ["installing", "removing"] }
       },
       "required": ["provider", "vendor", "binary", "accounts", "projects"],
       "additionalProperties": false
@@ -161,6 +163,30 @@
         "markdown": { "type": "string" }
       },
       "required": ["vendor", "binary", "reference", "markdown"],
+      "additionalProperties": false
+    },
+    "VendorActionArgs": {
+      "description": "The args of the app calls vendor.install and vendor.remove (OVERSIRE-582). vendor is a provider id, for example plane. The app serves them only from the local CLI, never from a member call.",
+      "type": "object",
+      "properties": {
+        "vendor": { "type": "string", "minLength": 1 }
+      },
+      "required": ["vendor"],
+      "additionalProperties": false
+    },
+    "VendorChange": {
+      "description": "The data of a vendor.install or vendor.remove result. installed: a first install. updated: a new version replaced the OverSire copy (previous). unchanged: the newest version is installed already, or remove found no OverSire copy. removed: the OverSire copy is gone. path is the OverSire copy after the change. release is the source of the archive.",
+      "type": "object",
+      "properties": {
+        "vendor": { "description": "The provider id.", "type": "string", "minLength": 1 },
+        "binary": { "type": "string", "minLength": 1 },
+        "action": { "type": "string", "enum": ["installed", "updated", "unchanged", "removed"] },
+        "version": { "type": "string", "minLength": 1 },
+        "previous": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 },
+        "release": { "type": "string", "enum": ["trebi-catalog", "github-release"] }
+      },
+      "required": ["vendor", "binary", "action"],
       "additionalProperties": false
     }
   }

@@ -1,0 +1,10 @@
+{
+  "provider": "bigtimer",
+  "vendor": "Big Timer",
+  "binary": "big-timer-cli",
+  "minVersion": "1.0.12",
+  "state": "missing",
+  "accounts": ["bigtimer:bt.bigtimedata.io"],
+  "projects": ["ACME"],
+  "job": "installing"
+}
