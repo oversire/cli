@@ -52,7 +52,7 @@ func (a *API) Routes() []server.Route {
 // turns gives the turns after a seq, as one page. It reads the history and no live turns.
 func (a *API) turns(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Origin") != "" {
-		writeError(w, http.StatusForbidden, "a web page cannot read the turns of a session")
+		server.WriteError(w, http.StatusForbidden, "a web page cannot read the turns of a session")
 		return
 	}
 	after, ok := intParam(w, r, "after", 0, 0, 1<<31-1)
@@ -65,23 +65,23 @@ func (a *API) turns(w http.ResponseWriter, r *http.Request) {
 	}
 	ses, found := a.sessions.Get(r.PathValue("id"))
 	if !found {
-		writeError(w, http.StatusNotFound, "no session")
+		server.WriteError(w, http.StatusNotFound, "no session")
 		return
 	}
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 	src, err := a.open.Chat(ctx, ses)
 	if errors.Is(err, ErrNoView) {
-		writeError(w, http.StatusConflict, err.Error())
+		server.WriteError(w, http.StatusConflict, err.Error())
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		server.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	history, _, err := src.Turns(ctx, after)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		server.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	page := wire.SessionTurnsPage{Turns: []wire.SessionTurn{}, More: len(history) > limit}
@@ -98,7 +98,7 @@ func intParam(w http.ResponseWriter, r *http.Request, name string, def, lo, hi i
 	}
 	n, err := strconv.Atoi(raw)
 	if err != nil || n < lo || n > hi {
-		writeError(w, http.StatusBadRequest, "bad "+name+": use an integer from "+strconv.Itoa(lo)+" to "+strconv.Itoa(hi))
+		server.WriteError(w, http.StatusBadRequest, "bad "+name+": use an integer from "+strconv.Itoa(lo)+" to "+strconv.Itoa(hi))
 		return 0, false
 	}
 	return n, true
@@ -107,12 +107,12 @@ func intParam(w http.ResponseWriter, r *http.Request, name string, def, lo, hi i
 func (a *API) stream(w http.ResponseWriter, r *http.Request) {
 	// The app sends no Origin. A web page always does: it must not reach a terminal.
 	if r.Header.Get("Origin") != "" {
-		writeError(w, http.StatusForbidden, "a web page cannot open a session stream")
+		server.WriteError(w, http.StatusForbidden, "a web page cannot open a session stream")
 		return
 	}
 	ses, ok := a.sessions.Get(r.PathValue("id"))
 	if !ok {
-		writeError(w, http.StatusNotFound, "no session")
+		server.WriteError(w, http.StatusNotFound, "no session")
 		return
 	}
 	conn, err := websocket.Accept(w, r, nil)
@@ -188,10 +188,4 @@ func readAttach(ctx context.Context, conn *websocket.Conn) (wire.StreamAttach, e
 		return wire.StreamAttach{}, errors.New("the first frame must be attach")
 	}
 	return at, nil
-}
-
-func writeError(w http.ResponseWriter, code int, msg string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }

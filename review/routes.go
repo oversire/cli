@@ -1,9 +1,6 @@
 package review
 
 import (
-	"encoding/json"
-	"errors"
-	"io"
 	"net/http"
 	"strings"
 
@@ -19,10 +16,6 @@ type Routes struct{ engine *Engine }
 
 func NewRoutes(e *Engine) *Routes { return &Routes{engine: e} }
 
-type errorBody struct {
-	Error string `json:"error"`
-}
-
 func (rt *Routes) Routes() []server.Route {
 	member := func(p string, h http.HandlerFunc) server.Route {
 		return server.Route{Pattern: p, Access: server.Member, Handle: h}
@@ -30,31 +23,23 @@ func (rt *Routes) Routes() []server.Route {
 	local := func(p string, h http.HandlerFunc) server.Route {
 		return server.Route{Pattern: p, Access: server.LoopbackOnly, Handle: h}
 	}
+	app := func(h http.HandlerFunc) http.HandlerFunc {
+		return server.RefuseDaemon("Only an app changes a review.", h)
+	}
 	return []server.Route{
 		member("GET /v1/reviews", rt.list),
 		member("GET /v1/reviews/{key}", rt.get),
 		member("GET /v1/reviews/{key}/diff", rt.diff),
-		member("POST /v1/reviews/{key}/comments", rt.app(rt.addComment)),
-		member("PATCH /v1/reviews/{key}/comments/{id}", rt.app(rt.editComment)),
-		member("DELETE /v1/reviews/{key}/comments/{id}", rt.app(rt.deleteComment)),
-		member("PUT /v1/reviews/{key}/viewed", rt.app(rt.viewed)),
-		member("POST /v1/reviews/{key}/submit", rt.app(rt.submit)),
-		member("POST /v1/reviews/{key}/merge", rt.app(rt.merge)),
-		member("POST /v1/reviews/{key}/fix", rt.app(rt.fix)),
+		member("POST /v1/reviews/{key}/comments", app(rt.addComment)),
+		member("PATCH /v1/reviews/{key}/comments/{id}", app(rt.editComment)),
+		member("DELETE /v1/reviews/{key}/comments/{id}", app(rt.deleteComment)),
+		member("PUT /v1/reviews/{key}/viewed", app(rt.viewed)),
+		member("POST /v1/reviews/{key}/submit", app(rt.submit)),
+		member("POST /v1/reviews/{key}/merge", app(rt.merge)),
+		member("POST /v1/reviews/{key}/fix", app(rt.fix)),
 		local("POST /v1/reviews/{key}/comments/{id}/reply", rt.reply),
 		local("POST /v1/reviews/{key}/ready", rt.ready),
 		local("PUT /v1/reviews/{key}/plan", rt.plan),
-	}
-}
-
-// app refuses a daemon credential: only an app or loopback changes a review.
-func (rt *Routes) app(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if c, ok := server.CallerFrom(r.Context()); ok && c.Kind == string(wire.DeviceDaemon) {
-			writeJSON(w, http.StatusForbidden, errorBody{Error: "Only an app changes a review."})
-			return
-		}
-		next(w, r)
 	}
 }
 
@@ -75,12 +60,12 @@ func (rt *Routes) get(w http.ResponseWriter, r *http.Request) {
 func (rt *Routes) diff(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	if q.Get("repo") == "" || q.Get("path") == "" {
-		writeJSON(w, http.StatusBadRequest, errorBody{Error: "Give the repo and the path of the file."})
+		server.WriteError(w, http.StatusBadRequest, "Give the repo and the path of the file.")
 		return
 	}
 	c := q.Get("context")
 	if c != "" && c != "full" {
-		writeJSON(w, http.StatusBadRequest, errorBody{Error: "The context can only be full."})
+		server.WriteError(w, http.StatusBadRequest, "The context can only be full.")
 		return
 	}
 	d, err := rt.engine.Diff(r.Context(), pathKey(r), q.Get("repo"), q.Get("path"), c == "full")
@@ -89,7 +74,7 @@ func (rt *Routes) diff(w http.ResponseWriter, r *http.Request) {
 
 func (rt *Routes) addComment(w http.ResponseWriter, r *http.Request) {
 	var d wire.CommentDraft
-	if !decode(w, r, &d) {
+	if !server.Decode(w, r, maxBody, "The body is not valid JSON: ", &d) {
 		return
 	}
 	c, err := rt.engine.AddComment(r.Context(), pathKey(r), d)
@@ -98,7 +83,7 @@ func (rt *Routes) addComment(w http.ResponseWriter, r *http.Request) {
 
 func (rt *Routes) editComment(w http.ResponseWriter, r *http.Request) {
 	var ed wire.CommentEdit
-	if !decode(w, r, &ed) {
+	if !server.Decode(w, r, maxBody, "The body is not valid JSON: ", &ed) {
 		return
 	}
 	c, err := rt.engine.EditComment(pathKey(r), r.PathValue("id"), ed)
@@ -111,7 +96,7 @@ func (rt *Routes) deleteComment(w http.ResponseWriter, r *http.Request) {
 
 func (rt *Routes) viewed(w http.ResponseWriter, r *http.Request) {
 	var m wire.ViewedMark
-	if !decode(w, r, &m) {
+	if !server.Decode(w, r, maxBody, "The body is not valid JSON: ", &m) {
 		return
 	}
 	none(w, rt.engine.MarkViewed(r.Context(), pathKey(r), m))
@@ -119,7 +104,7 @@ func (rt *Routes) viewed(w http.ResponseWriter, r *http.Request) {
 
 func (rt *Routes) submit(w http.ResponseWriter, r *http.Request) {
 	var s wire.SubmitReview
-	if !decode(w, r, &s) {
+	if !server.Decode(w, r, maxBody, "The body is not valid JSON: ", &s) {
 		return
 	}
 	round, err := rt.engine.Submit(r.Context(), pathKey(r), s)
@@ -128,7 +113,7 @@ func (rt *Routes) submit(w http.ResponseWriter, r *http.Request) {
 
 func (rt *Routes) merge(w http.ResponseWriter, r *http.Request) {
 	var m wire.MergeRequest
-	if !decode(w, r, &m) {
+	if !server.Decode(w, r, maxBody, "The body is not valid JSON: ", &m) {
 		return
 	}
 	res, err := rt.engine.Merge(r.Context(), pathKey(r), m)
@@ -137,7 +122,7 @@ func (rt *Routes) merge(w http.ResponseWriter, r *http.Request) {
 
 func (rt *Routes) fix(w http.ResponseWriter, r *http.Request) {
 	if k := queryKind(r); k != "" && k != wire.ReviewCode {
-		writeJSON(w, http.StatusBadRequest, errorBody{Error: "Only a code review has a merge conflict to fix."})
+		server.WriteError(w, http.StatusBadRequest, "Only a code review has a merge conflict to fix.")
 		return
 	}
 	round, err := rt.engine.Fix(r.Context(), pathKey(r), nil)
@@ -146,7 +131,7 @@ func (rt *Routes) fix(w http.ResponseWriter, r *http.Request) {
 
 func (rt *Routes) reply(w http.ResponseWriter, r *http.Request) {
 	var rp wire.CommentReply
-	if !decode(w, r, &rp) {
+	if !server.Decode(w, r, maxBody, "The body is not valid JSON: ", &rp) {
 		return
 	}
 	c, err := rt.engine.Reply(pathKey(r), r.PathValue("id"), rp)
@@ -155,7 +140,7 @@ func (rt *Routes) reply(w http.ResponseWriter, r *http.Request) {
 
 func (rt *Routes) ready(w http.ResponseWriter, r *http.Request) {
 	var rd wire.ReviewReady
-	if !decode(w, r, &rd) {
+	if !server.Decode(w, r, maxBody, "The body is not valid JSON: ", &rd) {
 		return
 	}
 	s, err := rt.engine.Ready(r.Context(), pathKey(r), rd)
@@ -164,23 +149,11 @@ func (rt *Routes) ready(w http.ResponseWriter, r *http.Request) {
 
 func (rt *Routes) plan(w http.ResponseWriter, r *http.Request) {
 	var p wire.PlanDoc
-	if !decode(w, r, &p) {
+	if !server.Decode(w, r, maxBody, "The body is not valid JSON: ", &p) {
 		return
 	}
 	out, err := rt.engine.PutPlan(pathKey(r), p)
 	reply(w, http.StatusOK, out, err)
-}
-
-func decode(w http.ResponseWriter, r *http.Request, v any) bool {
-	body, err := io.ReadAll(io.LimitReader(r.Body, maxBody))
-	if err == nil {
-		err = wire.Decode(body, v)
-	}
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, errorBody{Error: "The body is not valid JSON: " + err.Error()})
-		return false
-	}
-	return true
 }
 
 func none(w http.ResponseWriter, err error) {
@@ -192,20 +165,9 @@ func none(w http.ResponseWriter, err error) {
 }
 
 func reply[T any](w http.ResponseWriter, code int, v T, err error) {
-	var e *Error
-	switch {
-	case err == nil:
-		writeJSON(w, code, v)
-	case errors.As(err, &e):
-		status := map[Kind]int{NotFound: http.StatusNotFound, Conflict: http.StatusConflict, Invalid: http.StatusBadRequest}[e.Kind]
-		writeJSON(w, status, errorBody{Error: e.Text})
-	default:
-		writeJSON(w, http.StatusInternalServerError, errorBody{Error: err.Error()})
+	if err != nil {
+		server.Fail(w, err)
+		return
 	}
-}
-
-func writeJSON(w http.ResponseWriter, code int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(v)
+	server.WriteJSON(w, code, v)
 }

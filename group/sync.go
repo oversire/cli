@@ -257,7 +257,7 @@ func (s *Syncer) Discover(ctx context.Context, peers []server.Peer) []wire.Daemo
 // daemonCaller gives the caller when it is a daemon of the group on Tailscale.
 func daemonCaller(r *http.Request) (server.Caller, bool) {
 	c, ok := server.CallerFrom(r.Context())
-	return c, ok && !c.Loopback && c.Kind == string(wire.DeviceDaemon) && c.Machine != ""
+	return c, ok && !c.Loopback && c.IsDaemon() && c.Machine != ""
 }
 
 var errDaemonOnly = errors.New("group: only a daemon of the group can call this route")
@@ -272,24 +272,24 @@ func (s *Syncer) Routes() []server.Route {
 				writeErr(w, ErrNoGroup)
 				return
 			}
-			writeJSON(w, http.StatusOK, g)
+			server.WriteJSON(w, http.StatusOK, g)
 		}},
 		{Pattern: "POST /v1/group/poke", Access: server.Member, Handle: func(w http.ResponseWriter, r *http.Request) {
 			c, isDaemon := daemonCaller(r)
 			if !isDaemon {
-				writeJSON(w, http.StatusForbidden, errorBody{Error: errDaemonOnly.Error()})
+				server.WriteError(w, http.StatusForbidden, errDaemonOnly.Error())
 				return
 			}
 			select {
 			case s.pokes <- c.Machine:
 			default:
 			}
-			writeJSON(w, http.StatusOK, ok)
+			server.WriteJSON(w, http.StatusOK, ok)
 		}},
 		{Pattern: "POST /v1/group/rekey", Access: server.Member, Handle: func(w http.ResponseWriter, r *http.Request) {
 			c, isDaemon := daemonCaller(r)
 			if !isDaemon {
-				writeJSON(w, http.StatusForbidden, errorBody{Error: errDaemonOnly.Error()})
+				server.WriteError(w, http.StatusForbidden, errDaemonOnly.Error())
 				return
 			}
 			var in rekeyBody
@@ -340,7 +340,7 @@ func (s *Syncer) Routes() []server.Route {
 			}
 			out, err := s.takeHome(r.Context(), in.Machine)
 			if err != nil {
-				writeJSON(w, http.StatusBadGateway, errorBody{Error: err.Error()})
+				server.WriteError(w, http.StatusBadGateway, err.Error())
 				return
 			}
 			reply(w, out, s.store.SetHome(in.Machine))
@@ -350,19 +350,19 @@ func (s *Syncer) Routes() []server.Route {
 		}},
 		{Pattern: "GET /v1/group/peers", Access: server.LoopbackOnly, Handle: func(w http.ResponseWriter, r *http.Request) {
 			if s.tailnet == nil {
-				writeJSON(w, http.StatusOK, []wire.DaemonInfo{})
+				server.WriteJSON(w, http.StatusOK, []wire.DaemonInfo{})
 				return
 			}
 			peers, err := s.tailnet(r.Context())
 			if errors.Is(err, server.ErrTailscaleDown) {
-				writeJSON(w, http.StatusServiceUnavailable, errorBody{Error: err.Error()})
+				server.WriteError(w, http.StatusServiceUnavailable, err.Error())
 				return
 			}
 			if err != nil {
-				writeJSON(w, http.StatusServiceUnavailable, errorBody{Error: "tailscale: " + err.Error()})
+				server.WriteError(w, http.StatusServiceUnavailable, "tailscale: "+err.Error())
 				return
 			}
-			writeJSON(w, http.StatusOK, s.Discover(r.Context(), peers))
+			server.WriteJSON(w, http.StatusOK, s.Discover(r.Context(), peers))
 		}},
 	}
 }

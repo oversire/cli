@@ -3,13 +3,13 @@ package worker
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/oversire/cli/runtime"
+	"github.com/oversire/cli/server"
 	"github.com/oversire/cli/term"
 	"github.com/oversire/cli/ticket"
 	"github.com/oversire/cli/wire"
@@ -42,6 +42,7 @@ type Sessions interface {
 	Get(id string) (wire.DaemonSession, bool)
 	ByKey(runtime, key string) (wire.DaemonSession, bool)
 	Tool(id string) (tool, input string)
+	Watch() (<-chan string, func()) // the id of each changed session
 }
 
 // Chats opens the turns of a session (runtime.Registry).
@@ -65,27 +66,6 @@ type Orders interface {
 type Oversight interface {
 	Inspect(ctx context.Context, s wire.DaemonSession) (runtime.Inspection, error)
 	Escalate(ctx context.Context, s wire.DaemonSession, q *wire.RunnerQuestion) error
-}
-
-// Kind is the kind of an Error. The routes give it as the HTTP status.
-type Kind string
-
-const (
-	NotFound Kind = "notFound"
-	Invalid  Kind = "invalid"
-	Conflict Kind = "conflict"
-)
-
-// Error is a refused call.
-type Error struct {
-	Kind Kind
-	Text string
-}
-
-func (e *Error) Error() string { return e.Text }
-
-func refuse(k Kind, format string, a ...any) *Error {
-	return &Error{Kind: k, Text: fmt.Sprintf(format, a...)}
 }
 
 // Header is the state of a worker at one read.
@@ -121,7 +101,7 @@ type Cursor struct {
 // Engine reads the turns of worker sessions for each reader and keeps the cursor of each reader.
 type Engine struct {
 	Log       *slog.Logger
-	Poll      time.Duration // the time between two checks in Wait
+	Poll      time.Duration // the time between two checks in Wait, besides the check at each change of the session
 	Stall     time.Duration // a working session with no turn for this time is stalled
 	StallTool time.Duration // a running tool keeps off a stall for this time
 	Tick      time.Duration // the time between two checks in Run
@@ -171,7 +151,7 @@ func (e *Engine) Resolve(ref string) (wire.DaemonSession, error) {
 			return s, nil
 		}
 	}
-	return wire.DaemonSession{}, refuse(NotFound, "There is no worker session %s.", ref)
+	return wire.DaemonSession{}, server.Refuse(server.NotFound, "There is no worker session %s.", ref)
 }
 
 // session resolves ref and checks that the session is on the oversire runtime.
@@ -181,7 +161,7 @@ func (e *Engine) session(ref string) (wire.DaemonSession, error) {
 		return s, err
 	}
 	if s.Runtime != wire.RuntimeOversire {
-		return s, refuse(Conflict, "The session %s runs on the %s runtime. A worker runs on the oversire runtime.", s.ID, s.Runtime)
+		return s, server.Refuse(server.Conflict, "The session %s runs on the %s runtime. A worker runs on the oversire runtime.", s.ID, s.Runtime)
 	}
 	return s, nil
 }
@@ -189,10 +169,10 @@ func (e *Engine) session(ref string) (wire.DaemonSession, error) {
 // Read gives the turns of the session after the cursor of the reader, at most limit. 0 is the default limit.
 func (e *Engine) Read(ctx context.Context, ref, reader string, limit int) (Read, error) {
 	if reader == "" {
-		return Read{}, refuse(Invalid, "Give the reader.")
+		return Read{}, server.Refuse(server.Invalid, "Give the reader.")
 	}
 	if limit < 0 || limit > MaxLimit {
-		return Read{}, refuse(Invalid, "The limit is 1 to %d.", MaxLimit)
+		return Read{}, server.Refuse(server.Invalid, "The limit is 1 to %d.", MaxLimit)
 	}
 	if limit == 0 {
 		limit = DefaultLimit
@@ -209,7 +189,7 @@ func (e *Engine) Read(ctx context.Context, ref, reader string, limit int) (Read,
 	defer cancel()
 	src, err := e.chats.Chat(ctx, ses)
 	if errors.Is(err, term.ErrNoView) {
-		return Read{}, refuse(Conflict, "The session %s has no turns.", ses.ID)
+		return Read{}, server.Refuse(server.Conflict, "The session %s has no turns.", ses.ID)
 	}
 	if err != nil {
 		return Read{}, err
@@ -260,10 +240,10 @@ func (e *Engine) remember(ses wire.DaemonSession) (Record, error) {
 // Commit sets the cursor of the reader. The reader runs it after it shows the turns.
 func (e *Engine) Commit(ref, reader string, seq int) error {
 	if reader == "" {
-		return refuse(Invalid, "Give the reader.")
+		return server.Refuse(server.Invalid, "Give the reader.")
 	}
 	if seq < 0 {
-		return refuse(Invalid, "The seq is 0 or more.")
+		return server.Refuse(server.Invalid, "The seq is 0 or more.")
 	}
 	ses, err := e.session(ref)
 	if err != nil {
@@ -391,11 +371,13 @@ func wakeFor(s wire.DaemonSession) WakeReason {
 	return WakeNone
 }
 
-// Wait blocks until the worker needs an action, or until max. It checks every Poll.
+// Wait blocks until the worker needs an action, or until max. It checks at each change of the session and every Poll.
 func (e *Engine) Wait(ctx context.Context, ref string, max time.Duration) (Wake, error) {
 	if max <= 0 || max > MaxWait {
-		return Wake{}, refuse(Invalid, "The max is above 0 and at most %s.", MaxWait)
+		return Wake{}, server.Refuse(server.Invalid, "The max is above 0 and at most %s.", MaxWait)
 	}
+	changes, stopWatch := e.sessions.Watch()
+	defer stopWatch()
 	ses, err := e.session(ref)
 	if err != nil {
 		return Wake{}, err
@@ -423,12 +405,20 @@ func (e *Engine) Wait(ctx context.Context, ref string, max time.Duration) (Wake,
 		if reason != WakeNone {
 			return e.wake(ctx, ses, reason)
 		}
-		select {
-		case <-ctx.Done():
-			return Wake{}, ctx.Err()
-		case <-timer.C:
-			return e.wake(ctx, ses, WakeNone)
-		case <-tick.C:
+	next:
+		for {
+			select {
+			case <-ctx.Done():
+				return Wake{}, ctx.Err()
+			case <-timer.C:
+				return e.wake(ctx, ses, WakeNone)
+			case <-tick.C:
+				break next
+			case id := <-changes:
+				if id == ses.ID {
+					break next
+				}
+			}
 		}
 		if ses, err = e.session(ref); err != nil {
 			return Wake{}, err
@@ -509,7 +499,7 @@ func (l *lastTurn) update(ctx context.Context, chats Chats, ses wire.DaemonSessi
 	if l.src == nil {
 		src, err := chats.Chat(ctx, ses)
 		if errors.Is(err, term.ErrNoView) {
-			return refuse(Conflict, "The session %s has no turns.", ses.ID)
+			return server.Refuse(server.Conflict, "The session %s has no turns.", ses.ID)
 		}
 		if err != nil {
 			return err
@@ -552,7 +542,7 @@ func (e *Engine) Brief(ctx context.Context, ref string) (Brief, error) {
 	defer cancel()
 	src, err := e.chats.Chat(ctx, ses)
 	if errors.Is(err, term.ErrNoView) {
-		return Brief{}, refuse(Conflict, "The session %s has no turns.", ses.ID)
+		return Brief{}, server.Refuse(server.Conflict, "The session %s has no turns.", ses.ID)
 	}
 	if err != nil {
 		return Brief{}, err

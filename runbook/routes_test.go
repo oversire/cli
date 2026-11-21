@@ -150,3 +150,11 @@ func TestRoutes(t *testing.T) {
 		t.Fatal("app stop", code, body)
 	}
 }
+
+func TestReplyRefusalWithoutProblems(t *testing.T) {
+	rec := httptest.NewRecorder()
+	reply(rec, http.StatusOK, wire.RunbookRun{}, server.Refuse(server.Conflict, "Busy."))
+	if rec.Code != 409 || rec.Body.String() != "{\"error\":\"Busy.\"}\n" {
+		t.Fatalf("%d %q", rec.Code, rec.Body.String())
+	}
+}

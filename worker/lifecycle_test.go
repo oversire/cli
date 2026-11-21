@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/oversire/cli/runtime"
+	"github.com/oversire/cli/server"
 	"github.com/oversire/cli/wire"
 )
 
@@ -30,9 +31,9 @@ func startReq() StartRequest {
 	return StartRequest{Key: "oversire-12", Harness: "codex", Model: "gpt-5", Dir: groupDir, Plan: "Build it.", Overseer: "ov1"}
 }
 
-func wantKind(t *testing.T, err error, k Kind) {
+func wantKind(t *testing.T, err error, k server.RefusalKind) {
 	t.Helper()
-	var e *Error
+	var e *server.Refusal
 	if !errors.As(err, &e) || e.Kind != k {
 		t.Fatalf("want %s, got %v", k, err)
 	}
@@ -77,7 +78,7 @@ func TestStartRefusesBadInput(t *testing.T) {
 		req := startReq()
 		mod(&req)
 		_, _, err := r.e.Start(context.Background(), req)
-		wantKind(t, err, Invalid)
+		wantKind(t, err, server.Invalid)
 	}
 	if len(r.orders.launches) != 0 {
 		t.Fatal("a bad request launched")
@@ -113,7 +114,7 @@ func TestStartMapsARuntimeRefusal(t *testing.T) {
 	r := newRig(t, nil)
 	r.orders.err = runtime.ErrConflict
 	_, _, err := r.e.Start(context.Background(), startReq())
-	wantKind(t, err, Conflict)
+	wantKind(t, err, server.Conflict)
 	if len(r.got()) != 0 {
 		t.Fatal("a failed start wrote a change")
 	}
@@ -166,9 +167,9 @@ func TestDoneSetsAwaitingCheck(t *testing.T) {
 func TestDoneRefusesABadVerdict(t *testing.T) {
 	r := newRig(t, nil, overseen("s1", "work:OVERSIRE-12"))
 	_, err := r.e.Done(context.Background(), "s1", "pass", "")
-	wantKind(t, err, Invalid)
+	wantKind(t, err, server.Invalid)
 	_, err = r.e.Done(context.Background(), "nope", "done", "")
-	wantKind(t, err, NotFound)
+	wantKind(t, err, server.NotFound)
 }
 
 func TestSendMarksOriginOverseer(t *testing.T) {
@@ -193,7 +194,7 @@ func TestSendMarksOriginOverseer(t *testing.T) {
 	if last.Kind != wire.KindWorkerNudged || last.Payload["how"] != "send" || last.Actor != ActorOverseer || last.Session != "ov1" {
 		t.Fatalf("change %+v", last)
 	}
-	wantKind(t, r.e.Send(ctx, "s1", " "), Invalid)
+	wantKind(t, r.e.Send(ctx, "s1", " "), server.Invalid)
 }
 
 func TestAnswerSendsTheTextAsOther(t *testing.T) {
@@ -208,9 +209,9 @@ func TestAnswerSendsTheTextAsOther(t *testing.T) {
 	if a == nil || a.ID != "q-1" || len(a.Items) != 1 || a.Items[0].ID != "i1" || a.Items[0].Other != "Use sqlite." {
 		t.Fatalf("%+v", r.orders.sends[0].P)
 	}
-	wantKind(t, r.e.Answer(ctx, "s1", Answer{Question: "q-9", Text: "x"}), Conflict)
-	wantKind(t, r.e.Answer(ctx, "s1", Answer{Question: "esc-1", Text: "x"}), Conflict)
-	wantKind(t, r.e.Answer(ctx, "s1", Answer{Question: "q-1"}), Invalid)
+	wantKind(t, r.e.Answer(ctx, "s1", Answer{Question: "q-9", Text: "x"}), server.Conflict)
+	wantKind(t, r.e.Answer(ctx, "s1", Answer{Question: "esc-1", Text: "x"}), server.Conflict)
+	wantKind(t, r.e.Answer(ctx, "s1", Answer{Question: "q-1"}), server.Invalid)
 
 	yes := true
 	if err := r.e.Answer(ctx, "s1", Answer{Permission: "p-1", Allow: &yes}); err != nil {
@@ -220,8 +221,8 @@ func TestAnswerSendsTheTextAsOther(t *testing.T) {
 	if p == nil || p.ID != "p-1" || !p.Allow {
 		t.Fatalf("%+v", r.orders.sends[1].P)
 	}
-	wantKind(t, r.e.Answer(ctx, "s1", Answer{Permission: "p-1"}), Invalid)
-	wantKind(t, r.e.Answer(ctx, "s1", Answer{}), Invalid)
+	wantKind(t, r.e.Answer(ctx, "s1", Answer{Permission: "p-1"}), server.Invalid)
+	wantKind(t, r.e.Answer(ctx, "s1", Answer{}), server.Invalid)
 	got := r.got()
 	if len(got) != 2 || got[0].Kind != wire.KindWorkerAnswered || got[0].Payload["request"] != "question" || got[1].Payload["allow"] != true {
 		t.Fatalf("changes %+v", got)
@@ -313,8 +314,8 @@ func TestEscalateRefusesASecondOpenEscalation(t *testing.T) {
 	if err := r.e.Escalate(ctx, "s1", "Which db?", ReasonOverseer); err != nil {
 		t.Fatal(err)
 	}
-	wantKind(t, r.e.Escalate(ctx, "s1", "Another?", ReasonOverseer), Conflict)
-	wantKind(t, r.e.Escalate(ctx, "s1", "", ReasonOverseer), Conflict)
+	wantKind(t, r.e.Escalate(ctx, "s1", "Another?", ReasonOverseer), server.Conflict)
+	wantKind(t, r.e.Escalate(ctx, "s1", "", ReasonOverseer), server.Conflict)
 	calls := r.watch.calls()
 	if len(calls) != 1 || calls[0].Q == nil || !strings.HasPrefix(calls[0].Q.ID, "esc-") || calls[0].Q.Items[0].Text != "Which db?" || calls[0].Q.Items[0].Kind != wire.QuestionFree || !calls[0].Q.Items[0].AllowsOther {
 		t.Fatalf("calls %+v", calls)
@@ -341,9 +342,9 @@ func TestEscalateWithNoQuestionPublishesTheOpenAsk(t *testing.T) {
 func TestEscalateMapsTheRuntimeRefusal(t *testing.T) {
 	r := newRig(t, nil, overseen("s1", "work:OVERSIRE-12"))
 	r.watch.escEr = runtime.ErrConflict
-	wantKind(t, r.e.Escalate(context.Background(), "s1", "Q?", ReasonOverseer), Conflict)
+	wantKind(t, r.e.Escalate(context.Background(), "s1", "Q?", ReasonOverseer), server.Conflict)
 	if rec, _ := r.store.Load("s1"); rec.Escalation != nil || len(r.got()) != 0 {
 		t.Fatalf("a refused escalation left a trace: %+v", rec)
 	}
-	wantKind(t, r.e.Escalate(context.Background(), "s1", "Q?", "other"), Invalid)
+	wantKind(t, r.e.Escalate(context.Background(), "s1", "Q?", "other"), server.Invalid)
 }

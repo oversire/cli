@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/oversire/cli/server"
 	"github.com/oversire/cli/wire"
 )
 
@@ -147,13 +148,13 @@ func TestWaitStopsWithTheContext(t *testing.T) {
 
 func TestWaitRefusesBadInput(t *testing.T) {
 	r := waitRig(t, turnsTo(3))
-	var e *Error
+	var e *server.Refusal
 	for _, max := range []time.Duration{60 * time.Second, 0, -time.Second} {
-		if _, err := r.e.Wait(context.Background(), "s1", max); !errors.As(err, &e) || e.Kind != Invalid {
+		if _, err := r.e.Wait(context.Background(), "s1", max); !errors.As(err, &e) || e.Kind != server.Invalid {
 			t.Fatalf("max %s: %v", max, err)
 		}
 	}
-	if _, err := r.e.Wait(context.Background(), "nope", time.Second); !errors.As(err, &e) || e.Kind != NotFound {
+	if _, err := r.e.Wait(context.Background(), "nope", time.Second); !errors.As(err, &e) || e.Kind != server.NotFound {
 		t.Fatalf("unknown: %v", err)
 	}
 }
@@ -195,5 +196,31 @@ func TestBriefGivesTheLastFailedTools(t *testing.T) {
 	b, err := waitRig(t, h).e.Brief(context.Background(), "s1")
 	if err != nil || len(b.Failed) != 5 || b.Failed[0].Seq != 3 || b.Failed[4].Seq != 7 || b.Plan != "" || b.Notes == nil {
 		t.Fatalf("%+v %v", b, err)
+	}
+}
+
+func TestWaitWakesOnBookChange(t *testing.T) {
+	r := waitRig(t, turnsTo(3))
+	r.e.Poll = time.Hour
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		r.book.feed <- "other"
+		r.book.setPhase("s1", wire.PhaseWaiting, wire.ReasonTurnEnd)
+		r.book.feed <- "s1"
+	}()
+	start := time.Now()
+	w, err := r.e.Wait(context.Background(), "s1", MaxWait)
+	if err != nil || w.Reason != WakeInput || time.Since(start) > time.Second {
+		t.Fatalf("%+v %v after %s", w, err, time.Since(start))
+	}
+}
+
+func TestWaitIgnoresChangeOfOtherSession(t *testing.T) {
+	r := waitRig(t, turnsTo(3))
+	r.e.Poll = time.Hour
+	r.book.feed <- "other"
+	w, err := r.e.Wait(context.Background(), "s1", 50*time.Millisecond)
+	if err != nil || w.Reason != WakeNone {
+		t.Fatalf("%+v %v", w, err)
 	}
 }

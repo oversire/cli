@@ -27,7 +27,7 @@ func logged(t *testing.T, h http.Handler, method, target string, header map[stri
 
 func TestAccessLogAFailureHasTheErrorAndTheRequestID(t *testing.T) {
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeError(w, http.StatusBadRequest, "wire: order needs id, runner and suggestion")
+		WriteError(w, http.StatusBadRequest, "wire: order needs id, runner and suggestion")
 	})
 	line := logged(t, h, "POST", "/v1/orders?token=abc", map[string]string{RequestID: "0a1b2c3d", "Authorization": "Bearer sekret"})
 	for _, want := range []string{"level=WARN", "method=POST", "path=/v1/orders", "status=400", "id=0a1b2c3d", `err="wire: order needs id, runner and suggestion"`, "via=loopback"} {
@@ -42,7 +42,9 @@ func TestAccessLogAFailureHasTheErrorAndTheRequestID(t *testing.T) {
 
 func TestAccessLogLevels(t *testing.T) {
 	ok := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("{}")) })
-	boom := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Error(w, "orca: exit 1\nmore", http.StatusBadGateway) })
+	boom := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "orca: exit 1\nmore", http.StatusBadGateway)
+	})
 	held := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusConflict) })
 	for _, c := range []struct {
 		h              http.Handler

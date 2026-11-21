@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/oversire/cli/proc"
+	"github.com/oversire/cli/server"
 	"github.com/oversire/cli/wire"
 )
 
@@ -59,10 +60,10 @@ func TestOneRepo(t *testing.T) {
 	if fd.Status != wire.FileModified || len(fd.Hunks) != 1 || fd.Hunks[0].Lines[3].Text != "func A() { Store() }" {
 		t.Fatalf("%+v", fd)
 	}
-	if _, err := r.Diff(ctx, "APP-1", "app", "none.go", false); !kindIs(err, NotFound) {
+	if _, err := r.Diff(ctx, "APP-1", "app", "none.go", false); !kindIs(err, server.NotFound) {
 		t.Fatal(err)
 	}
-	if _, err := r.Get(ctx, "APP-9", ""); !kindIs(err, NotFound) {
+	if _, err := r.Get(ctx, "APP-9", ""); !kindIs(err, server.NotFound) {
 		t.Fatal(err)
 	}
 }

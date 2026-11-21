@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/oversire/cli/config"
+	"github.com/oversire/cli/server"
 )
 
 // Errors of the join flows. statusOf maps them to HTTP status codes.
@@ -52,14 +53,8 @@ type errorBody struct {
 	Status string `json:"status,omitempty"`
 }
 
-func writeJSON(w http.ResponseWriter, code int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(v)
-}
-
 func writeErr(w http.ResponseWriter, err error) {
-	writeJSON(w, statusOf(err), errorBody{Error: err.Error()})
+	server.WriteJSON(w, statusOf(err), errorBody{Error: err.Error()})
 }
 
 func readJSON(r *http.Request, v any) error {

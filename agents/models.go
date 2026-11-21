@@ -3,7 +3,6 @@ package agents
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -46,7 +45,7 @@ func (a *API) models(w http.ResponseWriter, r *http.Request) {
 	agent := r.PathValue("agent")
 	h := agentwire.Harness(agent)
 	if h == agentwire.Fake || h == agentwire.Native || !slices.Contains(agentwire.Harnesses(), h) {
-		writeError(w, http.StatusNotFound, "The agent "+agent+" is not known.")
+		server.WriteError(w, http.StatusNotFound, "The agent "+agent+" is not known.")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), probeTimeout)
@@ -63,15 +62,5 @@ func (a *API) models(w http.ResponseWriter, r *http.Request) {
 	for _, m := range list {
 		out.Models = append(out.Models, wire.AgentModel{ID: m.ID, Name: m.Name, Description: m.Description, IsDefault: m.Default})
 	}
-	writeJSON(w, http.StatusOK, out)
-}
-
-func writeJSON(w http.ResponseWriter, code int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(v)
-}
-
-func writeError(w http.ResponseWriter, code int, msg string) {
-	writeJSON(w, code, map[string]string{"error": msg})
+	server.WriteJSON(w, http.StatusOK, out)
 }

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/oversire/cli/runtime"
+	"github.com/oversire/cli/server"
 	"github.com/oversire/cli/term"
 	"github.com/oversire/cli/wire"
 )
@@ -20,10 +21,11 @@ type book struct {
 	mu    sync.Mutex
 	byID  map[string]wire.DaemonSession
 	tools map[string][2]string
+	feed  chan string // the ids that Watch gives
 }
 
 func newBook(ss ...wire.DaemonSession) *book {
-	b := &book{byID: map[string]wire.DaemonSession{}, tools: map[string][2]string{}}
+	b := &book{byID: map[string]wire.DaemonSession{}, tools: map[string][2]string{}, feed: make(chan string, 16)}
 	for _, s := range ss {
 		b.byID[s.ID] = s
 	}
@@ -47,6 +49,8 @@ func (b *book) ByKey(rt, key string) (wire.DaemonSession, bool) {
 	}
 	return wire.DaemonSession{}, false
 }
+
+func (b *book) Watch() (<-chan string, func()) { return b.feed, func() {} }
 
 func (b *book) Tool(id string) (string, string) { return b.tools[id][0], b.tools[id][1] }
 
@@ -355,8 +359,8 @@ func TestResolveFindsTheSessionByKey(t *testing.T) {
 			t.Fatalf("%s: %+v %v", ref, s, err)
 		}
 	}
-	var e *Error
-	if _, err := r.e.Resolve("OVERSIRE-99"); !errors.As(err, &e) || e.Kind != NotFound {
+	var e *server.Refusal
+	if _, err := r.e.Resolve("OVERSIRE-99"); !errors.As(err, &e) || e.Kind != server.NotFound {
 		t.Fatalf("unknown: %v", err)
 	}
 }
@@ -383,29 +387,29 @@ func TestResolveFindsAStoppedSessionInTheStore(t *testing.T) {
 func TestReadRefusesAnotherRuntime(t *testing.T) {
 	orca := wire.DaemonSession{ID: "o1", Runtime: "orca", Key: "work:OVERSIRE-12"}
 	r := newRig(t, turnsTo(2), orca)
-	var e *Error
-	if _, err := r.e.Read(context.Background(), "o1", "overseer", 0); !errors.As(err, &e) || e.Kind != Conflict {
+	var e *server.Refusal
+	if _, err := r.e.Read(context.Background(), "o1", "overseer", 0); !errors.As(err, &e) || e.Kind != server.Conflict {
 		t.Fatalf("read: %v", err)
 	}
-	if err := r.e.Commit("o1", "overseer", 1); !errors.As(err, &e) || e.Kind != Conflict {
+	if err := r.e.Commit("o1", "overseer", 1); !errors.As(err, &e) || e.Kind != server.Conflict {
 		t.Fatalf("commit: %v", err)
 	}
 }
 
 func TestReadRefusesBadInput(t *testing.T) {
 	r := newRig(t, turnsTo(2), live("s1", ""))
-	var e *Error
-	if _, err := r.e.Read(context.Background(), "s1", "", 0); !errors.As(err, &e) || e.Kind != Invalid {
+	var e *server.Refusal
+	if _, err := r.e.Read(context.Background(), "s1", "", 0); !errors.As(err, &e) || e.Kind != server.Invalid {
 		t.Fatalf("no reader: %v", err)
 	}
-	if err := r.e.Commit("s1", "x", -1); !errors.As(err, &e) || e.Kind != Invalid {
+	if err := r.e.Commit("s1", "x", -1); !errors.As(err, &e) || e.Kind != server.Invalid {
 		t.Fatalf("negative seq: %v", err)
 	}
-	if _, err := r.e.Read(context.Background(), "nope", "x", 0); !errors.As(err, &e) || e.Kind != NotFound {
+	if _, err := r.e.Read(context.Background(), "nope", "x", 0); !errors.As(err, &e) || e.Kind != server.NotFound {
 		t.Fatalf("unknown: %v", err)
 	}
 	r.e.chats = chats{err: term.ErrNoView}
-	if _, err := r.e.Read(context.Background(), "s1", "x", 0); !errors.As(err, &e) || e.Kind != Conflict {
+	if _, err := r.e.Read(context.Background(), "s1", "x", 0); !errors.As(err, &e) || e.Kind != server.Conflict {
 		t.Fatalf("no view: %v", err)
 	}
 }

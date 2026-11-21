@@ -3,9 +3,7 @@ package ask
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -67,20 +65,17 @@ func (k *Asker) Routes() []server.Route {
 }
 
 func (k *Asker) serve(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(io.LimitReader(r.Body, maxBody))
 	var a wire.SessionAsk
-	if err == nil {
-		err = wire.Decode(body, &a)
-	}
+	err := server.ReadJSON(r, maxBody, &a)
 	if err == nil {
 		err = a.Check()
 	}
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, wire.SessionAskReply{Error: wire.AskBadRequest, Message: err.Error()})
+		server.WriteJSON(w, http.StatusBadRequest, wire.SessionAskReply{Error: wire.AskBadRequest, Message: err.Error()})
 		return
 	}
 	code, reply := k.Ask(r.Context(), r.PathValue("id"), a)
-	writeJSON(w, code, reply)
+	server.WriteJSON(w, code, reply)
 }
 
 // Ask sends a.Prompt() to the session id and waits for the turn end. code is the HTTP status of the reply.
@@ -224,10 +219,4 @@ func tail(s string, n int) string {
 		return s
 	}
 	return string(r[len(r)-n:])
-}
-
-func writeJSON(w http.ResponseWriter, code int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(v)
 }

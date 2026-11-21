@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/oversire/cli/server"
 	"github.com/oversire/cli/wire"
 )
 
@@ -41,7 +42,7 @@ func (e *Engine) AddComment(ctx context.Context, key string, d wire.CommentDraft
 	switch kind {
 	case wire.ReviewPlan:
 		if a.Block == "" || a.Repo != "" || a.Path != "" || a.Line != 0 {
-			return wire.ReviewComment{}, refuse(Invalid, "A plan comment needs an anchor with only a block.")
+			return wire.ReviewComment{}, server.Refuse(server.Invalid, "A plan comment needs an anchor with only a block.")
 		}
 		e.mu.Lock()
 		r := e.recs[id(kind, key)]
@@ -51,7 +52,7 @@ func (e *Engine) AddComment(ctx context.Context, key string, d wire.CommentDraft
 		}
 		if plan == nil {
 			e.mu.Unlock()
-			return wire.ReviewComment{}, refuse(NotFound, "%s has no plan.", key)
+			return wire.ReviewComment{}, server.Refuse(server.NotFound, "%s has no plan.", key)
 		}
 		i := slices.IndexFunc(plan.Blocks, func(b wire.PlanBlock) bool { return b.ID == a.Block })
 		if i >= 0 {
@@ -59,17 +60,17 @@ func (e *Engine) AddComment(ctx context.Context, key string, d wire.CommentDraft
 		}
 		e.mu.Unlock()
 		if i < 0 {
-			return wire.ReviewComment{}, refuse(Invalid, "The plan of %s has no block %s.", key, a.Block)
+			return wire.ReviewComment{}, server.Refuse(server.Invalid, "The plan of %s has no block %s.", key, a.Block)
 		}
 	default:
 		if a.Block != "" || a.Repo == "" || a.Path == "" || a.Line < 1 {
-			return wire.ReviewComment{}, refuse(Invalid, "A code comment needs an anchor with a repo, a path and a line.")
+			return wire.ReviewComment{}, server.Refuse(server.Invalid, "A code comment needs an anchor with a repo, a path and a line.")
 		}
 		if a.Side != "" && a.Side != "old" && a.Side != "new" {
-			return wire.ReviewComment{}, refuse(Invalid, "The side %q is not old or new.", a.Side)
+			return wire.ReviewComment{}, server.Refuse(server.Invalid, "The side %q is not old or new.", a.Side)
 		}
 		if a.From > a.Line {
-			return wire.ReviewComment{}, refuse(Invalid, "The anchor starts at line %d after its end at line %d.", a.From, a.Line)
+			return wire.ReviewComment{}, server.Refuse(server.Invalid, "The anchor starts at line %d after its end at line %d.", a.From, a.Line)
 		}
 		excerpt, err = e.excerpt(ctx, key, a)
 		if err != nil {
@@ -119,7 +120,7 @@ func (e *Engine) EditComment(key, cid string, ed wire.CommentEdit) (wire.ReviewC
 	}
 	c := &r.Comments[i]
 	if c.State != wire.CommentPending {
-		return wire.ReviewComment{}, refuse(Conflict, "The comment %s is %s. Only a pending comment can change.", cid, c.State)
+		return wire.ReviewComment{}, server.Refuse(server.Conflict, "The comment %s is %s. Only a pending comment can change.", cid, c.State)
 	}
 	now := e.now()
 	c.Text, c.UpdatedAt = ed.Text, &now
@@ -136,10 +137,10 @@ func (e *Engine) DeleteComment(key, cid string, kind wire.ReviewKind) error {
 		return err
 	}
 	if kind != "" && r.Kind != kind {
-		return refuse(NotFound, "The %s review of %s has no comment %s.", kind, key, cid)
+		return server.Refuse(server.NotFound, "The %s review of %s has no comment %s.", kind, key, cid)
 	}
 	if r.Comments[i].State != wire.CommentPending {
-		return refuse(Conflict, "The comment %s is %s. Only a pending comment can go.", cid, r.Comments[i].State)
+		return server.Refuse(server.Conflict, "The comment %s is %s. Only a pending comment can go.", cid, r.Comments[i].State)
 	}
 	r.Comments = slices.Delete(r.Comments, i, i+1)
 	e.changed(r, wire.EventReviewChanged)
@@ -159,7 +160,7 @@ func (e *Engine) Reply(key, cid string, rp wire.CommentReply) (wire.ReviewCommen
 	}
 	c := &r.Comments[i]
 	if c.State == wire.CommentPending {
-		return wire.ReviewComment{}, refuse(Conflict, "The comment %s is not submitted yet.", cid)
+		return wire.ReviewComment{}, server.Refuse(server.Conflict, "The comment %s is not submitted yet.", cid)
 	}
 	now := e.now()
 	c.Reply, c.State, c.AnsweredAt = strings.TrimSpace(rp.Text), wire.CommentAnswered, &now
@@ -176,17 +177,17 @@ func (e *Engine) comment(key, cid string) (*record, int, error) {
 			}
 		}
 	}
-	return nil, 0, refuse(NotFound, "%s has no comment %s.", key, cid)
+	return nil, 0, server.Refuse(server.NotFound, "%s has no comment %s.", key, cid)
 }
 
 // MarkViewed sets or clears the viewed mark of a file of the code review of key.
 // The mark keeps the content hash of the file. Get clears the mark when the file changes.
 func (e *Engine) MarkViewed(ctx context.Context, key string, m wire.ViewedMark) error {
 	if !validKey(key) {
-		return refuse(Invalid, "The key %q is not valid.", key)
+		return server.Refuse(server.Invalid, "The key %q is not valid.", key)
 	}
 	if m.Repo == "" || m.Path == "" {
-		return refuse(Invalid, "A viewed mark needs a repo and a path.")
+		return server.Refuse(server.Invalid, "A viewed mark needs a repo and a path.")
 	}
 	var print string
 	if m.Viewed {
@@ -253,10 +254,10 @@ func setKey[V any](m map[string]V, k string, v V) map[string]V {
 // Ready is the hand-off of the agent: the review is the turn of the user again. It gives the summary.
 func (e *Engine) Ready(ctx context.Context, key string, rd wire.ReviewReady) (wire.ReviewSummary, error) {
 	if len([]rune(rd.Note)) > MaxNote {
-		return wire.ReviewSummary{}, refuse(Invalid, "The note has more than %d characters.", MaxNote)
+		return wire.ReviewSummary{}, server.Refuse(server.Invalid, "The note has more than %d characters.", MaxNote)
 	}
 	if rd.Root != "" && !filepath.IsAbs(rd.Root) {
-		return wire.ReviewSummary{}, refuse(Invalid, "The root %q is not an absolute path.", rd.Root)
+		return wire.ReviewSummary{}, server.Refuse(server.Invalid, "The root %q is not an absolute path.", rd.Root)
 	}
 	if rd.Root != "" && rd.Kind != wire.ReviewPlan {
 		e.mu.Lock()
@@ -271,7 +272,7 @@ func (e *Engine) Ready(ctx context.Context, key string, rd wire.ReviewReady) (wi
 	if kind == wire.ReviewCode {
 		var ok bool
 		if g, ok = findGroup(e.allRoots(ctx), key); !ok {
-			return wire.ReviewSummary{}, refuse(NotFound, "There is no group .wt/%s in the roots of this daemon. Give the root.", strings.ToLower(key))
+			return wire.ReviewSummary{}, server.Refuse(server.NotFound, "There is no group .wt/%s in the roots of this daemon. Give the root.", strings.ToLower(key))
 		}
 	} else {
 		e.mu.Lock()
@@ -279,7 +280,7 @@ func (e *Engine) Ready(ctx context.Context, key string, rd wire.ReviewReady) (wi
 		none := r == nil || r.Plan == nil
 		e.mu.Unlock()
 		if none {
-			return wire.ReviewSummary{}, refuse(NotFound, "%s has no plan. Store it first: oversire review ready --kind plan --plan <file.md>.", key)
+			return wire.ReviewSummary{}, server.Refuse(server.NotFound, "%s has no plan. Store it first: oversire review ready --kind plan --plan <file.md>.", key)
 		}
 	}
 	e.mu.Lock()
@@ -316,27 +317,27 @@ func (e *Engine) Ready(ctx context.Context, key string, rd wire.ReviewReady) (wi
 // PutPlan keeps the plan of a Plan session. Each new plan of the key has the next version.
 func (e *Engine) PutPlan(key string, p wire.PlanDoc) (wire.PlanDoc, error) {
 	if !validKey(key) {
-		return p, refuse(Invalid, "The key %q is not valid.", key)
+		return p, server.Refuse(server.Invalid, "The key %q is not valid.", key)
 	}
 	if p.Key != "" && p.Key != key {
-		return p, refuse(Invalid, "The plan is for %s, not %s.", p.Key, key)
+		return p, server.Refuse(server.Invalid, "The plan is for %s, not %s.", p.Key, key)
 	}
 	if !filepath.IsAbs(p.Root) {
-		return p, refuse(Invalid, "The plan needs the folder of the Plan session as an absolute root.")
+		return p, server.Refuse(server.Invalid, "The plan needs the folder of the Plan session as an absolute root.")
 	}
 	if len(p.Blocks) == 0 {
-		return p, refuse(Invalid, "The plan has no blocks.")
+		return p, server.Refuse(server.Invalid, "The plan has no blocks.")
 	}
 	seen := map[string]bool{}
 	for _, b := range p.Blocks {
 		if !blockID.MatchString(b.ID) || seen[b.ID] {
-			return p, refuse(Invalid, "The block id %q is not valid or not unique. Use a-z, 0-9 and -.", b.ID)
+			return p, server.Refuse(server.Invalid, "The block id %q is not valid or not unique. Use a-z, 0-9 and -.", b.ID)
 		}
 		seen[b.ID] = true
 	}
 	for _, s := range p.Subitems {
 		if s.Title == "" {
-			return p, refuse(Invalid, "Each sub-item needs a title.")
+			return p, server.Refuse(server.Invalid, "Each sub-item needs a title.")
 		}
 	}
 	e.mu.Lock()
@@ -355,9 +356,9 @@ func (e *Engine) PutPlan(key string, p wire.PlanDoc) (wire.PlanDoc, error) {
 func checkText(text string, n int) error {
 	switch {
 	case strings.TrimSpace(text) == "":
-		return refuse(Invalid, "The text is empty.")
+		return server.Refuse(server.Invalid, "The text is empty.")
 	case len([]rune(text)) > n:
-		return refuse(Invalid, "The text has more than %d characters.", n)
+		return server.Refuse(server.Invalid, "The text has more than %d characters.", n)
 	}
 	return nil
 }

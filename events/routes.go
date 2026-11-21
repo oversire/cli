@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	maxLinks  = 2000
-	maxBody   = 4 << 20
+	maxLinks = 2000
+	maxBody  = 4 << 20
 )
 
 // Routes serves the events table: POST /v1/events, POST /v1/events/links, GET /v1/items/{key}/events, GET /v1/events/rows.
@@ -52,49 +52,45 @@ func (r *Routes) Routes() []server.Route {
 	}
 }
 
-type errorBody struct {
-	Error string `json:"error"`
-}
-
 func (r *Routes) append(w http.ResponseWriter, req *http.Request) {
 	var body wire.EventAppend
-	if !decode(w, req, &body) {
+	if !server.Decode(w, req, maxBody, "", &body) {
 		return
 	}
 	if len(body.Events) > MaxAppend {
-		writeJSON(w, http.StatusRequestEntityTooLarge, errorBody{fmt.Sprintf("at most %d events", MaxAppend)})
+		server.WriteError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("at most %d events", MaxAppend))
 		return
 	}
 	for i, d := range body.Events {
 		if _, err := Normalize(d); err != nil {
-			writeJSON(w, http.StatusBadRequest, errorBody{fmt.Sprintf("events[%d]: %v", i, err)})
+			server.WriteError(w, http.StatusBadRequest, fmt.Sprintf("events[%d]: %v", i, err))
 			return
 		}
 	}
 	rows, err := r.store.Append(req.Context(), body.Events)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, errorBody{err.Error()})
+		server.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	head, _ := r.store.Head(req.Context())
-	writeJSON(w, http.StatusOK, wire.EventAppendResult{Accepted: len(rows), Head: head})
+	server.WriteJSON(w, http.StatusOK, wire.EventAppendResult{Accepted: len(rows), Head: head})
 }
 
 func (r *Routes) links(w http.ResponseWriter, req *http.Request) {
 	var body wire.ItemLinks
-	if !decode(w, req, &body) {
+	if !server.Decode(w, req, maxBody, "", &body) {
 		return
 	}
 	if len(body.Links) > maxLinks {
-		writeJSON(w, http.StatusRequestEntityTooLarge, errorBody{fmt.Sprintf("at most %d links", maxLinks)})
+		server.WriteError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("at most %d links", maxLinks))
 		return
 	}
 	n, err := r.store.SetLinks(req.Context(), body.Links)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, errorBody{err.Error()})
+		server.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]int{"updated": n})
+	server.WriteJSON(w, http.StatusOK, map[string]int{"updated": n})
 }
 
 func (r *Routes) item(w http.ResponseWriter, req *http.Request) {
@@ -111,10 +107,10 @@ func (r *Routes) item(w http.ResponseWriter, req *http.Request) {
 	page, err := r.store.Query(req.Context(), wire.EventQuery{Item: req.PathValue("key"), Tree: tree == "1" || tree == "true",
 		After: after, Kinds: kinds, Limit: limit})
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, errorBody{err.Error()})
+		server.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, page)
+	server.WriteJSON(w, http.StatusOK, page)
 }
 
 func (r *Routes) rows(w http.ResponseWriter, req *http.Request) {
@@ -125,10 +121,10 @@ func (r *Routes) rows(w http.ResponseWriter, req *http.Request) {
 	}
 	page, err := r.store.Tail(req.Context(), after, limit)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, errorBody{err.Error()})
+		server.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, page)
+	server.WriteJSON(w, http.StatusOK, page)
 }
 
 // TakeHome copies all rows of the old home at base (GET /v1/events/rows until more is false). It implements group.HomeTaker.
@@ -190,33 +186,15 @@ func cursor(w http.ResponseWriter, a, l string) (after int64, limit int, ok bool
 	var err error
 	if a != "" {
 		if after, err = strconv.ParseInt(a, 10, 64); err != nil || after < 0 {
-			writeJSON(w, http.StatusBadRequest, errorBody{"after must be a seq"})
+			server.WriteError(w, http.StatusBadRequest, "after must be a seq")
 			return 0, 0, false
 		}
 	}
 	if l != "" {
 		if limit, err = strconv.Atoi(l); err != nil || limit < 1 || limit > MaxLimit {
-			writeJSON(w, http.StatusBadRequest, errorBody{fmt.Sprintf("limit must be 1 to %d", MaxLimit)})
+			server.WriteError(w, http.StatusBadRequest, fmt.Sprintf("limit must be 1 to %d", MaxLimit))
 			return 0, 0, false
 		}
 	}
 	return after, limit, true
-}
-
-func decode(w http.ResponseWriter, req *http.Request, v any) bool {
-	data, err := io.ReadAll(http.MaxBytesReader(w, req.Body, maxBody))
-	if err == nil {
-		err = wire.Decode(data, v)
-	}
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, errorBody{err.Error()})
-		return false
-	}
-	return true
-}
-
-func writeJSON(w http.ResponseWriter, code int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(v)
 }

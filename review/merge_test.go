@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/oversire/cli/proc"
+	"github.com/oversire/cli/server"
 	"github.com/oversire/cli/wire"
 )
 
@@ -140,26 +141,26 @@ func TestMergeChecks(t *testing.T) {
 	wt := filepath.Join(g, "app")
 	r := newRig(t, w.root)
 	ctx := context.Background()
-	if _, err := r.Merge(ctx, "APP-1", wire.MergeRequest{}); !kindIs(err, Conflict) {
+	if _, err := r.Merge(ctx, "APP-1", wire.MergeRequest{}); !kindIs(err, server.Conflict) {
 		t.Fatal("no commits:", err)
 	}
 	w.commit(wt, "Work", map[string]string{"n.go": "package lib\n", "README.md": "branch\n"})
 	w.write(filepath.Join(wt, "wip.go"), "package lib\n")
-	if _, err := r.Merge(ctx, "APP-1", wire.MergeRequest{}); !kindIs(err, Conflict) {
+	if _, err := r.Merge(ctx, "APP-1", wire.MergeRequest{}); !kindIs(err, server.Conflict) {
 		t.Fatal("dirty worktree:", err)
 	}
 	os.Remove(filepath.Join(wt, "wip.go"))
 	w.write(filepath.Join(app, "README.md"), "changed\n")
 	_, err := r.Merge(ctx, "APP-1", wire.MergeRequest{})
-	if !kindIs(err, Conflict) || !strings.Contains(err.Error(), "primary checkout") || !strings.Contains(err.Error(), "README.md") {
+	if !kindIs(err, server.Conflict) || !strings.Contains(err.Error(), "primary checkout") || !strings.Contains(err.Error(), "README.md") {
 		t.Fatal("dirty primary:", err)
 	}
 	w.git(app, "checkout", "-q", "README.md")
 	r.book.put(session("s1", wire.PhaseWorking, r.clock.now(), wt))
-	if _, err := r.Merge(ctx, "APP-1", wire.MergeRequest{}); !kindIs(err, Conflict) {
+	if _, err := r.Merge(ctx, "APP-1", wire.MergeRequest{}); !kindIs(err, server.Conflict) {
 		t.Fatal("working session:", err)
 	}
-	if _, err := r.Merge(ctx, "APP-2", wire.MergeRequest{}); !kindIs(err, NotFound) {
+	if _, err := r.Merge(ctx, "APP-2", wire.MergeRequest{}); !kindIs(err, server.NotFound) {
 		t.Fatal(err)
 	}
 	if w.git(app, "rev-parse", "main") == w.git(wt, "rev-parse", "HEAD") {

@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"log/slog"
 	"net/http"
 	"sync"
@@ -119,58 +118,50 @@ func (r *Relay) Routes() []server.Route {
 }
 
 func (r *Relay) serveCall(w http.ResponseWriter, req *http.Request) {
-	body, err := io.ReadAll(io.LimitReader(req.Body, MaxCallBody+1))
-	if len(body) > MaxCallBody {
-		reply(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "The call is too large."})
-		return
-	}
 	var c wire.AppCall
-	if err == nil {
-		err = wire.Decode(body, &c)
+	err := server.ReadJSON(req, MaxCallBody, &c)
+	if errors.Is(err, server.ErrTooLarge) {
+		server.WriteError(w, http.StatusRequestEntityTooLarge, "The call is too large.")
+		return
 	}
 	switch {
 	case err != nil:
-		reply(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		server.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	case c.Action == "":
-		reply(w, http.StatusBadRequest, map[string]string{"error": "no action"})
+		server.WriteError(w, http.StatusBadRequest, "no action")
 		return
 	case len(c.Args) > 0 && !isObject(c.Args):
-		reply(w, http.StatusBadRequest, map[string]string{"error": "args must be a JSON object"})
+		server.WriteError(w, http.StatusBadRequest, "args must be a JSON object")
 		return
 	}
 	res, err := r.Do(req.Context(), c)
 	switch {
 	case errors.Is(err, ErrNoApp), errors.Is(err, ErrBusy):
-		reply(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
+		server.WriteError(w, http.StatusServiceUnavailable, err.Error())
 	case errors.Is(err, context.DeadlineExceeded):
-		reply(w, http.StatusGatewayTimeout, map[string]string{"error": "The app did not answer. Update the app."})
+		server.WriteError(w, http.StatusGatewayTimeout, "The app did not answer. Update the app.")
 	case err != nil:
-		reply(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
+		server.WriteError(w, http.StatusServiceUnavailable, err.Error())
 	default:
-		reply(w, http.StatusOK, res)
+		server.WriteJSON(w, http.StatusOK, res)
 	}
 }
 
 func (r *Relay) serveResult(w http.ResponseWriter, req *http.Request) {
-	body, err := io.ReadAll(io.LimitReader(req.Body, 4<<20))
 	var res wire.AppCallResult
-	if err == nil {
-		err = wire.Decode(body, &res)
-	}
-	if err != nil {
-		reply(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+	if !server.Decode(w, req, 4<<20, "", &res) {
 		return
 	}
 	if res.ID != req.PathValue("id") {
-		reply(w, http.StatusBadRequest, map[string]string{"error": "the id of the body is not the id of the path"})
+		server.WriteError(w, http.StatusBadRequest, "the id of the body is not the id of the path")
 		return
 	}
 	switch err := r.Deliver(res); {
 	case errors.Is(err, ErrUnknown):
-		reply(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+		server.WriteError(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, ErrAnswered):
-		reply(w, http.StatusConflict, map[string]string{"error": err.Error()})
+		server.WriteError(w, http.StatusConflict, err.Error())
 	default:
 		w.WriteHeader(http.StatusNoContent)
 	}
@@ -183,10 +174,4 @@ func isObject(b json.RawMessage) bool {
 
 func newID() string {
 	return "c-" + wire.RandomHex(8)
-}
-
-func reply(w http.ResponseWriter, code int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(v)
 }

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/oversire/cli/runtime"
+	"github.com/oversire/cli/server"
 	"github.com/oversire/cli/term"
 	"github.com/oversire/cli/wire"
 )
@@ -71,9 +72,9 @@ func mapErr(err error) error {
 	case err == nil:
 		return nil
 	case errors.Is(err, runtime.ErrNotFound):
-		return refuse(NotFound, "%v", err)
+		return server.Refuse(server.NotFound, "%v", err)
 	case errors.Is(err, runtime.ErrConflict), errors.Is(err, runtime.ErrUnsupported):
-		return refuse(Conflict, "%v", err)
+		return server.Refuse(server.Conflict, "%v", err)
 	}
 	return err
 }
@@ -118,15 +119,15 @@ func (e *Engine) Start(ctx context.Context, r StartRequest) (Record, bool, error
 	key := strings.ToUpper(strings.TrimSpace(r.Key))
 	switch {
 	case key == "":
-		return Record{}, false, refuse(Invalid, "Give the item key.")
+		return Record{}, false, server.Refuse(server.Invalid, "Give the item key.")
 	case r.Harness == "":
-		return Record{}, false, refuse(Invalid, "Give the harness.")
+		return Record{}, false, server.Refuse(server.Invalid, "Give the harness.")
 	case r.Overseer == "":
-		return Record{}, false, refuse(Invalid, "Give the session of the overseer.")
+		return Record{}, false, server.Refuse(server.Invalid, "Give the session of the overseer.")
 	case !filepath.IsAbs(r.Dir):
-		return Record{}, false, refuse(Invalid, "The folder is an absolute path.")
+		return Record{}, false, server.Refuse(server.Invalid, "The folder is an absolute path.")
 	case r.Budget < 0:
-		return Record{}, false, refuse(Invalid, "The budget is 0 or more.")
+		return Record{}, false, server.Refuse(server.Invalid, "The budget is 0 or more.")
 	}
 	dir := filepath.Clean(r.Dir)
 	started, err := e.orders.Launch(ctx, wire.RuntimeOversire, e.order("start"), wire.LaunchRequest{
@@ -172,7 +173,7 @@ func (e *Engine) Done(ctx context.Context, ref string, verdict, note string) (Re
 	case "blocked":
 		state = StateBlocked
 	default:
-		return Record{}, refuse(Invalid, "The verdict is done or blocked.")
+		return Record{}, server.Refuse(server.Invalid, "The verdict is done or blocked.")
 	}
 	ses, err := e.session(ref)
 	if err != nil {
@@ -191,7 +192,7 @@ func (e *Engine) Done(ctx context.Context, ref string, verdict, note string) (Re
 // Send gives text to the worker as a turn of the overseer. The worker is working again.
 func (e *Engine) Send(ctx context.Context, ref, text string) error {
 	if strings.TrimSpace(text) == "" {
-		return refuse(Invalid, "Give the text.")
+		return server.Refuse(server.Invalid, "Give the text.")
 	}
 	ses, err := e.session(ref)
 	if err != nil {
@@ -214,25 +215,25 @@ func (e *Engine) Answer(ctx context.Context, ref string, a Answer) error {
 	switch {
 	case a.Permission != "" && a.Question == "":
 		if a.Allow == nil {
-			return refuse(Invalid, "Give allow or deny.")
+			return server.Refuse(server.Invalid, "Give allow or deny.")
 		}
 		p.Permission = &wire.PermissionAnswer{ID: a.Permission, Allow: *a.Allow}
 		payload["request"], payload["allow"] = "permission", *a.Allow
 	case a.Question != "" && a.Permission == "":
 		if strings.TrimSpace(a.Text) == "" {
-			return refuse(Invalid, "Give the text of the answer.")
+			return server.Refuse(server.Invalid, "Give the text of the answer.")
 		}
 		if strings.HasPrefix(a.Question, escalationPrefix) {
-			return refuse(Conflict, "The question %s asks the user. Only the user answers it.", a.Question)
+			return server.Refuse(server.Conflict, "The question %s asks the user. Only the user answers it.", a.Question)
 		}
 		insp, ok := e.inspect(ctx, ses)
 		if !ok || insp.Session.Question == nil || insp.Session.Question.ID != a.Question || len(insp.Session.Question.Items) == 0 {
-			return refuse(Conflict, "The worker has no open question %s.", a.Question)
+			return server.Refuse(server.Conflict, "The worker has no open question %s.", a.Question)
 		}
 		p.Answer = &wire.QuestionAnswer{ID: a.Question, Items: []wire.QuestionAnswerItem{{ID: insp.Session.Question.Items[0].ID, Choices: []string{}, Other: a.Text}}}
 		payload["request"] = "question"
 	default:
-		return refuse(Invalid, "Answer one permission or one question.")
+		return server.Refuse(server.Invalid, "Answer one permission or one question.")
 	}
 	if err := e.orders.Send(ctx, ses.Runtime, e.order("answer"), p); err != nil {
 		return mapErr(err)
@@ -257,7 +258,7 @@ func (e *Engine) interrupt(ctx context.Context, ses wire.DaemonSession) error {
 	defer cancel()
 	src, err := e.chats.Chat(ctx, ses)
 	if errors.Is(err, term.ErrNoView) {
-		return refuse(Conflict, "The session %s has no turns.", ses.ID)
+		return server.Refuse(server.Conflict, "The session %s has no turns.", ses.ID)
 	}
 	if err != nil {
 		return err
@@ -298,7 +299,7 @@ func (e *Engine) Escalate(ctx context.Context, ref, question string, reason Esca
 	switch reason {
 	case ReasonOverseer, ReasonFallback, ReasonBudget:
 	default:
-		return refuse(Invalid, "The reason is overseer, fallback or budget.")
+		return server.Refuse(server.Invalid, "The reason is overseer, fallback or budget.")
 	}
 	ses, err := e.session(ref)
 	if err != nil {
@@ -309,7 +310,7 @@ func (e *Engine) Escalate(ctx context.Context, ref, question string, reason Esca
 		return err
 	}
 	if rec.Escalation != nil {
-		return refuse(Conflict, "The worker %s has an open escalation.", ses.ID)
+		return server.Refuse(server.Conflict, "The worker %s has an open escalation.", ses.ID)
 	}
 	return e.escalate(ctx, ses, strings.TrimSpace(question), reason)
 }

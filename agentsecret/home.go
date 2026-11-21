@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"maps"
 	"net/http"
@@ -71,9 +70,9 @@ func NewHome(store *Store, group Group, agents Agents, events Events, clock func
 // Routes gives the secret routes. A daemon that is not home answers 409 with the home name.
 func (h *Home) Routes() []server.Route {
 	return []server.Route{
-		{Pattern: "GET /v1/agent-secrets", Access: server.Member, Handle: h.home(h.apps(h.list))},
-		{Pattern: "PUT /v1/agent-secrets/{scope}/{agent}/{key}", Access: server.Member, Handle: h.home(h.apps(h.set))},
-		{Pattern: "DELETE /v1/agent-secrets/{scope}/{agent}/{key}", Access: server.Member, Handle: h.home(h.apps(h.remove))},
+		{Pattern: "GET /v1/agent-secrets", Access: server.Member, Handle: h.home(server.RefuseDaemon("only an app sets the secrets", h.list))},
+		{Pattern: "PUT /v1/agent-secrets/{scope}/{agent}/{key}", Access: server.Member, Handle: h.home(server.RefuseDaemon("only an app sets the secrets", h.set))},
+		{Pattern: "DELETE /v1/agent-secrets/{scope}/{agent}/{key}", Access: server.Member, Handle: h.home(server.RefuseDaemon("only an app sets the secrets", h.remove))},
 		{Pattern: "POST /v1/agent-secrets/resolve", Access: server.Member, Handle: h.home(h.resolve)},
 	}
 }
@@ -90,30 +89,19 @@ func (h *Home) home(next http.HandlerFunc) http.HandlerFunc {
 		g, ok := h.group.Snapshot()
 		switch {
 		case !ok:
-			writeJSON(w, http.StatusConflict, notHome{Error: "this machine has no group"})
+			server.WriteJSON(w, http.StatusConflict, notHome{Error: "this machine has no group"})
 		case g.Cloud != nil:
-			writeJSON(w, http.StatusConflict, notHome{Error: "the cloud is home", Cloud: g.Cloud})
+			server.WriteJSON(w, http.StatusConflict, notHome{Error: "the cloud is home", Cloud: g.Cloud})
 		case g.Home != h.group.Self().Machine:
-			writeJSON(w, http.StatusConflict, notHome{Error: g.Home + " is home", Home: g.Home})
+			server.WriteJSON(w, http.StatusConflict, notHome{Error: g.Home + " is home", Home: g.Home})
 		default:
 			next(w, r)
 		}
 	}
 }
 
-// apps refuses a daemon credential: only an app sets and lists the secrets.
-func (h *Home) apps(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if c, ok := server.CallerFrom(r.Context()); ok && c.Kind == string(wire.DeviceDaemon) {
-			writeError(w, http.StatusForbidden, "only an app sets the secrets")
-			return
-		}
-		next(w, r)
-	}
-}
-
 func (h *Home) list(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, wire.AgentSecretList{Secrets: h.store.List()})
+	server.WriteJSON(w, http.StatusOK, wire.AgentSecretList{Secrets: h.store.List()})
 }
 
 // path reads and checks {scope}, {agent} and {key}.
@@ -136,36 +124,33 @@ func validName(s string) bool {
 func (h *Home) set(w http.ResponseWriter, r *http.Request) {
 	scope, agent, key, err := path(r)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		server.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	body, err := io.ReadAll(io.LimitReader(r.Body, maxBody))
 	var in wire.AgentSecretSet
-	if err == nil {
-		err = wire.Decode(body, &in)
-	}
+	err = server.ReadJSON(r, maxBody, &in)
 	if err != nil || in.Value == "" || utf8.RuneCountInString(in.Value) > wire.MaxEnvValue {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("The body must be {value} with 1 to %d characters.", wire.MaxEnvValue))
+		server.WriteError(w, http.StatusBadRequest, fmt.Sprintf("The body must be {value} with 1 to %d characters.", wire.MaxEnvValue))
 		return
 	}
 	row, err := h.store.Set(r.Context(), scope, agent, key, in.Value)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		server.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	h.changed(r, scope, agent, key, "set")
-	writeJSON(w, http.StatusOK, row)
+	server.WriteJSON(w, http.StatusOK, row)
 }
 
 func (h *Home) remove(w http.ResponseWriter, r *http.Request) {
 	scope, agent, key, err := path(r)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		server.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	ok, err := h.store.Delete(r.Context(), scope, agent, key)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		server.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	if ok {
@@ -194,24 +179,21 @@ func (h *Home) changed(r *http.Request, scope, agent, key, action string) {
 // (an app on home) and app credentials: no app reads a value back.
 func (h *Home) resolve(w http.ResponseWriter, r *http.Request) {
 	c, ok := server.CallerFrom(r.Context())
-	if !ok || c.Loopback || c.Kind != string(wire.DeviceDaemon) {
-		writeError(w, http.StatusForbidden, "only a daemon of the group reads the secrets")
+	if !ok || c.Loopback || !c.IsDaemon() {
+		server.WriteError(w, http.StatusForbidden, "only a daemon of the group reads the secrets")
 		return
 	}
-	body, err := io.ReadAll(io.LimitReader(r.Body, maxBody))
 	var in wire.AgentSecretResolve
-	if err == nil {
-		err = wire.Decode(body, &in)
-	}
+	err := server.ReadJSON(r, maxBody, &in)
 	if err == nil {
 		err = wire.LaunchRequest{EnvSecrets: in.Refs}.CheckEnv()
 	}
 	if err != nil || len(in.Refs) == 0 || in.Machine == "" {
-		writeError(w, http.StatusBadRequest, "The body must be {machine, refs} with valid env keys.")
+		server.WriteError(w, http.StatusBadRequest, "The body must be {machine, refs} with valid env keys.")
 		return
 	}
 	if in.Machine != c.Machine {
-		writeError(w, http.StatusForbidden, "a daemon reads the secrets only for its own machine")
+		server.WriteError(w, http.StatusForbidden, "a daemon reads the secrets only for its own machine")
 		return
 	}
 	v, err := h.Resolve(r.Context(), in)
@@ -220,10 +202,10 @@ func (h *Home) resolve(w http.ResponseWriter, r *http.Request) {
 		if e, ok := err.(*Error); ok {
 			code = e.Status
 		}
-		writeError(w, code, err.Error())
+		server.WriteError(w, code, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, v)
+	server.WriteJSON(w, http.StatusOK, v)
 }
 
 // Resolve checks the Runs on list of each shared agent against in.Machine and gives the values.
@@ -322,14 +304,4 @@ func (h *Home) add(s wire.DaemonSession, d wire.EventDraft) {
 func mustJSON(v any) json.RawMessage {
 	b, _ := json.Marshal(v)
 	return b
-}
-
-func writeJSON(w http.ResponseWriter, code int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(v)
-}
-
-func writeError(w http.ResponseWriter, code int, msg string) {
-	writeJSON(w, code, map[string]string{"error": msg})
 }

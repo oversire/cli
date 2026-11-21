@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/oversire/cli/server"
 	"github.com/oversire/cli/wire"
 )
 
@@ -70,10 +71,10 @@ func TestSubmitIdle(t *testing.T) {
 		t.Fatal(s.State)
 	}
 	// Nothing to send and no summary: refused.
-	if _, err := r.Submit(ctx, "APP-1", wire.SubmitReview{Verdict: wire.VerdictRequestChanges}); !kindIs(err, Invalid) {
+	if _, err := r.Submit(ctx, "APP-1", wire.SubmitReview{Verdict: wire.VerdictRequestChanges}); !kindIs(err, server.Invalid) {
 		t.Fatal(err)
 	}
-	if _, err := r.Submit(ctx, "APP-1", wire.SubmitReview{Verdict: "maybe"}); !kindIs(err, Invalid) {
+	if _, err := r.Submit(ctx, "APP-1", wire.SubmitReview{Verdict: "maybe"}); !kindIs(err, server.Invalid) {
 		t.Fatal(err)
 	}
 }

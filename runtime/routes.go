@@ -1,10 +1,8 @@
 package runtime
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"maps"
 	"net/http"
@@ -75,22 +73,22 @@ func (a *API) runtimes(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	a.mu.Unlock()
-	writeJSON(w, http.StatusOK, wire.DaemonRuntimesPage{Runtimes: list})
+	server.WriteJSON(w, http.StatusOK, wire.DaemonRuntimesPage{Runtimes: list})
 }
 
 func (a *API) retry(w http.ResponseWriter, r *http.Request) {
 	d, err := a.reg.Retry(r.Context(), r.PathValue("id"))
 	if err != nil {
-		writeError(w, status(err), err.Error())
+		server.WriteError(w, status(err), err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, d)
+	server.WriteJSON(w, http.StatusOK, d)
 }
 
 func (a *API) pair(w http.ResponseWriter, r *http.Request) {
 	var p wire.RuntimePair
-	if err := decode(r, 256<<10, &p); err != nil || strings.TrimSpace(p.Link) == "" {
-		writeError(w, http.StatusBadRequest, "The body needs a pairing link.")
+	if err := server.ReadJSON(r, 256<<10, &p); err != nil || strings.TrimSpace(p.Link) == "" {
+		server.WriteError(w, http.StatusBadRequest, "The body needs a pairing link.")
 		return
 	}
 	d, err := a.reg.Pair(r.Context(), r.PathValue("id"), p.Link)
@@ -99,31 +97,31 @@ func (a *API) pair(w http.ResponseWriter, r *http.Request) {
 		if errors.As(err, new(ErrPair)) {
 			code = http.StatusBadRequest
 		}
-		writeError(w, code, err.Error())
+		server.WriteError(w, code, err.Error())
 		return
 	}
 	a.Log.Info("runtime paired", "runtime", d.ID)
-	writeJSON(w, http.StatusOK, d)
+	server.WriteJSON(w, http.StatusOK, d)
 }
 
 func (a *API) unpair(w http.ResponseWriter, r *http.Request) {
 	d, err := a.reg.Unpair(r.Context(), r.PathValue("id"))
 	if err != nil {
-		writeError(w, status(err), err.Error())
+		server.WriteError(w, status(err), err.Error())
 		return
 	}
 	a.Log.Info("runtime unpaired", "runtime", d.ID)
-	writeJSON(w, http.StatusOK, d)
+	server.WriteJSON(w, http.StatusOK, d)
 }
 
 func (a *API) repos(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, a.reg.Repos(r.Context()))
+	server.WriteJSON(w, http.StatusOK, a.reg.Repos(r.Context()))
 }
 
 func (a *API) workspaces(w http.ResponseWriter, r *http.Request) {
 	page := a.reg.Workspaces(r.Context())
 	a.logErrors(page.Errors)
-	writeJSON(w, http.StatusOK, page)
+	server.WriteJSON(w, http.StatusOK, page)
 }
 
 // logErrors writes a runtime error of the workspaces page when it is new, and a line when the runtime works again.
@@ -149,39 +147,39 @@ func (a *API) logErrors(errs map[string]string) {
 
 func (a *API) removeWorkspace(w http.ResponseWriter, r *http.Request) {
 	var rm wire.WorkspaceRemove
-	if err := decode(r, 1<<16, &rm); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+	if err := server.ReadJSON(r, 1<<16, &rm); err != nil {
+		server.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	res, err := a.reg.RemoveWorkspace(r.Context(), r.PathValue("id"), rm)
 	if err != nil {
-		writeError(w, status(err), err.Error())
+		server.WriteError(w, status(err), err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, res)
+	server.WriteJSON(w, http.StatusOK, res)
 }
 
 func (a *API) handover(w http.ResponseWriter, r *http.Request) {
 	var h wire.SessionHandover
-	if err := decode(r, 1<<10, &h); err != nil || (h.View != wire.SessionViewChat && h.View != wire.SessionViewTerminal) {
-		writeError(w, http.StatusBadRequest, "The body needs the view chat or terminal.")
+	if err := server.ReadJSON(r, 1<<10, &h); err != nil || (h.View != wire.SessionViewChat && h.View != wire.SessionViewTerminal) {
+		server.WriteError(w, http.StatusBadRequest, "The body needs the view chat or terminal.")
 		return
 	}
 	if err := a.reg.Handover(r.Context(), r.PathValue("id"), h.View); err != nil {
-		writeError(w, status(err), err.Error())
+		server.WriteError(w, status(err), err.Error())
 		return
 	}
-	writeJSON(w, http.StatusAccepted, struct{}{})
+	server.WriteJSON(w, http.StatusAccepted, struct{}{})
 }
 
 func (a *API) reveal(w http.ResponseWriter, r *http.Request) {
 	var s wire.SessionRef
-	if err := decode(r, 1<<16, &s); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+	if err := server.ReadJSON(r, 1<<16, &s); err != nil {
+		server.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	if err := a.reg.Reveal(r.Context(), s); err != nil {
-		writeError(w, status(err), err.Error())
+		server.WriteError(w, status(err), err.Error())
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -190,30 +188,30 @@ func (a *API) reveal(w http.ResponseWriter, r *http.Request) {
 func (a *API) writeFiles(w http.ResponseWriter, r *http.Request) {
 	var fs wire.WorkspaceFiles
 	// base64 makes the body 4/3 of the data.
-	if err := decode(r, MaxFileBytes/3*4+1<<16, &fs); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+	if err := server.ReadJSON(r, MaxFileBytes/3*4+1<<16, &fs); err != nil {
+		server.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	if err := checkFiles(fs.Files); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		server.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	a.prune()
 	dir := filepath.Join(a.files, wire.RandomHex(8))
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		server.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	res := wire.WorkspaceFilesResult{Paths: []string{}}
 	for _, f := range fs.Files {
 		p := filepath.Join(dir, f.Name)
 		if err := os.WriteFile(p, f.Data, 0o600); err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
+			server.WriteError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		res.Paths = append(res.Paths, p)
 	}
-	writeJSON(w, http.StatusOK, res)
+	server.WriteJSON(w, http.StatusOK, res)
 }
 
 // checkFiles refuses a count or size over the limits, and a name that is not a plain file name.
@@ -255,17 +253,6 @@ func (a *API) prune() {
 	}
 }
 
-func decode(r *http.Request, limit int64, v any) error {
-	body, err := io.ReadAll(io.LimitReader(r.Body, limit+1))
-	if err != nil {
-		return err
-	}
-	if int64(len(body)) > limit {
-		return errors.New("the body is too large")
-	}
-	return wire.Decode(body, v)
-}
-
 func status(err error) int {
 	switch {
 	case errors.Is(err, ErrNotFound), errors.Is(err, ErrNoRuntime):
@@ -276,14 +263,4 @@ func status(err error) int {
 		return http.StatusConflict
 	}
 	return http.StatusBadGateway
-}
-
-func writeJSON(w http.ResponseWriter, code int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(v)
-}
-
-func writeError(w http.ResponseWriter, code int, msg string) {
-	writeJSON(w, code, map[string]string{"error": msg})
 }

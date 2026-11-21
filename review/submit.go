@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/oversire/cli/runtime"
+	"github.com/oversire/cli/server"
 	"github.com/oversire/cli/wire"
 )
 
@@ -16,10 +17,10 @@ import (
 // Approve sends nothing. A failed delivery is in the round, not in the error.
 func (e *Engine) Submit(ctx context.Context, key string, s wire.SubmitReview) (wire.ReviewRound, error) {
 	if s.Verdict != wire.VerdictRequestChanges && s.Verdict != wire.VerdictApprove {
-		return wire.ReviewRound{}, refuse(Invalid, "The verdict %q is not requestChanges or approve.", s.Verdict)
+		return wire.ReviewRound{}, server.Refuse(server.Invalid, "The verdict %q is not requestChanges or approve.", s.Verdict)
 	}
 	if len([]rune(s.Summary)) > MaxText {
-		return wire.ReviewRound{}, refuse(Invalid, "The summary has more than %d characters.", MaxText)
+		return wire.ReviewRound{}, server.Refuse(server.Invalid, "The summary has more than %d characters.", MaxText)
 	}
 	kind, err := e.kindOf(ctx, key, s.Kind)
 	if err != nil {
@@ -47,7 +48,7 @@ func (e *Engine) Submit(ctx context.Context, key string, s wire.SubmitReview) (w
 	}
 	if s.Verdict == wire.VerdictRequestChanges && len(batch) == 0 && strings.TrimSpace(s.Summary) == "" {
 		e.mu.Unlock()
-		return wire.ReviewRound{}, refuse(Invalid, "The review has no comments and no summary. Add one first.")
+		return wire.ReviewRound{}, server.Refuse(server.Invalid, "The review has no comments and no summary. Add one first.")
 	}
 	n := len(r.Rounds) + 1
 	for i := range r.Comments {
@@ -87,11 +88,11 @@ func (e *Engine) Submit(ctx context.Context, key string, s wire.SubmitReview) (w
 // It is a round with no comments. The pending comments stay in the batch.
 func (e *Engine) Fix(ctx context.Context, key string, launch *wire.AgentLaunch) (wire.ReviewRound, error) {
 	if !validKey(key) {
-		return wire.ReviewRound{}, refuse(Invalid, "The key %q is not valid.", key)
+		return wire.ReviewRound{}, server.Refuse(server.Invalid, "The key %q is not valid.", key)
 	}
 	g, ok := findGroup(e.allRoots(ctx), key)
 	if !ok {
-		return wire.ReviewRound{}, refuse(NotFound, "There is no group .wt/%s in the roots of this daemon.", strings.ToLower(key))
+		return wire.ReviewRound{}, server.Refuse(server.NotFound, "There is no group .wt/%s in the roots of this daemon.", strings.ToLower(key))
 	}
 	var repos []wire.ReviewRepo
 	for _, name := range e.d.Order.Sort(g.Repos) {
@@ -337,11 +338,11 @@ func (e *Engine) folder(ctx context.Context, kind wire.ReviewKind, key string) (
 		if r := e.recs[id(kind, key)]; r != nil && r.Root != "" {
 			return r.Root, nil
 		}
-		return "", refuse(NotFound, "%s has no plan.", key)
+		return "", server.Refuse(server.NotFound, "%s has no plan.", key)
 	}
 	g, ok := findGroup(e.allRoots(ctx), key)
 	if !ok {
-		return "", refuse(NotFound, "There is no group .wt/%s in the roots of this daemon.", strings.ToLower(key))
+		return "", server.Refuse(server.NotFound, "There is no group .wt/%s in the roots of this daemon.", strings.ToLower(key))
 	}
 	return g.Dir(), nil
 }

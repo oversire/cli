@@ -6,7 +6,6 @@ package review
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"maps"
 	"os"
@@ -19,6 +18,7 @@ import (
 	"time"
 
 	"github.com/oversire/cli/runtime"
+	"github.com/oversire/cli/server"
 	"github.com/oversire/cli/wire"
 )
 
@@ -80,27 +80,6 @@ type EventAdder interface {
 	Add(session string, d wire.EventDraft)
 }
 
-// Kind is the kind of an Error. The routes give it as the HTTP status.
-type Kind int
-
-const (
-	NotFound Kind = iota + 1
-	Conflict
-	Invalid
-)
-
-// Error is a refused call.
-type Error struct {
-	Kind Kind
-	Text string
-}
-
-func (e *Error) Error() string { return e.Text }
-
-func refuse(k Kind, format string, a ...any) *Error {
-	return &Error{Kind: k, Text: fmt.Sprintf(format, a...)}
-}
-
 // Engine keeps the reviews of this machine. mu guards the records and the roots.
 // send puts the deliveries and the merges in a line, so that two prompts never go to one session at the same time.
 type Engine struct {
@@ -145,7 +124,7 @@ func id(kind wire.ReviewKind, key string) string { return string(kind) + ":" + k
 func (e *Engine) List(ctx context.Context, kind wire.ReviewKind) (wire.ReviewsPage, error) {
 	page := wire.ReviewsPage{Reviews: []wire.ReviewSummary{}, NotPushed: []wire.NotPushed{}}
 	if kind != "" && kind != wire.ReviewCode && kind != wire.ReviewPlan {
-		return page, refuse(Invalid, "The kind %q is not code or plan.", kind)
+		return page, server.Refuse(server.Invalid, "The kind %q is not code or plan.", kind)
 	}
 	roots := e.allRoots(ctx)
 	if kind != wire.ReviewPlan {
@@ -208,7 +187,7 @@ func (e *Engine) Get(ctx context.Context, key string, kind wire.ReviewKind) (wir
 		}
 		e.mu.Unlock()
 		if plan == nil {
-			return d, refuse(NotFound, "%s has no plan.", key)
+			return d, server.Refuse(server.NotFound, "%s has no plan.", key)
 		}
 		d.Summary, d.Plan = e.planSummary(key), plan
 	} else {
@@ -219,7 +198,7 @@ func (e *Engine) Get(ctx context.Context, key string, kind wire.ReviewKind) (wir
 				return d, err
 			}
 		} else if d.Summary, ok = e.goneSummary(key); !ok {
-			return d, refuse(NotFound, "There is no group .wt/%s in the roots of this daemon.", strings.ToLower(key))
+			return d, server.Refuse(server.NotFound, "There is no group .wt/%s in the roots of this daemon.", strings.ToLower(key))
 		}
 		viewed, stale := e.viewed(key)
 		prints := map[string]string{}
@@ -273,17 +252,17 @@ func (e *Engine) Diff(ctx context.Context, key, repo, path string, full bool) (w
 			return e.d.Git.diff(ctx, g, r, f, full)
 		}
 	}
-	return wire.FileDiff{}, refuse(NotFound, "The review %s has no changed file %s/%s.", key, repo, path)
+	return wire.FileDiff{}, server.Refuse(server.NotFound, "The review %s has no changed file %s/%s.", key, repo, path)
 }
 
 // repoOf gives the group of key and the state of its repo.
 func (e *Engine) repoOf(ctx context.Context, key, repo string) (group, wire.ReviewRepo, error) {
 	g, ok := findGroup(e.allRoots(ctx), key)
 	if !ok {
-		return g, wire.ReviewRepo{}, refuse(NotFound, "There is no group .wt/%s in the roots of this daemon.", strings.ToLower(key))
+		return g, wire.ReviewRepo{}, server.Refuse(server.NotFound, "There is no group .wt/%s in the roots of this daemon.", strings.ToLower(key))
 	}
 	if !slices.Contains(g.Repos, repo) {
-		return g, wire.ReviewRepo{}, refuse(NotFound, "The group %s has no repo %s.", g.Rel(), repo)
+		return g, wire.ReviewRepo{}, server.Refuse(server.NotFound, "The group %s has no repo %s.", g.Rel(), repo)
 	}
 	r, _, err := e.d.Git.repo(ctx, g, repo)
 	return g, r, err
@@ -491,14 +470,14 @@ func inside(path, dir string) bool {
 // kindOf checks the key and gives the kind: kind when it is set, else code, or plan for a key that only has a plan.
 func (e *Engine) kindOf(ctx context.Context, key string, kind wire.ReviewKind) (wire.ReviewKind, error) {
 	if !validKey(key) {
-		return "", refuse(Invalid, "The key %q is not valid. Use the item key in upper case, for example SLING-170.", key)
+		return "", server.Refuse(server.Invalid, "The key %q is not valid. Use the item key in upper case, for example SLING-170.", key)
 	}
 	switch kind {
 	case wire.ReviewCode, wire.ReviewPlan:
 		return kind, nil
 	case "":
 	default:
-		return "", refuse(Invalid, "The kind %q is not code or plan.", kind)
+		return "", server.Refuse(server.Invalid, "The kind %q is not code or plan.", kind)
 	}
 	e.mu.Lock()
 	code, plan := e.recs[id(wire.ReviewCode, key)], e.recs[id(wire.ReviewPlan, key)]

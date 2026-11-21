@@ -1,9 +1,7 @@
 package lease
 
 import (
-	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 
 	"github.com/oversire/cli/server"
@@ -30,10 +28,6 @@ type notHome struct {
 	Home  string `json:"home,omitempty"`
 }
 
-type errorBody struct {
-	Error string `json:"error"`
-}
-
 func (r *Routes) Routes() []server.Route {
 	return []server.Route{
 		{Pattern: "POST /v1/leases/{name}", Access: server.Member, Handle: r.home(r.acquire)},
@@ -47,9 +41,9 @@ func (r *Routes) home(next http.HandlerFunc) http.HandlerFunc {
 		g, ok := r.group.Snapshot()
 		switch {
 		case !ok:
-			writeJSON(w, http.StatusConflict, notHome{Error: "this machine has no group"})
+			server.WriteJSON(w, http.StatusConflict, notHome{Error: "this machine has no group"})
 		case g.Home != r.group.Self().Machine:
-			writeJSON(w, http.StatusConflict, notHome{Error: g.Home + " is home", Home: g.Home})
+			server.WriteJSON(w, http.StatusConflict, notHome{Error: g.Home + " is home", Home: g.Home})
 		default:
 			next(w, req)
 		}
@@ -57,25 +51,20 @@ func (r *Routes) home(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func (r *Routes) acquire(w http.ResponseWriter, req *http.Request) {
-	body, err := io.ReadAll(io.LimitReader(req.Body, 1<<16))
 	var lr wire.LeaseRequest
-	if err == nil {
-		err = wire.Decode(body, &lr)
-	}
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, errorBody{Error: "bad json: " + err.Error()})
+	if !server.Decode(w, req, 1<<16, "bad json: ", &lr) {
 		return
 	}
 	l, err := r.book.Acquire(req.PathValue("name"), lr)
 	switch {
 	case errors.Is(err, ErrHeld):
-		writeJSON(w, http.StatusConflict, l)
+		server.WriteJSON(w, http.StatusConflict, l)
 	case errors.Is(err, ErrBadInput):
-		writeJSON(w, http.StatusBadRequest, errorBody{Error: err.Error()})
+		server.WriteError(w, http.StatusBadRequest, err.Error())
 	case err != nil:
-		writeJSON(w, http.StatusInternalServerError, errorBody{Error: err.Error()})
+		server.WriteError(w, http.StatusInternalServerError, err.Error())
 	default:
-		writeJSON(w, http.StatusOK, l)
+		server.WriteJSON(w, http.StatusOK, l)
 	}
 }
 
@@ -83,9 +72,9 @@ func (r *Routes) release(w http.ResponseWriter, req *http.Request) {
 	err := r.book.Release(req.PathValue("name"), req.URL.Query().Get("holder"))
 	switch {
 	case errors.Is(err, ErrNotHolder):
-		writeJSON(w, http.StatusForbidden, errorBody{Error: err.Error()})
+		server.WriteError(w, http.StatusForbidden, err.Error())
 	case err != nil:
-		writeJSON(w, http.StatusInternalServerError, errorBody{Error: err.Error()})
+		server.WriteError(w, http.StatusInternalServerError, err.Error())
 	default:
 		w.WriteHeader(http.StatusNoContent)
 	}
@@ -94,14 +83,8 @@ func (r *Routes) release(w http.ResponseWriter, req *http.Request) {
 func (r *Routes) get(w http.ResponseWriter, req *http.Request) {
 	l, ok := r.book.Get(req.PathValue("name"))
 	if !ok {
-		writeJSON(w, http.StatusNotFound, errorBody{Error: "nobody holds the lease"})
+		server.WriteError(w, http.StatusNotFound, "nobody holds the lease")
 		return
 	}
-	writeJSON(w, http.StatusOK, l)
-}
-
-func writeJSON(w http.ResponseWriter, code int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(v)
+	server.WriteJSON(w, http.StatusOK, l)
 }

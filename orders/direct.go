@@ -86,43 +86,43 @@ func (d *Direct) post(w http.ResponseWriter, r *http.Request) {
 	}
 	body, err := io.ReadAll(io.LimitReader(r.Body, maxOrderBody))
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		server.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	var o wire.WorkOrder
 	if err := json.Unmarshal(body, &o); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		server.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	if l, ok := o.Payload.(wire.LaunchRequest); ok {
 		if err := l.CheckEnv(); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
+			server.WriteError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 	}
 	if res, ok := d.runner.Result(o.ID); ok {
 		d.send(res)
-		writeJSON(w, http.StatusOK, OrderState{State: wire.State(res.State), Result: res.Result})
+		server.WriteJSON(w, http.StatusOK, OrderState{State: wire.State(res.State), Result: res.Result})
 		return
 	}
 	d.start(o, r)
-	writeJSON(w, http.StatusAccepted, Accepted{Order: o})
+	server.WriteJSON(w, http.StatusAccepted, Accepted{Order: o})
 }
 
 func (d *Direct) get(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if res, ok := d.runner.Result(id); ok {
-		writeJSON(w, http.StatusOK, OrderState{State: wire.State(res.State), Result: res.Result})
+		server.WriteJSON(w, http.StatusOK, OrderState{State: wire.State(res.State), Result: res.Result})
 		return
 	}
 	d.mu.Lock()
 	st, ok := d.states[id]
 	d.mu.Unlock()
 	if !ok {
-		writeError(w, http.StatusNotFound, "not found")
+		server.WriteError(w, http.StatusNotFound, "not found")
 		return
 	}
-	writeJSON(w, http.StatusOK, OrderState{State: st})
+	server.WriteJSON(w, http.StatusOK, OrderState{State: st})
 }
 
 // permission answers the pending permission prompt of a session with a sessionSend order.
@@ -132,7 +132,7 @@ func (d *Direct) permission(w http.ResponseWriter, r *http.Request) {
 	}
 	var b PermissionBody
 	if err := json.NewDecoder(io.LimitReader(r.Body, maxOrderBody)).Decode(&b); err != nil || b.Permission == nil || b.Allow == nil {
-		writeError(w, http.StatusBadRequest, "body must be {permission, allow}")
+		server.WriteError(w, http.StatusBadRequest, "body must be {permission, allow}")
 		return
 	}
 	now := d.clock()
@@ -141,15 +141,15 @@ func (d *Direct) permission(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case !ok:
 		d.mu.Unlock()
-		writeError(w, http.StatusNotFound, "not found")
+		server.WriteError(w, http.StatusNotFound, "not found")
 		return
 	case s.Permission == nil || s.Permission.ID != *b.Permission || s.State != wire.SessionWaitingPermission:
 		d.mu.Unlock()
-		writeError(w, http.StatusConflict, "no such prompt is pending")
+		server.WriteError(w, http.StatusConflict, "no such prompt is pending")
 		return
 	case !s.Permission.ExpiresAt.After(now):
 		d.mu.Unlock()
-		writeError(w, http.StatusGone, "the prompt has expired")
+		server.WriteError(w, http.StatusGone, "the prompt has expired")
 		return
 	}
 	o := d.sendOrder(s, now, s.Permission.ExpiresAt, wire.SendPayload{Session: s.Session,
@@ -159,7 +159,7 @@ func (d *Direct) permission(w http.ResponseWriter, r *http.Request) {
 	d.mu.Unlock()
 	d.send(wire.Session{Session: s})
 	d.start(o, r)
-	writeJSON(w, http.StatusOK, o)
+	server.WriteJSON(w, http.StatusOK, o)
 }
 
 // answer answers the open question of a session with a sessionSend order.
@@ -167,13 +167,10 @@ func (d *Direct) answer(w http.ResponseWriter, r *http.Request) {
 	if !d.ordersFrom(w, r) {
 		return
 	}
-	body, err := io.ReadAll(io.LimitReader(r.Body, maxOrderBody))
 	var a wire.QuestionAnswer
-	if err == nil {
-		err = wire.Decode(body, &a)
-	}
+	err := server.ReadJSON(r, maxOrderBody, &a)
 	if err != nil || a.ID == "" || a.Items == nil {
-		writeError(w, http.StatusBadRequest, "body must be a RunnerAnswer {id, items, note?}")
+		server.WriteError(w, http.StatusBadRequest, "body must be a RunnerAnswer {id, items, note?}")
 		return
 	}
 	now := d.clock()
@@ -182,11 +179,11 @@ func (d *Direct) answer(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case !ok:
 		d.mu.Unlock()
-		writeError(w, http.StatusNotFound, "not found")
+		server.WriteError(w, http.StatusNotFound, "not found")
 		return
 	case s.Question == nil || s.Question.ID != a.ID:
 		d.mu.Unlock()
-		writeError(w, http.StatusConflict, "no such question is open")
+		server.WriteError(w, http.StatusConflict, "no such question is open")
 		return
 	}
 	o := d.sendOrder(s, now, now.Add(answerWait), wire.SendPayload{Session: s.Session, Answer: &a})
@@ -195,7 +192,7 @@ func (d *Direct) answer(w http.ResponseWriter, r *http.Request) {
 	d.mu.Unlock()
 	d.send(wire.Session{Session: s})
 	d.start(o, r)
-	writeJSON(w, http.StatusOK, o)
+	server.WriteJSON(w, http.StatusOK, o)
 }
 
 // answered sets the session to working until the next report. The caller holds mu.
@@ -211,8 +208,8 @@ func (d *Direct) sendOrder(s wire.RunnerSession, now, expires time.Time, p wire.
 
 // ordersFrom refuses a daemon credential: daemons do not order each other.
 func (d *Direct) ordersFrom(w http.ResponseWriter, r *http.Request) bool {
-	if c, ok := server.CallerFrom(r.Context()); ok && c.Kind == string(wire.DeviceDaemon) {
-		writeError(w, http.StatusForbidden, "only an app gives orders")
+	if c, _ := server.CallerFrom(r.Context()); c.IsDaemon() {
+		server.WriteError(w, http.StatusForbidden, "only an app gives orders")
 		return false
 	}
 	return true
@@ -276,14 +273,4 @@ func (d *Direct) send(m wire.Message) {
 		return
 	}
 	d.notify(json.RawMessage(b))
-}
-
-func writeJSON(w http.ResponseWriter, code int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(v)
-}
-
-func writeError(w http.ResponseWriter, code int, msg string) {
-	writeJSON(w, code, map[string]string{"error": msg})
 }

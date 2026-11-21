@@ -359,11 +359,11 @@ func (s *Server) guard(port int, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Header.Get("Origin") != "":
-			writeError(w, http.StatusForbidden, "origin not allowed")
+			WriteError(w, http.StatusForbidden, "origin not allowed")
 		case !slices.Contains(hosts, strings.ToLower(r.Host)):
-			writeError(w, http.StatusForbidden, "host not allowed")
+			WriteError(w, http.StatusForbidden, "host not allowed")
 		case writes(r.Method) && !isJSON(r.Header.Get("Content-Type")):
-			writeError(w, http.StatusForbidden, "content type must be application/json")
+			WriteError(w, http.StatusForbidden, "content type must be application/json")
 		default:
 			next.ServeHTTP(w, r)
 		}
@@ -389,7 +389,7 @@ func (s *Server) onTailnet(r Route) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		c, ok := s.verify(req)
 		if !ok && r.Access == Member {
-			writeError(w, http.StatusUnauthorized, "unauthorized")
+			WriteError(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
 		if ok {
@@ -417,7 +417,7 @@ func (s *Server) whoami(w http.ResponseWriter, r *http.Request) {
 	if c, ok := CallerFrom(r.Context()); ok {
 		d.Device = c.DeviceID
 	}
-	writeJSON(w, http.StatusOK, d)
+	WriteJSON(w, http.StatusOK, d)
 }
 
 func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
@@ -425,13 +425,13 @@ func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
 	if s.Health != nil {
 		src = s.Health()
 	}
-	writeJSON(w, http.StatusOK, Health{OK: true, Uptime: int64(s.now().Sub(s.started).Seconds()), Sources: src})
+	WriteJSON(w, http.StatusOK, Health{OK: true, Uptime: int64(s.now().Sub(s.started).Seconds()), Sources: src})
 }
 
 func (s *Server) eventsPage(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	if sc := q.Get("schema"); sc != "" && sc != "1" {
-		writeError(w, http.StatusBadRequest, "unknown schema "+sc)
+		WriteError(w, http.StatusBadRequest, "unknown schema "+sc)
 		return
 	}
 	after, _ := strconv.Atoi(q.Get("after"))
@@ -439,7 +439,7 @@ func (s *Server) eventsPage(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		limit = pageLimit
 	}
-	writeJSON(w, http.StatusOK, s.events.Page(max(after, 0), min(max(limit, 1), pageLimit)))
+	WriteJSON(w, http.StatusOK, s.events.Page(max(after, 0), min(max(limit, 1), pageLimit)))
 }
 
 func (s *Server) ack(w http.ResponseWriter, r *http.Request) {
@@ -447,10 +447,10 @@ func (s *Server) ack(w http.ResponseWriter, r *http.Request) {
 		Seq *int64 `json:"seq"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSmallBody)).Decode(&body); err != nil || body.Seq == nil || *body.Seq < 0 {
-		writeError(w, http.StatusBadRequest, "bad seq")
+		WriteError(w, http.StatusBadRequest, "bad seq")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 func (s *Server) sessionList(w http.ResponseWriter, _ *http.Request) {
@@ -458,33 +458,33 @@ func (s *Server) sessionList(w http.ResponseWriter, _ *http.Request) {
 	if all == nil {
 		all = []wire.DaemonSession{}
 	}
-	writeJSON(w, http.StatusOK, wire.DaemonSessionsPage{Sessions: all})
+	WriteJSON(w, http.StatusOK, wire.DaemonSessionsPage{Sessions: all})
 }
 
 func (s *Server) session(w http.ResponseWriter, r *http.Request) {
 	ses, ok := s.sessions.Get(r.PathValue("id"))
 	if !ok {
-		writeError(w, http.StatusNotFound, "no session")
+		WriteError(w, http.StatusNotFound, "no session")
 		return
 	}
-	writeJSON(w, http.StatusOK, ses)
+	WriteJSON(w, http.StatusOK, ses)
 }
 
 func (s *Server) hook(w http.ResponseWriter, r *http.Request) {
 	if s.hooks == nil {
-		writeError(w, http.StatusServiceUnavailable, "hooks are off")
+		WriteError(w, http.StatusServiceUnavailable, "hooks are off")
 		return
 	}
 	var call HookCall
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxHookBody)).Decode(&call); err != nil {
-		writeError(w, http.StatusBadRequest, "bad hook call")
+		WriteError(w, http.StatusBadRequest, "bad hook call")
 		return
 	}
 	if err := s.hooks.Ingest(r.Context(), r.PathValue("harness"), call.Env, call.Payload); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, struct{}{})
+	WriteJSON(w, http.StatusOK, struct{}{})
 }
 
 // connect is the WebSocket of the app. It speaks the frames of the cloud hub: "ping" gets "pong", and JSON frames
@@ -553,14 +553,4 @@ func (c *client) writeLoop(ctx context.Context, cancel func()) {
 			}
 		}
 	}
-}
-
-func writeJSON(w http.ResponseWriter, code int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(v)
-}
-
-func writeError(w http.ResponseWriter, code int, msg string) {
-	writeJSON(w, code, map[string]string{"error": msg})
 }

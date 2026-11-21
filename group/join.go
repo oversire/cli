@@ -398,7 +398,7 @@ func (j *Joins) Routes() []server.Route {
 			reply(w, p, err)
 		})},
 		{Pattern: "GET /v1/group/requests", Access: server.LoopbackOnly, Handle: func(w http.ResponseWriter, r *http.Request) {
-			writeJSON(w, http.StatusOK, j.Pending())
+			server.WriteJSON(w, http.StatusOK, j.Pending())
 		}},
 		{Pattern: "GET /v1/group/requests/{id}", Access: server.Public, Handle: func(w http.ResponseWriter, r *http.Request) {
 			res, status, err := j.Poll(r.PathValue("id"), r.URL.Query().Get("nonce"))
@@ -406,13 +406,13 @@ func (j *Joins) Routes() []server.Route {
 			case err != nil:
 				writeErr(w, err)
 			case status == StatusApproved:
-				writeJSON(w, http.StatusOK, res)
+				server.WriteJSON(w, http.StatusOK, res)
 			case status == StatusDenied:
-				writeJSON(w, http.StatusForbidden, errorBody{Status: status, Error: ErrDenied.Error()})
+				server.WriteJSON(w, http.StatusForbidden, errorBody{Status: status, Error: ErrDenied.Error()})
 			case status == StatusExpired:
-				writeJSON(w, http.StatusGone, errorBody{Status: status, Error: ErrExpired.Error()})
+				server.WriteJSON(w, http.StatusGone, errorBody{Status: status, Error: ErrExpired.Error()})
 			default:
-				writeJSON(w, http.StatusAccepted, errorBody{Status: status})
+				server.WriteJSON(w, http.StatusAccepted, errorBody{Status: status})
 			}
 		}},
 		{Pattern: "POST /v1/group/requests/{id}/approve", Access: server.LoopbackOnly, Handle: func(w http.ResponseWriter, r *http.Request) {
@@ -483,13 +483,13 @@ func reply(w http.ResponseWriter, v any, err error) {
 	if err != nil {
 		var re *RemoteError
 		if errors.As(err, &re) {
-			writeJSON(w, http.StatusBadGateway, errorBody{Error: err.Error(), Status: re.Status})
+			server.WriteJSON(w, http.StatusBadGateway, errorBody{Error: err.Error(), Status: re.Status})
 			return
 		}
 		writeErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, v)
+	server.WriteJSON(w, http.StatusOK, v)
 }
 
 func newCode() string {

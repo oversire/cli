@@ -150,8 +150,8 @@ func TestRouteTable(t *testing.T) {
 		}
 	}
 	// Routes of other packages follow the same table.
-	f.s.Handle(Route{"GET /v1/questions", Member, func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, 200, struct{}{}) }},
-		Route{"POST /v1/group/approve", LoopbackOnly, func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, 200, struct{}{}) }})
+	f.s.Handle(Route{"GET /v1/questions", Member, func(w http.ResponseWriter, _ *http.Request) { WriteJSON(w, 200, struct{}{}) }},
+		Route{"POST /v1/group/approve", LoopbackOnly, func(w http.ResponseWriter, _ *http.Request) { WriteJSON(w, 200, struct{}{}) }})
 	if code, _ := call(t, "GET", f.net.URL+"/v1/questions", "", "Authorization", "Bearer good"); code != 200 {
 		t.Fatal(code)
 	}

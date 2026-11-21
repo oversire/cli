@@ -47,11 +47,6 @@ type notHome struct {
 	Cloud *wire.GroupCloud `json:"cloud,omitempty"`
 }
 
-// errorBody is the body of a 4xx or 5xx answer.
-type errorBody struct {
-	Error string `json:"error"`
-}
-
 // Routes gives the store routes. A member that is not home gets 409.
 func (r *Routes) Routes() []server.Route {
 	return []server.Route{
@@ -66,11 +61,11 @@ func (r *Routes) home(next http.HandlerFunc) http.HandlerFunc {
 		g, ok := r.group.Snapshot()
 		switch {
 		case !ok:
-			writeJSON(w, http.StatusConflict, notHome{Error: "this machine has no group"})
+			server.WriteJSON(w, http.StatusConflict, notHome{Error: "this machine has no group"})
 		case g.Cloud != nil:
-			writeJSON(w, http.StatusConflict, notHome{Error: "the cloud is home", Cloud: g.Cloud})
+			server.WriteJSON(w, http.StatusConflict, notHome{Error: "the cloud is home", Cloud: g.Cloud})
 		case g.Home != r.group.Self().Machine:
-			writeJSON(w, http.StatusConflict, notHome{Error: g.Home + " is home", Home: g.Home})
+			server.WriteJSON(w, http.StatusConflict, notHome{Error: g.Home + " is home", Home: g.Home})
 		default:
 			next(w, req)
 		}
@@ -87,29 +82,29 @@ func (r *Routes) pull(w http.ResponseWriter, req *http.Request) {
 	}
 	p, err := r.log.Pull(max(after, 0), limit)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, errorBody{Error: err.Error()})
+		server.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, p)
+	server.WriteJSON(w, http.StatusOK, p)
 }
 
 func (r *Routes) write(w http.ResponseWriter, req *http.Request) {
 	body, err := io.ReadAll(io.LimitReader(req.Body, 8<<20))
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, errorBody{Error: "bad json"})
+		server.WriteError(w, http.StatusBadRequest, "bad json")
 		return
 	}
 	ops, err := DecodeOps(body)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, errorBody{Error: err.Error()})
+		server.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	res, err := r.apply(ops)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, errorBody{Error: err.Error()})
+		server.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, res)
+	server.WriteJSON(w, http.StatusOK, res)
 }
 
 // apply writes ops and tells the clients to pull when one op won.
@@ -167,7 +162,9 @@ func (r *Routes) get(ctx context.Context, url, token string) (p wire.StorePull, 
 	defer resp.Body.Close()
 	data, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<20))
 	if resp.StatusCode != http.StatusOK {
-		var e errorBody
+		var e struct {
+			Error string `json:"error"`
+		}
 		_ = json.Unmarshal(data, &e)
 		return p, false, fmt.Errorf("store: the old home answered %d %s", resp.StatusCode, e.Error)
 	}
@@ -175,10 +172,4 @@ func (r *Routes) get(ctx context.Context, url, token string) (p wire.StorePull, 
 		return p, false, fmt.Errorf("store: the answer of the old home is not valid: %w", err)
 	}
 	return p, false, nil
-}
-
-func writeJSON(w http.ResponseWriter, code int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(v)
 }

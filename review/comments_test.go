@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/oversire/cli/server"
 	"github.com/oversire/cli/wire"
 )
 
@@ -32,14 +33,14 @@ func TestCommentRules(t *testing.T) {
 		"no text":     {Anchor: wire.Anchor{Repo: "app", Path: "n.go", Line: 1}, Text: "  "},
 		"long text":   {Anchor: wire.Anchor{Repo: "app", Path: "n.go", Line: 1}, Text: strings.Repeat("x", MaxText+1)},
 	} {
-		if _, err := r.AddComment(ctx, "APP-1", d); !kindIs(err, Invalid) {
+		if _, err := r.AddComment(ctx, "APP-1", d); !kindIs(err, server.Invalid) {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
-	if _, err := r.AddComment(ctx, "APP-1", wire.CommentDraft{Anchor: wire.Anchor{Repo: "app", Path: "x.go", Line: 1}, Text: "x"}); !kindIs(err, NotFound) {
+	if _, err := r.AddComment(ctx, "APP-1", wire.CommentDraft{Anchor: wire.Anchor{Repo: "app", Path: "x.go", Line: 1}, Text: "x"}); !kindIs(err, server.NotFound) {
 		t.Fatal(err)
 	}
-	if _, err := r.AddComment(ctx, "APP-1", wire.CommentDraft{Anchor: wire.Anchor{Block: "goal"}, Text: "x"}); !kindIs(err, NotFound) {
+	if _, err := r.AddComment(ctx, "APP-1", wire.CommentDraft{Anchor: wire.Anchor{Block: "goal"}, Text: "x"}); !kindIs(err, server.NotFound) {
 		t.Fatal(err)
 	}
 
@@ -50,27 +51,27 @@ func TestCommentRules(t *testing.T) {
 	if c, err = r.EditComment("APP-1", c.ID, wire.CommentEdit{Text: "Join N and M."}); err != nil || c.Text != "Join N and M." || c.UpdatedAt == nil {
 		t.Fatalf("%v %+v", err, c)
 	}
-	if _, err := r.Reply("APP-1", c.ID, wire.CommentReply{Text: "Done."}); !kindIs(err, Conflict) {
+	if _, err := r.Reply("APP-1", c.ID, wire.CommentReply{Text: "Done."}); !kindIs(err, server.Conflict) {
 		t.Fatal(err)
 	}
 	gone, _ := r.AddComment(ctx, "APP-1", wire.CommentDraft{Anchor: wire.Anchor{Repo: "app", Path: "n.go", Line: 1}, Text: "Drop."})
-	if err := r.DeleteComment("APP-1", gone.ID, wire.ReviewPlan); !kindIs(err, NotFound) {
+	if err := r.DeleteComment("APP-1", gone.ID, wire.ReviewPlan); !kindIs(err, server.NotFound) {
 		t.Fatal(err)
 	}
 	if err := r.DeleteComment("APP-1", gone.ID, ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.DeleteComment("APP-1", gone.ID, ""); !kindIs(err, NotFound) {
+	if err := r.DeleteComment("APP-1", gone.ID, ""); !kindIs(err, server.NotFound) {
 		t.Fatal(err)
 	}
 
 	if _, err := r.Submit(ctx, "APP-1", wire.SubmitReview{Verdict: wire.VerdictApprove}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.EditComment("APP-1", c.ID, wire.CommentEdit{Text: "Later."}); !kindIs(err, Conflict) {
+	if _, err := r.EditComment("APP-1", c.ID, wire.CommentEdit{Text: "Later."}); !kindIs(err, server.Conflict) {
 		t.Fatal(err)
 	}
-	if err := r.DeleteComment("APP-1", c.ID, ""); !kindIs(err, Conflict) {
+	if err := r.DeleteComment("APP-1", c.ID, ""); !kindIs(err, server.Conflict) {
 		t.Fatal(err)
 	}
 	if s := list(t, r)[0]; s.Unanswered != 1 || s.Pending != 0 || s.Round != 1 {
@@ -96,7 +97,7 @@ func TestReadyConflict(t *testing.T) {
 		t.Fatal(s.State)
 	}
 	s, err := r.Ready(context.Background(), "app-1", wire.ReviewReady{})
-	if !kindIs(err, Invalid) {
+	if !kindIs(err, server.Invalid) {
 		t.Fatal(err, s)
 	}
 	if s, err = r.Ready(context.Background(), "APP-1", wire.ReviewReady{Note: "Done."}); err != nil || s.State != wire.ReviewConflict {
@@ -108,7 +109,7 @@ func TestReadyConflict(t *testing.T) {
 	if !slices.Equal(r.eventNames(), []string{wire.EventReviewReady}) {
 		t.Fatal(r.eventNames())
 	}
-	if _, err := r.Ready(context.Background(), "APP-2", wire.ReviewReady{}); !kindIs(err, NotFound) {
+	if _, err := r.Ready(context.Background(), "APP-2", wire.ReviewReady{}); !kindIs(err, server.NotFound) {
 		t.Fatal(err)
 	}
 }
@@ -128,11 +129,11 @@ func TestPlan(t *testing.T) {
 		"same id":       {Root: root, Blocks: []wire.PlanBlock{{ID: "a"}, {ID: "a"}}},
 		"other key":     {Key: "APP-9", Root: root, Blocks: p.Blocks},
 	} {
-		if _, err := r.PutPlan("APP-1", bad); !kindIs(err, Invalid) {
+		if _, err := r.PutPlan("APP-1", bad); !kindIs(err, server.Invalid) {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
-	if _, err := r.Ready(ctx, "APP-1", wire.ReviewReady{Kind: wire.ReviewPlan}); !kindIs(err, NotFound) {
+	if _, err := r.Ready(ctx, "APP-1", wire.ReviewReady{Kind: wire.ReviewPlan}); !kindIs(err, server.NotFound) {
 		t.Fatal(err)
 	}
 	got, err := r.PutPlan("APP-1", p)
@@ -154,7 +155,7 @@ func TestPlan(t *testing.T) {
 	if err != nil || c.Excerpt != "Steps" {
 		t.Fatalf("%v %+v", err, c)
 	}
-	if _, err := r.AddComment(ctx, "APP-1", wire.CommentDraft{Anchor: wire.Anchor{Block: "none"}, Text: "x"}); !kindIs(err, Invalid) {
+	if _, err := r.AddComment(ctx, "APP-1", wire.CommentDraft{Anchor: wire.Anchor{Block: "none"}, Text: "x"}); !kindIs(err, server.Invalid) {
 		t.Fatal(err)
 	}
 	d, err := r.Get(ctx, "APP-1", "")

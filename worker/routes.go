@@ -1,15 +1,11 @@
 package worker
 
 import (
-	"encoding/json"
-	"errors"
-	"io"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/oversire/cli/server"
-	"github.com/oversire/cli/wire"
 )
 
 const maxBody = 1 << 16
@@ -41,17 +37,17 @@ func (rt *Routes) read(w http.ResponseWriter, r *http.Request) {
 	if raw := r.URL.Query().Get("limit"); raw != "" {
 		n, err := strconv.Atoi(raw)
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, errorBody{Error: "The limit is not a number."})
+			server.WriteError(w, http.StatusBadRequest, "The limit is not a number.")
 			return
 		}
 		limit = n
 	}
 	out, err := rt.e.Read(r.Context(), r.PathValue("id"), r.URL.Query().Get("reader"), limit)
 	if err != nil {
-		fail(w, err)
+		server.Fail(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, out)
+	server.WriteJSON(w, http.StatusOK, out)
 }
 
 func (rt *Routes) wait(w http.ResponseWriter, r *http.Request) {
@@ -59,45 +55,32 @@ func (rt *Routes) wait(w http.ResponseWriter, r *http.Request) {
 	if raw := r.URL.Query().Get("max"); raw != "" {
 		d, err := time.ParseDuration(raw)
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, errorBody{Error: "The max is not a duration."})
+			server.WriteError(w, http.StatusBadRequest, "The max is not a duration.")
 			return
 		}
 		max = d
 	}
 	out, err := rt.e.Wait(r.Context(), r.PathValue("id"), max)
 	if err != nil {
-		fail(w, err)
+		server.Fail(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, out)
+	server.WriteJSON(w, http.StatusOK, out)
 }
 
 func (rt *Routes) brief(w http.ResponseWriter, r *http.Request) {
 	out, err := rt.e.Brief(r.Context(), r.PathValue("id"))
 	if err != nil {
-		fail(w, err)
+		server.Fail(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, out)
-}
-
-// decode reads the JSON body into v. It answers 400 and gives false when the body is bad.
-func decode(w http.ResponseWriter, r *http.Request, v any) bool {
-	body, err := io.ReadAll(io.LimitReader(r.Body, maxBody))
-	if err == nil {
-		err = wire.Decode(body, v)
-	}
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, errorBody{Error: "The body is not valid JSON: " + err.Error()})
-		return false
-	}
-	return true
+	server.WriteJSON(w, http.StatusOK, out)
 }
 
 // reply answers 204 for a call without a result, else the error.
 func reply(w http.ResponseWriter, err error) {
 	if err != nil {
-		fail(w, err)
+		server.Fail(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -105,24 +88,24 @@ func reply(w http.ResponseWriter, err error) {
 
 func (rt *Routes) start(w http.ResponseWriter, r *http.Request) {
 	var req StartRequest
-	if !decode(w, r, &req) {
+	if !server.Decode(w, r, maxBody, "The body is not valid JSON: ", &req) {
 		return
 	}
 	rec, reused, err := rt.e.Start(r.Context(), req)
 	if err != nil {
-		fail(w, err)
+		server.Fail(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, Started{Record: rec, Reused: reused})
+	server.WriteJSON(w, http.StatusOK, Started{Record: rec, Reused: reused})
 }
 
 func (rt *Routes) get(w http.ResponseWriter, r *http.Request) {
 	rec, err := rt.e.Get(r.PathValue("id"))
 	if err != nil {
-		fail(w, err)
+		server.Fail(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, rec)
+	server.WriteJSON(w, http.StatusOK, rec)
 }
 
 func (rt *Routes) done(w http.ResponseWriter, r *http.Request) {
@@ -130,22 +113,22 @@ func (rt *Routes) done(w http.ResponseWriter, r *http.Request) {
 		Verdict string `json:"verdict"`
 		Note    string `json:"note"`
 	}
-	if !decode(w, r, &b) {
+	if !server.Decode(w, r, maxBody, "The body is not valid JSON: ", &b) {
 		return
 	}
 	rec, err := rt.e.Done(r.Context(), r.PathValue("id"), b.Verdict, b.Note)
 	if err != nil {
-		fail(w, err)
+		server.Fail(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, rec)
+	server.WriteJSON(w, http.StatusOK, rec)
 }
 
 func (rt *Routes) escalate(w http.ResponseWriter, r *http.Request) {
 	var b struct {
 		Question string `json:"question"`
 	}
-	if !decode(w, r, &b) {
+	if !server.Decode(w, r, maxBody, "The body is not valid JSON: ", &b) {
 		return
 	}
 	reply(w, rt.e.Escalate(r.Context(), r.PathValue("id"), b.Question, ReasonOverseer))
@@ -155,7 +138,7 @@ func (rt *Routes) send(w http.ResponseWriter, r *http.Request) {
 	var b struct {
 		Text string `json:"text"`
 	}
-	if !decode(w, r, &b) {
+	if !server.Decode(w, r, maxBody, "The body is not valid JSON: ", &b) {
 		return
 	}
 	reply(w, rt.e.Send(r.Context(), r.PathValue("id"), b.Text))
@@ -163,7 +146,7 @@ func (rt *Routes) send(w http.ResponseWriter, r *http.Request) {
 
 func (rt *Routes) answer(w http.ResponseWriter, r *http.Request) {
 	var a Answer
-	if !decode(w, r, &a) {
+	if !server.Decode(w, r, maxBody, "The body is not valid JSON: ", &a) {
 		return
 	}
 	reply(w, rt.e.Answer(r.Context(), r.PathValue("id"), a))
@@ -179,32 +162,12 @@ func (rt *Routes) stop(w http.ResponseWriter, r *http.Request) {
 
 func (rt *Routes) commit(w http.ResponseWriter, r *http.Request) {
 	var c Cursor
-	if !decode(w, r, &c) {
+	if !server.Decode(w, r, maxBody, "The body is not valid JSON: ", &c) {
 		return
 	}
 	if err := rt.e.Commit(r.PathValue("id"), r.PathValue("reader"), c.Seq); err != nil {
-		fail(w, err)
+		server.Fail(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-type errorBody struct {
-	Error string `json:"error"`
-}
-
-func fail(w http.ResponseWriter, err error) {
-	var e *Error
-	if !errors.As(err, &e) {
-		writeJSON(w, http.StatusInternalServerError, errorBody{Error: err.Error()})
-		return
-	}
-	status := map[Kind]int{NotFound: http.StatusNotFound, Invalid: http.StatusBadRequest, Conflict: http.StatusConflict}[e.Kind]
-	writeJSON(w, status, errorBody{Error: e.Text})
-}
-
-func writeJSON(w http.ResponseWriter, code int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(v)
 }

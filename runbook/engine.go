@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/oversire/cli/runtime"
+	"github.com/oversire/cli/server"
 	"github.com/oversire/cli/wire"
 )
 
@@ -60,27 +61,13 @@ type Sessions interface {
 	Watch() (<-chan string, func())
 }
 
-// Kind is the kind of an Error. The routes give it as the HTTP status.
-type Kind int
-
-const (
-	NotFound Kind = iota + 1
-	Conflict
-	Invalid
-)
-
-// Error is a refused call. Problems are the broken rules of a runbook.
+// Error is a refused call with the broken rules of a runbook.
 type Error struct {
-	Kind     Kind
-	Text     string
+	server.Refusal
 	Problems []Problem
 }
 
-func (e *Error) Error() string { return e.Text }
-
-func refuse(k Kind, format string, a ...any) *Error {
-	return &Error{Kind: k, Text: fmt.Sprintf(format, a...)}
-}
+func (e *Error) Unwrap() error { return &e.Refusal }
 
 // Engine runs each runbook run as a state machine. It keeps the runs in the store, so a run goes on after a restart.
 type Engine struct {
@@ -153,17 +140,17 @@ func (e *Engine) check() {
 // Start checks s, makes the run and starts its first step.
 func (e *Engine) Start(ctx context.Context, s wire.RunbookStart) (wire.RunbookRun, error) {
 	if p := validateStart(s); len(p) > 0 {
-		return wire.RunbookRun{}, &Error{Kind: Invalid, Text: "The runbook is not valid.", Problems: p}
+		return wire.RunbookRun{}, &Error{Refusal: server.Refusal{Kind: server.Invalid, Text: "The runbook is not valid."}, Problems: p}
 	}
 	rt, err := e.runtimes.Pick(ctx, s.Runtime)
 	if err != nil {
-		return wire.RunbookRun{}, refuse(Invalid, "%s", err.Error())
+		return wire.RunbookRun{}, server.Refuse(server.Invalid, "%s", err.Error())
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	for _, r := range e.runs {
 		if r.State.Open() && r.Item.Key == s.Item.Key {
-			return wire.RunbookRun{}, refuse(Conflict, "%s has the open run %s.", s.Item.Key, r.ID)
+			return wire.RunbookRun{}, server.Refuse(server.Conflict, "%s has the open run %s.", s.Item.Key, r.ID)
 		}
 	}
 	id := newID()
@@ -198,11 +185,11 @@ func (e *Engine) Done(run, step string, d wire.StepDone) (wire.RunbookRun, error
 		if c := r.Runbook.Step(cur); c != nil {
 			cur = fmt.Sprintf("%s (%s)", cur, c.Name)
 		}
-		return wire.RunbookRun{}, refuse(Conflict, "The step %s is not the current step. The current step is %s.", step, cur)
+		return wire.RunbookRun{}, server.Refuse(server.Conflict, "The step %s is not the current step. The current step is %s.", step, cur)
 	}
 	sr := last(r, step)
 	if sr == nil || !sr.State.Live() && sr.State != wire.StepEnded {
-		return wire.RunbookRun{}, refuse(Conflict, "The step %s does not run now.", step)
+		return wire.RunbookRun{}, server.Refuse(server.Conflict, "The step %s does not run now.", step)
 	}
 	state, err := verdictState(*st, d.Verdict)
 	if err != nil {
@@ -238,7 +225,7 @@ func (e *Engine) Done(run, step string, d wire.StepDone) (wire.RunbookRun, error
 func (e *Engine) Approve(run string) (wire.RunbookRun, error) {
 	return e.change(run, func(r *wire.RunbookRun) error {
 		if r.State != wire.RunGate {
-			return refuse(Conflict, "The run does not wait at a gate. It is %s.", r.State)
+			return server.Refuse(server.Conflict, "The run does not wait at a gate. It is %s.", r.State)
 		}
 		e.begin(r, r.Current, nextRound(r, r.Current))
 		return nil
@@ -249,7 +236,7 @@ func (e *Engine) Approve(run string) (wire.RunbookRun, error) {
 func (e *Engine) Pause(run string) (wire.RunbookRun, error) {
 	return e.change(run, func(r *wire.RunbookRun) error {
 		if r.State != wire.RunRunning {
-			return refuse(Conflict, "Only a running run can pause. The run is %s.", r.State)
+			return server.Refuse(server.Conflict, "Only a running run can pause. The run is %s.", r.State)
 		}
 		e.pause(r, reasonPaused)
 		return nil
@@ -261,7 +248,7 @@ func (e *Engine) Pause(run string) (wire.RunbookRun, error) {
 func (e *Engine) Resume(run string) (wire.RunbookRun, error) {
 	return e.change(run, func(r *wire.RunbookRun) error {
 		if r.State != wire.RunPaused {
-			return refuse(Conflict, "The run is not paused. It is %s.", r.State)
+			return server.Refuse(server.Conflict, "The run is not paused. It is %s.", r.State)
 		}
 		sr := last(r, r.Current)
 		switch {
@@ -287,7 +274,7 @@ func (e *Engine) Stop(ctx context.Context, run string) (wire.RunbookRun, error) 
 	}
 	if !r.State.Open() {
 		e.mu.Unlock()
-		return wire.RunbookRun{}, refuse(Conflict, "The run is %s already.", r.State)
+		return wire.RunbookRun{}, server.Refuse(server.Conflict, "The run is %s already.", r.State)
 	}
 	var session *wire.SessionRef
 	if sr := live(r); sr != nil {
@@ -310,10 +297,10 @@ func (e *Engine) Stop(ctx context.Context, run string) (wire.RunbookRun, error) 
 func (e *Engine) Retry(run, step string) (wire.RunbookRun, error) {
 	return e.change(run, func(r *wire.RunbookRun) error {
 		if r.Runbook.Step(step) == nil {
-			return refuse(NotFound, "The runbook has no step %s.", step)
+			return server.Refuse(server.NotFound, "The runbook has no step %s.", step)
 		}
 		if sr := live(r); sr != nil {
-			return refuse(Conflict, "The step %s runs now. Stop or skip it first.", sr.Step)
+			return server.Refuse(server.Conflict, "The step %s runs now. Stop or skip it first.", sr.Step)
 		}
 		e.begin(r, step, nextRound(r, step))
 		return nil
@@ -325,12 +312,12 @@ func (e *Engine) Skip(run, step string) (wire.RunbookRun, error) {
 	return e.change(run, func(r *wire.RunbookRun) error {
 		i := r.Runbook.Index(step)
 		if i < 0 {
-			return refuse(NotFound, "The runbook has no step %s.", step)
+			return server.Refuse(server.NotFound, "The runbook has no step %s.", step)
 		}
 		now := e.now()
 		if step != r.Current {
 			if i < r.Runbook.Index(r.Current) {
-				return refuse(Conflict, "The step %s is done. Retry it to run it again.", step)
+				return server.Refuse(server.Conflict, "The step %s is done. Retry it to run it again.", step)
 			}
 			r.Steps = append(r.Steps, wire.StepRun{Step: step, Round: nextRound(r, step), State: wire.StepSkipped})
 			return nil
@@ -356,26 +343,26 @@ func (e *Engine) Patch(run, step string, p wire.StepPatch) (wire.RunbookRun, err
 	return e.change(run, func(r *wire.RunbookRun) error {
 		st := r.Runbook.Step(step)
 		if st == nil {
-			return refuse(NotFound, "The runbook has no step %s.", step)
+			return server.Refuse(server.NotFound, "The runbook has no step %s.", step)
 		}
 		for _, sr := range r.Steps {
 			if sr.Step == step && sr.Started != nil {
-				return refuse(Conflict, "The step %s started. Only a step that did not start can change.", step)
+				return server.Refuse(server.Conflict, "The step %s started. Only a step that did not start can change.", step)
 			}
 		}
 		switch {
 		case p.Agent == "" && p.Launch != nil:
-			return refuse(Invalid, "A launch needs an agent name.")
+			return server.Refuse(server.Invalid, "A launch needs an agent name.")
 		case p.Agent == "" && p.Prompt == "":
-			return refuse(Invalid, "The patch changes nothing.")
+			return server.Refuse(server.Invalid, "The patch changes nothing.")
 		case p.Agent != "" && p.Launch == nil:
 			if _, ok := r.Agents[p.Agent]; !ok {
-				return refuse(Invalid, "The run has no agent %s. Send its launch too.", p.Agent)
+				return server.Refuse(server.Invalid, "The run has no agent %s. Send its launch too.", p.Agent)
 			}
 		}
 		if p.Prompt != "" {
 			if probs := Validate(wire.Runbook{Name: r.Runbook.Name, Steps: []wire.RunbookStep{{ID: step, Prompt: p.Prompt}}}); len(probs) > 0 {
-				return &Error{Kind: Invalid, Text: "The prompt is not valid.", Problems: probs}
+				return &Error{Refusal: server.Refusal{Kind: server.Invalid, Text: "The prompt is not valid."}, Problems: probs}
 			}
 			st.Prompt = p.Prompt
 		}
@@ -430,7 +417,7 @@ func (e *Engine) change(run string, f func(r *wire.RunbookRun) error) (wire.Runb
 		return wire.RunbookRun{}, err
 	}
 	if !r.State.Open() {
-		return wire.RunbookRun{}, refuse(Conflict, "The run is %s.", r.State)
+		return wire.RunbookRun{}, server.Refuse(server.Conflict, "The run is %s.", r.State)
 	}
 	if err := f(r); err != nil {
 		return wire.RunbookRun{}, err
@@ -442,7 +429,7 @@ func (e *Engine) change(run string, f func(r *wire.RunbookRun) error) (wire.Runb
 func (e *Engine) get(run string) (*wire.RunbookRun, error) {
 	r, ok := e.runs[run]
 	if !ok {
-		return nil, refuse(NotFound, "There is no run %s.", run)
+		return nil, server.Refuse(server.NotFound, "There is no run %s.", run)
 	}
 	return r, nil
 }
@@ -454,11 +441,11 @@ func (e *Engine) step(run, step string) (*wire.RunbookRun, *wire.RunbookStep, er
 		return nil, nil, err
 	}
 	if !r.State.Open() {
-		return nil, nil, refuse(Conflict, "The run is %s.", r.State)
+		return nil, nil, server.Refuse(server.Conflict, "The run is %s.", r.State)
 	}
 	st := r.Runbook.Step(step)
 	if st == nil {
-		return nil, nil, refuse(NotFound, "The runbook has no step %s.", step)
+		return nil, nil, server.Refuse(server.NotFound, "The runbook has no step %s.", step)
 	}
 	return r, st, nil
 }
@@ -686,7 +673,7 @@ func verdictState(st wire.RunbookStep, v wire.Verdict) (wire.StepState, error) {
 		case wire.VerdictGaps:
 			return wire.StepGaps, nil
 		}
-		return "", refuse(Invalid, "The review step %s takes the verdict pass, gaps or blocked.", st.ID)
+		return "", server.Refuse(server.Invalid, "The review step %s takes the verdict pass, gaps or blocked.", st.ID)
 	}
 	switch v {
 	case wire.VerdictDone:
@@ -694,7 +681,7 @@ func verdictState(st wire.RunbookStep, v wire.Verdict) (wire.StepState, error) {
 	case wire.VerdictSkipped:
 		return wire.StepSkipped, nil
 	}
-	return "", refuse(Invalid, "The step %s takes the verdict done, skipped or blocked.", st.ID)
+	return "", server.Refuse(server.Invalid, "The step %s takes the verdict done, skipped or blocked.", st.ID)
 }
 
 func roundsText(rounds int) string {

@@ -53,7 +53,7 @@ func newNode(t *testing.T, name string, clock *fakeClock) *node {
 	routes := append(n.joins.Routes(), n.syncer.Routes()...)
 	routes = append(routes, server.Route{Pattern: "GET /v1/whoami", Access: server.Public, Handle: func(w http.ResponseWriter, r *http.Request) {
 		id, home := n.store.Info()
-		writeJSON(w, http.StatusOK, wire.DaemonInfo{Machine: name, Group: id, Home: home})
+		server.WriteJSON(w, http.StatusOK, wire.DaemonInfo{Machine: name, Group: id, Home: home})
 	}})
 	for _, r := range routes {
 		loopMux.HandleFunc(r.Pattern, func(w http.ResponseWriter, req *http.Request) {

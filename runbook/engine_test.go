@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/oversire/cli/runtime"
+	"github.com/oversire/cli/server"
 	"github.com/oversire/cli/wire"
 )
 
@@ -265,8 +266,8 @@ func expect(t *testing.T, r wire.RunbookRun, state wire.RunState, current, steps
 	}
 }
 
-func kind(err error) Kind {
-	var e *Error
+func kind(err error) server.RefusalKind {
+	var e *server.Refusal
 	if errors.As(err, &e) {
 		return e.Kind
 	}
@@ -294,7 +295,7 @@ func TestLinearRunToDone(t *testing.T) {
 	if g.l.count() != 2 || g.frameCount() < 3 {
 		t.Fatalf("%d launches, %d frames", g.l.count(), g.frameCount())
 	}
-	if _, err := g.e.Done(r.ID, "build", wire.StepDone{Verdict: wire.VerdictDone}); kind(err) != Conflict {
+	if _, err := g.e.Done(r.ID, "build", wire.StepDone{Verdict: wire.VerdictDone}); kind(err) != server.Conflict {
 		t.Fatalf("done on a done run: %v", err)
 	}
 }
@@ -387,11 +388,11 @@ func TestGateAndApprove(t *testing.T) {
 	if g.l.count() != 1 {
 		t.Fatal("the gate launched")
 	}
-	if _, err := g.e.Done(r.ID, "build", wire.StepDone{Verdict: wire.VerdictDone}); kind(err) != Conflict {
+	if _, err := g.e.Done(r.ID, "build", wire.StepDone{Verdict: wire.VerdictDone}); kind(err) != server.Conflict {
 		t.Fatalf("done at the gate: %v", err)
 	}
 	for _, f := range []func(string) (wire.RunbookRun, error){g.e.Pause, g.e.Resume} {
-		if _, err := f(r.ID); kind(err) != Conflict {
+		if _, err := f(r.ID); kind(err) != server.Conflict {
 			t.Fatalf("pause or resume at the gate: %v", err)
 		}
 	}
@@ -400,7 +401,7 @@ func TestGateAndApprove(t *testing.T) {
 	}
 	r = g.run(t, r.ID)
 	expect(t, r, wire.RunRunning, "build", "plan.1:done build.1:working")
-	if _, err := g.e.Approve(r.ID); kind(err) != Conflict {
+	if _, err := g.e.Approve(r.ID); kind(err) != server.Conflict {
 		t.Fatalf("approve of a running run: %v", err)
 	}
 }
@@ -533,10 +534,10 @@ func TestStop(t *testing.T) {
 	if len(g.l.stops) != 1 || g.l.stops[0].ID != "term-1" {
 		t.Fatalf("stops %+v", g.l.stops)
 	}
-	if _, err := g.e.Stop(context.Background(), r.ID); kind(err) != Conflict {
+	if _, err := g.e.Stop(context.Background(), r.ID); kind(err) != server.Conflict {
 		t.Fatalf("stop again: %v", err)
 	}
-	if _, err := g.e.Stop(context.Background(), "rb_00000000"); kind(err) != NotFound {
+	if _, err := g.e.Stop(context.Background(), "rb_00000000"); kind(err) != server.NotFound {
 		t.Fatalf("stop of no run: %v", err)
 	}
 }
@@ -544,7 +545,7 @@ func TestStop(t *testing.T) {
 func TestRetryAddsARound(t *testing.T) {
 	g := newRig(t, "")
 	r := g.start(t, linear())
-	if _, err := g.e.Retry(r.ID, "plan"); kind(err) != Conflict {
+	if _, err := g.e.Retry(r.ID, "plan"); kind(err) != server.Conflict {
 		t.Fatalf("retry of a live step: %v", err)
 	}
 	g.done(t, r.ID, "plan", wire.VerdictDone, "")
@@ -556,7 +557,7 @@ func TestRetryAddsARound(t *testing.T) {
 	expect(t, r, wire.RunRunning, "plan", "plan.1:done build.1:blocked plan.2:working")
 	r = g.done(t, r.ID, "plan", wire.VerdictDone, "")
 	expect(t, r, wire.RunRunning, "build", "plan.1:done build.1:blocked plan.2:done build.2:working")
-	if _, err := g.e.Retry(r.ID, "nope"); kind(err) != NotFound {
+	if _, err := g.e.Retry(r.ID, "nope"); kind(err) != server.NotFound {
 		t.Fatalf("retry of no step: %v", err)
 	}
 }
@@ -577,7 +578,7 @@ func TestSkip(t *testing.T) {
 	if len(g.l.stops) != 1 || g.l.stops[0].ID != "term-1" {
 		t.Fatalf("the skip did not stop the session: %+v", g.l.stops)
 	}
-	if _, err := g.e.Skip(r.ID, "plan"); kind(err) != Conflict {
+	if _, err := g.e.Skip(r.ID, "plan"); kind(err) != server.Conflict {
 		t.Fatalf("skip of a past step: %v", err)
 	}
 	r = g.done(t, r.ID, "ship", wire.VerdictDone, "")
@@ -587,21 +588,21 @@ func TestSkip(t *testing.T) {
 func TestPatch(t *testing.T) {
 	g := newRig(t, "")
 	r := g.start(t, linear())
-	if _, err := g.e.Patch(r.ID, "plan", wire.StepPatch{Prompt: prompt("Other.")}); kind(err) != Conflict {
+	if _, err := g.e.Patch(r.ID, "plan", wire.StepPatch{Prompt: prompt("Other.")}); kind(err) != server.Conflict {
 		t.Fatalf("patch after the start: %v", err)
 	}
-	if _, err := g.e.Patch(r.ID, "build", wire.StepPatch{Agent: "codex"}); kind(err) != Invalid {
+	if _, err := g.e.Patch(r.ID, "build", wire.StepPatch{Agent: "codex"}); kind(err) != server.Invalid {
 		t.Fatalf("patch with an unknown agent: %v", err)
 	}
 	_, err := g.e.Patch(r.ID, "build", wire.StepPatch{Prompt: "No done {nope}."})
 	var e *Error
-	if !errors.As(err, &e) || e.Kind != Invalid || len(e.Problems) != 2 || e.Problems[0].Step != "build" {
+	if !errors.As(err, &e) || e.Kind != server.Invalid || len(e.Problems) != 2 || e.Problems[0].Step != "build" {
 		t.Fatalf("patch with a bad prompt: %v", err)
 	}
-	if _, err := g.e.Patch(r.ID, "build", wire.StepPatch{}); kind(err) != Invalid {
+	if _, err := g.e.Patch(r.ID, "build", wire.StepPatch{}); kind(err) != server.Invalid {
 		t.Fatalf("empty patch: %v", err)
 	}
-	if _, err := g.e.Patch(r.ID, "nope", wire.StepPatch{Agent: "claude"}); kind(err) != NotFound {
+	if _, err := g.e.Patch(r.ID, "nope", wire.StepPatch{Agent: "claude"}); kind(err) != server.NotFound {
 		t.Fatalf("patch of no step: %v", err)
 	}
 	r, err = g.e.Patch(r.ID, "build", wire.StepPatch{Agent: "codex", Launch: &wire.AgentLaunch{CLI: "codex", Profile: "codex"}, Prompt: prompt("Build only the store of {key}.")})
@@ -621,19 +622,19 @@ func TestStartRefusals(t *testing.T) {
 	g := newRig(t, "")
 	r := g.start(t, linear())
 	_, err := g.e.Start(context.Background(), wire.RunbookStart{Item: item, Repo: "/r/app", Runbook: linear(), Agents: agents})
-	if kind(err) != Conflict || !strings.Contains(err.Error(), r.ID) {
+	if kind(err) != server.Conflict || !strings.Contains(err.Error(), r.ID) {
 		t.Fatalf("second open run: %v", err)
 	}
 	bad := linear()
 	bad.Steps[1].Agent = "nobody"
 	_, err = g.e.Start(context.Background(), wire.RunbookStart{Item: item, Repo: "/r/app", Runbook: bad, Agents: agents})
 	var e *Error
-	if !errors.As(err, &e) || e.Kind != Invalid || len(e.Problems) != 1 || e.Problems[0].Step != "build" {
+	if !errors.As(err, &e) || e.Kind != server.Invalid || len(e.Problems) != 1 || e.Problems[0].Step != "build" {
 		t.Fatalf("bad agent: %v %+v", err, e)
 	}
 	other := item
 	other.Key = "OVERSIRE-9"
-	if _, err := g.e.Start(context.Background(), wire.RunbookStart{Item: other, Repo: "/r/app", Runtime: "conductor", Runbook: linear(), Agents: agents}); kind(err) != Invalid {
+	if _, err := g.e.Start(context.Background(), wire.RunbookStart{Item: other, Repo: "/r/app", Runtime: "conductor", Runbook: linear(), Agents: agents}); kind(err) != server.Invalid {
 		t.Fatalf("unknown runtime: %v", err)
 	}
 	g.e.Stop(context.Background(), r.ID)
@@ -661,7 +662,7 @@ func TestStartAt(t *testing.T) {
 	if p := g.l.last().Prompt; !strings.Contains(p, "Notes: Implement: done by hand..") {
 		t.Fatal(p)
 	}
-	if _, err := g.e.Start(context.Background(), wire.RunbookStart{Item: wire.ItemRef{Key: "X-1"}, Repo: "/r", Runbook: small(1), Agents: agents, StartAt: "nope"}); kind(err) != Invalid {
+	if _, err := g.e.Start(context.Background(), wire.RunbookStart{Item: wire.ItemRef{Key: "X-1"}, Repo: "/r", Runbook: small(1), Agents: agents, StartAt: "nope"}); kind(err) != server.Invalid {
 		t.Fatalf("start at no step: %v", err)
 	}
 }
@@ -672,12 +673,12 @@ func TestWrongVerdicts(t *testing.T) {
 	for _, c := range []struct {
 		step string
 		v    wire.Verdict
-		want Kind
+		want server.RefusalKind
 	}{
-		{"implement", wire.VerdictPass, Invalid},
-		{"implement", "maybe", Invalid},
-		{"review", wire.VerdictPass, Conflict},
-		{"nope", wire.VerdictDone, NotFound},
+		{"implement", wire.VerdictPass, server.Invalid},
+		{"implement", "maybe", server.Invalid},
+		{"review", wire.VerdictPass, server.Conflict},
+		{"nope", wire.VerdictDone, server.NotFound},
 	} {
 		if _, err := g.e.Done(r.ID, c.step, wire.StepDone{Verdict: c.v}); kind(err) != c.want {
 			t.Errorf("%s %s: %v", c.step, c.v, err)
@@ -688,7 +689,7 @@ func TestWrongVerdicts(t *testing.T) {
 		t.Fatal(err)
 	}
 	g.done(t, r.ID, "implement", wire.VerdictDone, "")
-	if _, err := g.e.Done(r.ID, "review", wire.StepDone{Verdict: wire.VerdictDone}); kind(err) != Invalid {
+	if _, err := g.e.Done(r.ID, "review", wire.StepDone{Verdict: wire.VerdictDone}); kind(err) != server.Invalid {
 		t.Fatalf("done on a review: %v", err)
 	}
 	r = g.done(t, r.ID, "review", wire.VerdictGaps, strings.Repeat("é", 400))
@@ -705,7 +706,7 @@ func TestPauseAfterTheCurrentStep(t *testing.T) {
 		t.Fatal(err)
 	}
 	expect(t, r, wire.RunPaused, "plan", "plan.1:working")
-	if _, err := g.e.Pause(r.ID); kind(err) != Conflict {
+	if _, err := g.e.Pause(r.ID); kind(err) != server.Conflict {
 		t.Fatalf("pause again: %v", err)
 	}
 	r = g.done(t, r.ID, "plan", wire.VerdictDone, "")
@@ -928,7 +929,7 @@ func TestStepCarriesTheAgentEnv(t *testing.T) {
 	other := item
 	other.Key = "OVERSIRE-9"
 	var e *Error
-	if _, err := g.e.Start(context.Background(), wire.RunbookStart{Item: other, Repo: "/r/app", Runbook: b, Agents: bad}); !errors.As(err, &e) || e.Kind != Invalid {
+	if _, err := g.e.Start(context.Background(), wire.RunbookStart{Item: other, Repo: "/r/app", Runbook: b, Agents: bad}); !errors.As(err, &e) || e.Kind != server.Invalid {
 		t.Fatalf("a reserved key: %v", err)
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/oversire/cli/server"
 	"github.com/oversire/cli/wire"
 )
 
@@ -18,13 +19,13 @@ import (
 func (e *Engine) Merge(ctx context.Context, key string, m wire.MergeRequest) (wire.MergeResult, error) {
 	res := wire.MergeResult{Repos: []wire.RepoMerge{}, NotPushed: []wire.NotPushed{}}
 	if !validKey(key) {
-		return res, refuse(Invalid, "The key %q is not valid.", key)
+		return res, server.Refuse(server.Invalid, "The key %q is not valid.", key)
 	}
 	e.send.Lock()
 	defer e.send.Unlock()
 	g, ok := findGroup(e.allRoots(ctx), key)
 	if !ok {
-		return res, refuse(NotFound, "There is no group .wt/%s in the roots of this daemon.", strings.ToLower(key))
+		return res, server.Refuse(server.NotFound, "There is no group .wt/%s in the roots of this daemon.", strings.ToLower(key))
 	}
 	repos, err := e.checkMerge(ctx, g)
 	if err != nil {
@@ -132,33 +133,33 @@ func (e *Engine) Merge(ctx context.Context, key string, m wire.MergeRequest) (wi
 func (e *Engine) checkMerge(ctx context.Context, g group) ([]wire.ReviewRepo, error) {
 	key := g.Key()
 	if _, rs := e.sessionOf(wire.ReviewCode, key, g.Dir()); rs.State == wire.ReviewSessionWorking {
-		return nil, refuse(Conflict, "The session of %s works. Wait for its hand-off.", key)
+		return nil, server.Refuse(server.Conflict, "The session of %s works. Wait for its hand-off.", key)
 	}
 	var repos []wire.ReviewRepo
 	ahead := false
 	for _, name := range e.d.Order.Sort(g.Repos) {
 		r, _, err := e.d.Git.repo(ctx, g, name)
 		if err != nil {
-			return nil, refuse(Conflict, "%s: %v", name, err)
+			return nil, server.Refuse(server.Conflict, "%s: %v", name, err)
 		}
 		if r.Dirty {
-			return nil, refuse(Conflict, "%s: the worktree has changes that are not committed. Commit or discard them first.", name)
+			return nil, server.Refuse(server.Conflict, "%s: the worktree has changes that are not committed. Commit or discard them first.", name)
 		}
 		if r.Ahead > 0 {
 			ahead = true
 			if r.Base == "HEAD" {
-				return nil, refuse(Conflict, "%s: the primary checkout %s is not on a branch.", name, g.primary(name))
+				return nil, server.Refuse(server.Conflict, "%s: the primary checkout %s is not on a branch.", name, g.primary(name))
 			}
 			// Changes in the primary checkout stop the merge only in files of the branch.
 			// The fast-forward and the rollback (reset --keep) keep the other changes.
 			dirty, err := e.d.Git.Run(ctx, g.primary(name), "diff", "--name-only", "--no-renames", "HEAD")
 			if err != nil {
-				return nil, refuse(Conflict, "%s: %v", name, err)
+				return nil, server.Refuse(server.Conflict, "%s: %v", name, err)
 			}
 			if dirty != "" {
 				incoming, err := e.d.Git.Run(ctx, g.primary(name), "diff", "--name-only", "--no-renames", r.Base+"..."+r.Branch)
 				if err != nil {
-					return nil, refuse(Conflict, "%s: %v", name, err)
+					return nil, server.Refuse(server.Conflict, "%s: %v", name, err)
 				}
 				var shared []string
 				branch := lines(incoming)
@@ -168,7 +169,7 @@ func (e *Engine) checkMerge(ctx context.Context, g group) ([]wire.ReviewRepo, er
 					}
 				}
 				if len(shared) > 0 {
-					return nil, refuse(Conflict, "%s: the primary checkout %s has changes that are not committed in files of %s: %s. Commit or stash them first.",
+					return nil, server.Refuse(server.Conflict, "%s: the primary checkout %s has changes that are not committed in files of %s: %s. Commit or stash them first.",
 						name, g.primary(name), r.Branch, strings.Join(shared, ", "))
 				}
 			}
@@ -176,7 +177,7 @@ func (e *Engine) checkMerge(ctx context.Context, g group) ([]wire.ReviewRepo, er
 		repos = append(repos, r)
 	}
 	if !ahead {
-		return nil, refuse(Conflict, "%s has no commits to merge.", g.Rel())
+		return nil, server.Refuse(server.Conflict, "%s has no commits to merge.", g.Rel())
 	}
 	return repos, nil
 }

@@ -16,6 +16,7 @@ import (
 
 	"github.com/oversire/cli/proc"
 	"github.com/oversire/cli/runtime"
+	"github.com/oversire/cli/server"
 	"github.com/oversire/cli/wire"
 )
 
@@ -274,7 +275,7 @@ func (r *rig) eventNames() []string {
 	return out
 }
 
-func kindIs(err error, k Kind) bool {
-	var e *Error
+func kindIs(err error, k server.RefusalKind) bool {
+	var e *server.Refusal
 	return errors.As(err, &e) && e.Kind == k
 }
