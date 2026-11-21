@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -317,8 +318,6 @@ func TestInputAndWritable(t *testing.T) {
 	c := dial(t, srv, wire.StreamAttach{View: wire.ViewTerminal})
 	c.until(isLease(wire.HolderNone))
 	c.input("ls\r")
-	// Binary input and JSON frames use two channels, so their order is not fixed.
-	waitFor(t, func() bool { _, w, _ := src.state(); return len(w) == 1 })
 	c.json(wire.StreamSend{Text: "hi"})
 	waitFor(t, func() bool { _, w, _ := src.state(); return len(w) == 2 })
 	if _, w, _ := src.state(); w[0] != "ls\r" || w[1] != "hi" {
@@ -335,6 +334,28 @@ func TestInputAndWritable(t *testing.T) {
 	c2.json(wire.StreamControl{Cols: 10, Rows: 10})
 	if e := c2.until(func(f frame) bool { _, ok := f.msg.(wire.StreamError); return ok }).msg.(wire.StreamError); e.Code != "notResizable" {
 		t.Fatalf("error %+v", e)
+	}
+}
+
+func TestInputAndFramesKeepTheClientOrder(t *testing.T) {
+	src := newFakeSource(Caps{Source: wire.SourceStream, Writable: true})
+	srv := newServer(t, fakeOpener{terminal: func() Source { return src }}, time.Now)
+	c := dial(t, srv, wire.StreamAttach{View: wire.ViewTerminal})
+	c.until(isLease(wire.HolderNone))
+	var want []string
+	for i := range 50 {
+		a, b := fmt.Sprintf("a%d", i), fmt.Sprintf("b%d", i)
+		c.input(a)
+		c.json(wire.StreamSend{Text: b})
+		want = append(want, a, b)
+		if i%10 == 0 {
+			c.json(wire.StreamInterrupt{})
+			want = append(want, "\x03")
+		}
+	}
+	waitFor(t, func() bool { _, w, _ := src.state(); return len(w) == len(want) })
+	if _, w, _ := src.state(); !slices.Equal(w, want) {
+		t.Fatalf("writes %q, want %q", w, want)
 	}
 }
 

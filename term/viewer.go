@@ -21,6 +21,12 @@ const (
 	readLimit     = 1 << 20 // a large paste
 )
 
+// clientFrame is one client frame for the main loop. Exactly one field is set.
+type clientFrame struct {
+	input []byte       // binary input frame
+	msg   wire.Message // JSON frame, never an ack
+}
+
 // viewer is one WebSocket on the stream of one session.
 type viewer struct {
 	conn    *websocket.Conn
@@ -32,8 +38,7 @@ type viewer struct {
 	acked   atomic.Uint64
 	ackSeen chan struct{}         // a new ack came
 	holder  chan wire.LeaseHolder // the newest holder only
-	frames  chan wire.Message     // client frames from the read loop
-	inputs  chan []byte           // binary input from the read loop
+	frames  chan clientFrame      // client frames in socket order
 	failed  chan error            // the read loop stopped
 }
 
@@ -41,7 +46,7 @@ func newViewer(conn *websocket.Conn, session string, leases *Leases, now func() 
 	return &viewer{
 		conn: conn, session: session, leases: leases, now: now,
 		ackSeen: make(chan struct{}, 1), holder: make(chan wire.LeaseHolder, 1),
-		frames: make(chan wire.Message, 16), inputs: make(chan []byte, 64), failed: make(chan error, 1),
+		frames: make(chan clientFrame, 64), failed: make(chan error, 1),
 	}
 }
 
@@ -95,7 +100,7 @@ func (v *viewer) readLoop(ctx context.Context) {
 				continue
 			}
 			select {
-			case v.inputs <- p:
+			case v.frames <- clientFrame{input: p}:
 			case <-ctx.Done():
 				return
 			}
@@ -117,7 +122,7 @@ func (v *viewer) readLoop(ctx context.Context) {
 			continue
 		}
 		select {
-		case v.frames <- m:
+		case v.frames <- clientFrame{msg: m}:
 		case <-ctx.Done():
 			return
 		}
@@ -219,17 +224,12 @@ func (v *viewer) terminal(ctx context.Context, src Source, size Viewport) error 
 			if v.leases.expired(v.session, v) {
 				_ = src.Control(ctx, nil)
 			}
-		case p := <-v.inputs:
-			if !caps.Writable {
-				v.fail(ctx, "notWritable", "This view cannot type into the terminal.")
-				continue
+		case f := <-v.frames:
+			if f.msg == nil {
+				v.terminalInput(ctx, src, caps, f.input)
+			} else {
+				v.terminalFrame(ctx, src, caps, f.msg)
 			}
-			v.leases.touch(v.session, v)
-			if err := src.Write(ctx, p); err != nil {
-				v.fail(ctx, "sourceFailed", err.Error())
-			}
-		case m := <-v.frames:
-			v.terminalFrame(ctx, src, caps, m)
 		case c, ok := <-in:
 			if !ok {
 				if ctx.Err() != nil {
@@ -259,6 +259,17 @@ func (v *viewer) chunk(ctx context.Context, c Chunk) error {
 		v.leases.takeBack(v.session)
 	}
 	return nil
+}
+
+func (v *viewer) terminalInput(ctx context.Context, src Source, caps Caps, p []byte) {
+	if !caps.Writable {
+		v.fail(ctx, "notWritable", "This view cannot type into the terminal.")
+		return
+	}
+	v.leases.touch(v.session, v)
+	if err := src.Write(ctx, p); err != nil {
+		v.fail(ctx, "sourceFailed", err.Error())
+	}
 }
 
 func (v *viewer) terminalFrame(ctx context.Context, src Source, caps Caps, m wire.Message) {
@@ -321,11 +332,13 @@ func (v *viewer) chat(ctx context.Context, src TurnSource, after int) error {
 			return nil
 		case err := <-v.failed:
 			return err
-		case <-v.inputs:
-			v.fail(ctx, "notWritable", "The chat view takes text in a send frame.")
-		case m := <-v.frames:
+		case cf := <-v.frames:
+			if cf.msg == nil {
+				v.fail(ctx, "notWritable", "The chat view takes text in a send frame.")
+				continue
+			}
 			var err error
-			switch f := m.(type) {
+			switch f := cf.msg.(type) {
 			case wire.StreamSend:
 				err = src.Send(ctx, f.Text)
 			case wire.StreamInterrupt:

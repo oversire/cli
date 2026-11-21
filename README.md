@@ -555,6 +555,7 @@ The terminal view:
 - The daemon stops at 512 KiB that are not acked. A viewer that is 5 s late gets a new snapshot. Each attach and each resize also give a snapshot.
 - `control` `{cols, rows}` takes the size, and `release` gives it back to the runtime UI. One viewer holds the size. `lease` tells each viewer the holder: `you`, `other`, `desktop` or `none`. A holder with no input for 10 min loses the size.
 - The daemon pings each 30 s. A write that takes more than 10 s closes the socket.
+- The daemon keeps the order of the client frames: input, `send` and `interrupt` reach the terminal in the order that the client sent them.
 
 The chat view:
 
