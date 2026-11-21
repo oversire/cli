@@ -36,9 +36,12 @@ Then run `oversire ticket skill <command>` and do its steps.
 
 ## Rules for all commands
 
-- Use `oversire item` and `oversire project` for the items of each tracker (Plane, Big Timer). Run `oversire item` with no arguments to see the commands. Put long text in a file: `--body-file <file>`, or `--body-file -` for stdin. The OverSire app on this Mac runs them. Exit 3 means that no app answers: tell the user to open the OverSire app.
+- Use `oversire item`, `oversire project` and `oversire intake` for the items and the intake of each tracker (Plane, Big Timer). Run `oversire item` with no arguments to see the commands. Put long text in a file: `--body-file <file>`, or `--body-file -` for stdin. The OverSire app on this Mac runs them. Exit 3 means that no app answers: tell the user to open the OverSire app.
 - When a command answers "<Tracker> has no X", the tracker does not have that feature. Skip the step and tell the user.
-- `plane-cli` is only for three jobs on Plane: the intake, the list and delete of attachments, and the created-date scope. The `oversire` commands do all other item work. If you do not know a `plane-cli` command, load its skill.
+- Use `oversire` commands first.
+- For tracker work that no `oversire` command does (for example the list and delete of attachments), use the pass-through: `oversire vendor run --project <PROJECT> -- <command> [flags]`. The app on this Mac runs the CLI of the tracker of the project with its own token. Put the command first, then its flags. Do not give a host or a token flag.
+- `oversire vendor ls` shows the vendor CLIs, their accounts and projects. Load the skill of that vendor CLI for its commands. Do not run a vendor CLI directly.
+- The pass-through sends no stdin. For files, give a path in your folder. The output has at most 1 MB.
 - For the epics and the north star of a project, use `oversire epic` and `oversire project north-star`. The OverSire app on this Mac runs them. Run `oversire epic` with no arguments to see the commands.
 - For CI, use `oversire ci status`, `oversire ci wait` and `oversire ci why`. When a run fails, run `oversire ci why RUN`. For a short cause and fix, run `oversire ci explain RUN`. Do not poll with `gh run watch`, `gh run view` or `gh pr checks`: these calls use the shared GitHub quota. Exit 3 means that no OverSire app answers.
 - For CI changes, use `oversire ci rerun RUN [--failed]`, `oversire ci cancel RUN`, `oversire ci dispatch WORKFLOW [--ref REF] [-f key=value]` and `oversire ci approve RUN`. Do not use `gh run rerun`, `gh run cancel` or `gh workflow run`. Add `--wait` to `rerun` and `dispatch` to wait for the result. Exit 1 with a refusal means that the user did not give agents this right. Do not try another way.

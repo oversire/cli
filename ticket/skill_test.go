@@ -1,6 +1,7 @@
 package ticket
 
 import (
+	"io/fs"
 	"strings"
 	"testing"
 )
@@ -56,11 +57,6 @@ func TestBodyRendersEachVerb(t *testing.T) {
 	}
 	if !strings.Contains(nb, "- Epic:") || !strings.Contains(nb, "oversire epic add") {
 		t.Error("new has no epic step")
-	}
-	for _, b := range []string{main, eb, nb} {
-		if strings.Contains(b, "plane-cli module") {
-			t.Error("a body makes epics with plane-cli")
-		}
 	}
 	if !strings.Contains(main, "oversire project north-star") {
 		t.Error("main has no north star command")
@@ -152,5 +148,60 @@ func TestDoneBodyStopsTheWorker(t *testing.T) {
 	}
 	if strings.Index(b, "oversire worker stop") > strings.Index(b, "oversire ticket done") {
 		t.Fatal("the stop comes after ticket done")
+	}
+}
+
+func TestBodiesHaveNoPlaneCLI(t *testing.T) {
+	err := fs.WalkDir(NewSkill().Files(), ".", func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		b, _ := fs.ReadFile(NewSkill().Files(), p)
+		if strings.Contains(string(b), "plane-cli") {
+			t.Errorf("%s names plane-cli", p)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestGroomBodyUsesIntakeCommands(t *testing.T) {
+	b, _ := NewSkill().Body("groom", Context{})
+	for _, want := range []string{"oversire intake list", "oversire intake decline", "oversire intake duplicate", "oversire intake accept", "oversire intake edit", "--comment-file", "--status all"} {
+		if !strings.Contains(b, want) {
+			t.Errorf("groom body has no %q", want)
+		}
+	}
+}
+
+func TestPlanBodyUsesCreatedSinceAndIntake(t *testing.T) {
+	b, _ := NewSkill().Body("plan", Context{})
+	for _, want := range []string{"--created-since", "oversire intake list"} {
+		if !strings.Contains(b, want) {
+			t.Errorf("plan body has no %q", want)
+		}
+	}
+}
+
+func TestDoneBodyUsesVendorRun(t *testing.T) {
+	b, _ := NewSkill().Body("done", Context{})
+	last := -1
+	for _, want := range []string{"oversire vendor run", "attachment list", "attachment delete", "oversire item attach"} {
+		i := strings.Index(b, want)
+		if i < 0 || i < last {
+			t.Fatalf("done body has %q missing or out of order", want)
+		}
+		last = i
+	}
+}
+
+func TestMainBodyNamesThePassThrough(t *testing.T) {
+	b, _ := NewSkill().Body("", Context{})
+	for _, want := range []string{"oversire vendor run", "oversire vendor ls", "oversire intake"} {
+		if !strings.Contains(b, want) {
+			t.Errorf("main body has no %q", want)
+		}
 	}
 }

@@ -43,8 +43,8 @@ If the arguments (or Groom) give the keys, skip this step. Else ask with AskUser
 
 ### 2. Find the candidates
 
-- Read the work items with `oversire item list --project <PROJECT> --group todo --limit 200`. A date scope needs the created date, which the app does not have. On Plane only, use `plane-cli` for that scope. On other trackers, ask the user for keys.
-- On Plane, add the pending intake items: `plane-cli intake list --status -2`.
+- Read the work items with `oversire item list --project <PROJECT> --group todo --limit 200`. For a date scope, add `--created-since <YYYY-MM-DD>`. It filters the loaded items. For older closed items, use the pass-through (see the rules).
+- Add the pending intake items: `oversire intake list --project <PROJECT> --limit 200 --json`. When it answers "<Tracker> has no intake", skip this step.
 - Keep only the items whose description has no `## Changes` and no `## Tests`.
 - Show a numbered table: #, key, title, created, state.
 - The user types `all`, `1-5,8` or `all but 3`. Tell back the selected keys.

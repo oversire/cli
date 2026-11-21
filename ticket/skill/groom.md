@@ -17,7 +17,7 @@ Run `oversire ticket groom <PROJECT>`.
 
 ## 3. Read the items
 
-- Read the pending intake: `plane-cli intake list --status -2`. To include snoozed items, use `--status-in -2,0`.
+- Read the intake: `oversire intake list --project <PROJECT> --detail --limit 200 --json`. To include snoozed items, add `--status all`. The list has no comments.
 - With `--backlog`, also read `oversire item list --project <PROJECT> --group todo --limit 200`.
 - Skip the items in a started, completed or cancelled state, and the busy items.
 - The skill cannot see the queue lanes of the app. Tell the user this one time.
@@ -59,11 +59,11 @@ Show one table of the writes. Then write one item at a time, as the app does:
 
 | Kind | Work item | Intake item |
 | --- | --- | --- |
-| merge | The kept item gets the new description (`oversire item edit <KEEP> --body-file <file>`). Keep its OverSire block. Each other item gets the `duplicate` relation (`oversire item relate <KEY> --duplicate-of <KEEP>`), the comment "Merged into <KEEP> by Groom. <reason>" (`oversire item comment`), and the Cancelled state (`oversire item status <KEY> Cancelled`). | Each other item: `plane-cli intake update --status 2 --duplicate-to-id <id of KEEP>` (2 = Duplicate). |
-| done | The comment "Done: <reason>" plus the evidence lines (`oversire item comment`), then the Done state (`oversire item done <KEY>`). | The same comment, then `--status -1` (Rejected). |
-| obsolete | The comment "Obsolete: <reason>", then the Cancelled state (`oversire item status <KEY> Cancelled`). | The same comment, then `--status -1` (Rejected). |
-| fold | Set the parent (`oversire item parent <KEY> <PARENT>`). | Set the parent, then `--status 1` (Accepted). |
-| relate | Add the relation (`oversire item relate`). | Add the relation. |
+| merge | The kept item gets the new description (`oversire item edit <KEEP> --body-file <file>`). Keep its OverSire block. Each other item gets the `duplicate` relation (`oversire item relate <KEY> --duplicate-of <KEEP>`), the comment "Merged into <KEEP> by Groom. <reason>" (`oversire item comment`), and the Cancelled state (`oversire item status <KEY> Cancelled`). | Each other item: `oversire intake duplicate <KEY> --of <KEEP> --comment-file <file>`. When KEEP waits in the intake, write its description with `oversire intake edit <KEEP> --body-file <file>`. |
+| done | The comment "Done: <reason>" plus the evidence lines (`oversire item comment`), then the Done state (`oversire item done <KEY>`). | `oversire intake decline <KEY> --comment-file <file>`. The file holds the comment and the evidence. |
+| obsolete | The comment "Obsolete: <reason>", then the Cancelled state (`oversire item status <KEY> Cancelled`). | `oversire intake decline <KEY> --comment-file <file>`. |
+| fold | Set the parent (`oversire item parent <KEY> <PARENT>`). | `oversire intake edit <KEY> --parent <PARENT>`, then `oversire intake accept <KEY>`. |
+| relate | Add the relation (`oversire item relate`). | `oversire intake edit <KEY> --blocks\|--blocked-by\|--relates-to\|--duplicate-of <OTHER>`. |
 | vague | No write. | No write. |
 
 - A failed line stays in the list with its error. Offer to try again only the failed lines.

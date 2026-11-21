@@ -822,11 +822,11 @@ The `oversire` agent skill (OVERSIRE-434) makes, plans, works and closes tracker
 - `new` writes a brief, then a planner subagent writes the spec at the interface level (`oversire ticket skill spec`), and a checker subagent compares it with the code.
 - The ledger `<config>/tickets/<KEY>.json` keeps the sessions of each ticket on this machine. `work` uses it to print the digest of the last session. When the transcript is on a different machine, it prints the `ssh` command that gets the digest.
 - `plan` with no key or many keys plans a batch: one group brief, at most 5 planners at one time, and one round of questions.
-- `groom` does the Groom of the app in the chat: the same kinds and the same Plane writes, after a yes. `oversire ticket groom` checks the key `groom:<PROJECT>` on the local daemon and lists the busy items. It sets no key, because the app adopts each live `groom:` session.
+- `groom` does the Groom of the app in the chat: the same kinds and the same writes, through `oversire intake` and `oversire item`, after a yes. `oversire ticket groom` checks the key `groom:<PROJECT>` on the local daemon and lists the busy items. It sets no key, because the app adopts each live `groom:` session.
 - When no daemon answers, `oversire ticket applied` keeps the rows in the events spool, and the daemon writes them at its next start.
 - `sweep` reads the facts from the daemon, the ledger and git. The agent adds the Plane state, sorts the items into buckets and asks one time for each bucket. It does not merge. `stop` ends only the sessions of the `orca` and `oversire` runtimes.
 - `delegate` starts a background Overseer (model sonnet) with a fixed prompt. The Overseer drives a worker through `oversire worker` (see "Workers"): `worker start`, then `worker wait --timeout 8m` in a loop, then one action for each wake. It gives back `READY: ...` or `BLOCKED: ...`. `done` runs `oversire worker stop`, and `oversire ticket done` packs the turns of the worker as `<KEY>-worker-turns` beside the transcript.
-- The skill uses `oversire item` and `oversire project` for the items of each tracker (Plane and Big Timer). It uses `plane-cli` only for the intake, the attachment list and delete, and the created-date scope, on Plane. The CLI makes no tracker calls.
+- The skill uses `oversire item`, `oversire project` and `oversire intake` for each tracker (Plane and Big Timer). It uses `oversire vendor run` for the list and delete of attachments. The CLI makes no tracker calls.
 - `TestSkillCommandsExist` fails when the body names an `oversire` command that is not in the usage.
 
 ## Release

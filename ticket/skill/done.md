@@ -26,7 +26,7 @@ If `oversire ticket skill delegate` ran for this ticket:
 
 Run `oversire ticket done <KEY>`. It writes the transcript of this session as gzip files and prints one line for each file: `<path><TAB><name>`. If the ticket has a worker, it also writes the turns of the worker (`<KEY>-worker-turns`). A line with no TAB is a note, for example that there is no worker. Show it to the user and go on.
 
-- On Plane, list the attachments of the ticket (`plane-cli wi attachment list <KEY>`). Delete each attachment whose name starts with the session part of the names (for example `claude-session-<id>`, or `<KEY>-worker-turns`). Thus the ticket keeps only the latest transcript of this session. The protocol of the app has no delete. On other trackers, skip this step.
+- On Plane, list the attachments of the ticket: `oversire vendor run --project <PROJECT> -- wi attachment list <KEY> --json`. Delete each attachment whose name starts with the session part of the names (for example `claude-session-<id>`, or `<KEY>-worker-turns`): `oversire vendor run --project <PROJECT> -- wi attachment delete <KEY> <ID>`. <PROJECT> is the key prefix of <KEY>. Thus the ticket keeps only the latest transcript of this session. The protocol of the app has no delete. On other trackers, skip this step.
 - Upload each file: `oversire item attach <KEY> <path> --name <name>`. If it answers "<Tracker> has no attachments", skip the upload and tell the user.
 
 ## 5. Report
