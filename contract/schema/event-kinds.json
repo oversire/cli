@@ -387,6 +387,34 @@
       }
     },
     {
+      "kind": "groom.undone",
+      "domain": "agent",
+      "actorTypes": [
+        "human",
+        "agent"
+      ],
+      "private": false,
+      "summary": "the project and how many items Undo put back",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string"
+          },
+          "undone": {
+            "type": "integer"
+          },
+          "left": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "project"
+        ]
+      }
+    },
+    {
       "kind": "sweep.applied",
       "domain": "agent",
       "actorTypes": [

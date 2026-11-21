@@ -1,0 +1,14 @@
+{
+  "seq": 252,
+  "id": "app:mbp:-:groom:1795099999000",
+  "at": "2026-11-19T14:13:19Z",
+  "seenAt": "2026-11-19T14:13:20Z",
+  "kind": "groom.undone",
+  "project": "oversire",
+  "machine": "mbp",
+  "actorType": "human",
+  "actor": "flarco@gmail.com",
+  "via": "app@mba",
+  "summary": "Groom of OVERSIRE undone: 5 items put back, 1 left",
+  "payload": { "project": "OVERSIRE", "undone": 5, "left": 1 }
+}
