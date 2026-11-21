@@ -35,3 +35,19 @@ func TestActionWithNoArgs(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+func TestVendorListIsRead(t *testing.T) {
+	if (Action{Name: "vendor.list"}).Changes() {
+		t.Fatal("vendor.list changes data")
+	}
+	if !(Action{Name: "vendor.run"}).Changes() {
+		t.Fatal("vendor.run is a read")
+	}
+}
+
+func TestVendorRunTimeoutMessage(t *testing.T) {
+	got := Action{Name: "vendor.run", Args: json.RawMessage(`{"project":"OVERSIRE","args":["wi","list"]}`)}.TimeoutMessage("The app")
+	if !strings.Contains(got, "a read command of the vendor CLI, with oversire vendor run.") || strings.Contains(got, "oversire item list") {
+		t.Fatal(got)
+	}
+}

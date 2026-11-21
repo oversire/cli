@@ -23,8 +23,9 @@ import (
 
 // daemonClient calls the loopback API of the local daemon.
 type daemonClient struct {
-	base string
-	http *http.Client
+	base    string
+	http    *http.Client
+	maxBody int64 // the largest answer; 0 is 1 MiB
 }
 
 // daemonError is a failed daemon call. Status 0: the daemon did not answer.
@@ -72,7 +73,11 @@ func (d daemonClient) call(ctx context.Context, method, path string, body, out a
 		return &daemonError{Msg: fmt.Sprintf("The daemon does not answer on %s. Start it with: oversire daemon install", strings.TrimPrefix(d.base, "http://"))}
 	}
 	defer resp.Body.Close()
-	data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	limit := int64(1 << 20)
+	if d.maxBody > 0 {
+		limit = d.maxBody
+	}
+	data, _ := io.ReadAll(io.LimitReader(resp.Body, limit))
 	if resp.StatusCode/100 != 2 {
 		var e struct {
 			Error string `json:"error"`

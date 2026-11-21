@@ -13,6 +13,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/oversire/cli/appcall"
 	"github.com/oversire/cli/ticket"
 	"github.com/oversire/cli/wire"
 )
@@ -356,6 +357,7 @@ func (c *cli) runApp(ctx context.Context, f *appFlags, action string, args map[s
 // appCall posts the call to POST /v1/app-calls. No daemon, no app, or a daemon without app calls gives exit code 3.
 func (d daemonClient) appCall(ctx context.Context, call wire.AppCall) (wire.AppCallResult, error) {
 	d.http = &http.Client{Timeout: appCallTimeout}
+	d.maxBody = appcall.MaxResultBody
 	var res wire.AppCallResult
 	err := d.call(ctx, http.MethodPost, "/v1/app-calls", call, &res)
 	if de, ok := errors.AsType[*daemonError](err); ok {

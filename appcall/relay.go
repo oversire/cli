@@ -22,6 +22,10 @@ const Wait = 60 * time.Second
 // MaxCallBody is the largest body of POST /v1/app-calls. It holds an attachment of 10 MB as base64.
 const MaxCallBody = 16 << 20
 
+// MaxResultBody is the largest body of POST /v1/app-calls/{id}/result. A vendor output of 1 MB can pass 4 MiB
+// when JSON escapes it.
+const MaxResultBody = 16 << 20
+
 // answeredKeep is how long the relay knows an answered id, to refuse a second result.
 const answeredKeep = 10 * time.Minute
 
@@ -150,7 +154,7 @@ func (r *Relay) serveCall(w http.ResponseWriter, req *http.Request) {
 
 func (r *Relay) serveResult(w http.ResponseWriter, req *http.Request) {
 	var res wire.AppCallResult
-	if !server.Decode(w, req, 4<<20, "", &res) {
+	if !server.Decode(w, req, MaxResultBody, "", &res) {
 		return
 	}
 	if res.ID != req.PathValue("id") {

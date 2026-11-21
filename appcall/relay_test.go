@@ -254,3 +254,28 @@ func TestTimeoutMessageWithAKey(t *testing.T) {
 		t.Fatal(code, body)
 	}
 }
+
+func TestResultBodyLimit(t *testing.T) {
+	app := &fakeApp{}
+	r := newRelay(app, true, 2*time.Second)
+	loop, _ := rig(t, r)
+	codes := make(chan int, 1)
+	answerWith := func(size int) {
+		app.answer = func(c wire.AppCall) {
+			body := `{"id":"` + c.ID + `","status":"ok","summary":"` + strings.Repeat("a", size) + `"}`
+			code, _ := post(t, loop.URL+"/v1/app-calls/"+c.ID+"/result", body)
+			codes <- code
+			r.Deliver(wire.AppCallResult{ID: c.ID, Status: wire.AppCallOK, Summary: "small"})
+		}
+	}
+	answerWith(6 << 20)
+	post(t, loop.URL+"/v1/app-calls", `{"action":"vendor.run","args":{}}`)
+	if code := <-codes; code != http.StatusNoContent {
+		t.Fatal(code)
+	}
+	answerWith(17 << 20)
+	post(t, loop.URL+"/v1/app-calls", `{"action":"vendor.run","args":{}}`)
+	if code := <-codes; code < 400 || code > 499 {
+		t.Fatal(code)
+	}
+}

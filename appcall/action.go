@@ -23,6 +23,7 @@ var readActions = map[string]bool{
 	"queue.list": true, "run.explain": true, "run.log": true,
 	"runbook.get": true, "runbook.list": true, "runbook.status": true, "runbook.validate": true,
 	"work.context": true,
+	"vendor.list":  true,
 	"ci.log":       true, "ci.jobs": true, "ci.workflows": true, "ci.refresh": true,
 }
 
@@ -63,6 +64,8 @@ func (a Action) checkHint() string {
 			return "oversire item list" + project
 		}
 		return "oversire item list" + project + ` --text "` + shellQuoter.Replace(title) + `"`
+	case a.Name == "vendor.run":
+		return "a read command of the vendor CLI, with oversire vendor run"
 	case a.Name == "epic.create":
 		return "oversire epic list" + project
 	case safeWord.MatchString(args.Key):

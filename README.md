@@ -204,6 +204,8 @@ The budget of the order has caps: 50 earlier turns, 10 last turns and 20000 char
 | `oversire item link <KEY> <URL> [--title T]` | Add a web link. The URL is http or https. |
 | `oversire item attach <KEY> <FILE> [--name N]` | Upload a file of at most 10 MB. |
 | `oversire app run <action> ['<json args>']` | Run one action of the allowed list of the app, with its args as a JSON object. |
+| `oversire vendor ls [--json]` | List the vendor CLIs that the app can run (`plane-cli`, `big-timer-cli`, `gh`), with the path, the accounts and the projects. See "App calls". |
+| `oversire vendor run [--project P \| --account A] [--json] -- <command> [flags]` | Run the vendor CLI of an account with the token of the Keychain of the app. `--project` picks the tracker account of the project. `--account` is `<provider>:<id>` or `<id>`. Give exactly one. The command and its flags follow `--`. Exit code 1 also covers a vendor exit that is not 0. |
 | `oversire review ready [--key K] [--kind code\|plan] [--note <text>] [--plan <file.md>]` | Hand off a worktree group or a plan for review. The agent runs it. See "Reviews". |
 | `oversire review reply [--key K] <comment id> "<text>"` | Answer a review comment. The agent runs it. |
 | `oversire review ls [--kind code\|plan] [--json]` | Show the reviews of this machine. |
@@ -363,7 +365,7 @@ The session book keeps the env keys (not the values) of a session. `session.star
 
 ### App calls
 
-The `oversire epic`, `oversire project`, `oversire item` and `oversire app` commands ask the OverSire app on this Mac to run an action of its action catalog (OVERSIRE-485). The bodies are in `contract/schema/app-call.json`. The feature is `app-calls` in `GET /v1/whoami`.
+The `oversire epic`, `oversire project`, `oversire item`, `oversire app` and `oversire vendor` commands ask the OverSire app on this Mac to run an action of its action catalog (OVERSIRE-485). The bodies are in `contract/schema/app-call.json`. The feature is `app-calls` in `GET /v1/whoami`.
 
 | Route | Access | What it does |
 |---|---|---|
@@ -373,6 +375,8 @@ The `oversire epic`, `oversire project`, `oversire item` and `oversire app` comm
 The app runs only the actions of its allowed list: `item.get`, `item.list`, `item.markdown`, `item.setEpic`, `item.setStatus`, `item.setPriority`, `item.update`, `item.edit`, `item.comment`, `item.assignMe`, `item.assign`, `item.start`, `item.reopen`, `item.create`, `item.relate`, `item.link`, `item.attach`, `epic.list`, `epic.show`, `epic.plan`, `epic.create`, `epic.update`, `epic.close`, `epic.addItems`, `epic.removeItems`, `project.northStar`, `project.setNorthStar`, `project.statuses`, `project.labels`, `project.people`, `search.all` and the CI writes `ci.rerun`, `ci.rerunJob`, `ci.cancel`, `ci.dispatch` and `ci.approve`. The CI writes change the CI provider. The app checks the agent rights first (Settings › Agents › CI). The list holds no other action that leaves the Mac (for example `item.closeSubItems` and `intake.delete`). Another action gives `notAllowed`. A change needs no confirm. The app names the agent as the actor of the rows of its writes (state, comment, create, field changes, link, attach, epics, north star).
 
 The body limit of `POST /v1/app-calls` is 16 MiB. An attachment goes in `args` as base64 text, so the limit of a file is 10 MB. A tracker that lacks a feature answers `notAllowed` with "<Tracker> has no X." (for example Big Timer has no links, attachments, labels, relations, priority or epics).
+
+The `vendor` commands use the actions `vendor.list` (a read) and `vendor.run` (a change). They are not in the allowed list above. The app serves them only to the local daemon over loopback. A member call over Tailscale and a runner never get them. The app runs the vendor CLI of the account with its token in an env var, so the token never enters the shell of the agent. The app removes the token value from stdout and stderr. The vendor CLI has no TTY and 45 s to end. After 45 s the app stops it, and the result is `failed` with the partial output. The output has 1 MB at most, and the app marks a cut output with `truncated`. The app refuses the host and token flags, the login and config commands, and the stream commands. The result data of `vendor.run` is `VendorRunOutput`. A vendor exit that is not 0 still gives `ok`, with `exit` in the data. `oversire vendor run` writes the stdout and the stderr of the vendor CLI as they are, and exits with 1 when the vendor exit is not 0. The limit of the body of `POST /v1/app-calls/{id}/result` is 16 MiB, because JSON escapes can make 1 MB of output much larger. The CLI reads an answer of the same size.
 
 `agent` is `<harness> <session>`. The commands take it from `--harness` and `--session`, else from `$CLAUDE_CODE_SESSION_ID` (harness `claude`), else from `$OVERSIRE_SESSION`. With none of these, the agent is absent: a human ran the command.
 

@@ -81,7 +81,10 @@ Usage:
   oversire item link <KEY> <URL> [--title T]           add a web link
   oversire item attach <KEY> <FILE> [--name N]         upload a file (at most 10 MB)
   oversire app run <action> ['<json args>']            run an action of the allowed list of the app on this Mac
-                                                       epic, project, item and app take --json, --harness H and --session ID
+                                                       epic, project, item, app and vendor take --json, --harness H and --session ID
+  oversire vendor ls [--json]                          list the vendor CLIs that the app can run, with the accounts
+  oversire vendor run [--project P | --account A] -- <command> [flags]
+                                                       run the vendor CLI of the account with the token of the app
   oversire review ready [--key K] [--kind code|plan] [--note <text>] [--plan <file.md>]
                                                        hand off a group or a plan for review (the agent runs it)
   oversire review reply [--key K] <comment id> "<text>"  answer a review comment (the agent runs it)
@@ -159,6 +162,7 @@ type cli struct {
 	paths   config.Paths
 	in      io.Reader
 	out     io.Writer
+	errOut  io.Writer // nil is os.Stderr
 	log     *slog.Logger
 	level   *slog.LevelVar
 	cmds    *proc.Logged // the runner of the daemon commands; it writes a line for each one
@@ -169,6 +173,13 @@ type cli struct {
 	home    string
 	wd      string                                                                // the working folder of the review command; empty is the folder of the process
 	git     func(ctx context.Context, dir string, args ...string) (string, error) // runs git; nil is the real git
+}
+
+func (c *cli) stderr() io.Writer {
+	if c.errOut == nil {
+		return os.Stderr
+	}
+	return c.errOut
 }
 
 func main() {
@@ -240,6 +251,8 @@ func (c *cli) dispatch(ctx context.Context, args []string) error {
 		return c.item(ctx, rest)
 	case cmd == "app":
 		return c.app(ctx, rest)
+	case cmd == "vendor":
+		return c.vendor(ctx, rest)
 	case cmd == "review":
 		return c.review(ctx, rest)
 	case cmd == "worker":
