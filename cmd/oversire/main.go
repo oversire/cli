@@ -55,6 +55,7 @@ Usage:
   oversire epic plan [<epic>] --project P              show the plan of the open epics, or of one epic
   oversire epic create --project P --title T [--goal G] [--start D] [--target D] [--lead ID]
   oversire epic update <epic> --project P [--title T] [--goal G] [--state S] [--start D] [--target D] [--lead ID]
+                         [--health on_track|at_risk|off_track [--note-file F]]
   oversire epic close <epic> --project P               set an epic to done
   oversire epic add <epic> KEY... [--project P]        put items in an epic
   oversire epic remove KEY... [--project P]            take items out of their epic

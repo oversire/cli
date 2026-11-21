@@ -183,7 +183,7 @@ The budget of the order has caps: 50 earlier turns, 10 last turns and 20000 char
 | `oversire epic show <epic> --project P` | Show an epic: the state, the progress, the dates, the forecast, the goal, the URL and the numbered steps. `<epic>` is the id or the title. |
 | `oversire epic plan [<epic>] --project P` | Show the plan of all open epics, or of one epic: the ordered steps with the dates and the slack, and the critical path (`*`). |
 | `oversire epic create --project P --title T [--goal G] [--start D] [--target D] [--lead ID]` | Make an epic. It prints the id. Dates are `YYYY-MM-DD`. |
-| `oversire epic update <epic> --project P [--title T] [--goal G] [--state S] [--start D] [--target D] [--lead ID]` | Change the fields that you give. The state is `planned`, `active`, `paused`, `done` or `canceled`. The value `none` removes a date or the lead. |
+| `oversire epic update <epic> --project P [--title T] [--goal G] [--state S] [--start D] [--target D] [--lead ID] [--health H] [--note-file F]` | Change the fields that you give. The state is `planned`, `active`, `paused`, `done` or `canceled`. The value `none` removes a date or the lead. `--health` (`on_track`, `at_risk` or `off_track`) or `--note-file` (a path, or `-` for stdin) posts an epic update. Only a tracker with epic health takes it (Big Timer). |
 | `oversire epic close <epic> --project P` | Set the epic to done. An epic with open items does not close. |
 | `oversire epic add <epic> KEY... [--project P]` | Put items in the epic. An item in another epic moves. Without `--project`, the project of the keys is used. |
 | `oversire epic remove KEY... [--project P]` | Take items out of their epic. |

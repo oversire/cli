@@ -24,12 +24,14 @@ const epicUsage = `usage:
   oversire epic show <epic> --project P
   oversire epic create --project P --title T [--goal G] [--start YYYY-MM-DD] [--target YYYY-MM-DD] [--lead ID]
   oversire epic update <epic> --project P [--title T] [--goal G] [--state S] [--start D] [--target D] [--lead ID]
+                       [--health on_track|at_risk|off_track [--note-file F]]
   oversire epic close <epic> --project P
   oversire epic add <epic> KEY... [--project P]
   oversire epic remove KEY... [--project P]
   oversire epic plan [<epic>] --project P
 Each command takes --json, --harness H and --session ID. <epic> is the id or the title of the epic.
 The state is planned, active, paused, done or canceled. The value none removes a date or the lead.
+A health or a note file posts an epic update. --note-file takes a path, or - for stdin.
 The app on this Mac runs the command. Exit codes: 0 ok, 1 failed or not allowed, 2 usage, 3 no daemon or no app.`
 
 const projectUsage = `usage:
@@ -144,8 +146,11 @@ func (c *cli) epic(ctx context.Context, args []string) error {
 		add("target", "targetDate", "the target date, YYYY-MM-DD")
 		add("lead", "lead", "the person id of the lead")
 	}
+	var noteFile *string
 	if sub == "update" {
 		add("state", "state", "planned, active, paused, done or canceled")
+		add("health", "health", "on_track, at_risk or off_track")
+		noteFile = f.fs.String("note-file", "", "the Markdown text of the epic update: a path, or - for stdin")
 	}
 	pos, err := f.parse(args[1:])
 	if err != nil {
@@ -201,8 +206,18 @@ func (c *cli) epic(ctx context.Context, args []string) error {
 				a[fd.arg] = *fd.v
 			}
 		})
+		f.fs.Visit(func(fl *flag.Flag) {
+			if fl.Name == "note-file" {
+				a["note"] = *noteFile
+			}
+		})
 		if len(a) == 0 {
 			return f.usage(epicUsage, errors.New("give a field to change"))
+		}
+		if path, ok := a["note"].(string); ok {
+			if a["note"], err = c.readBody(path); err != nil {
+				return err
+			}
 		}
 	case "add":
 		a["epic"], a["keys"] = pos[0], keys
@@ -418,10 +433,10 @@ func (c *cli) printID(data json.RawMessage) error {
 }
 
 type epicRow struct {
-	Project, ID, Title, State, Progress string
-	Next                                []string
-	LateDays                            *int
-	ReadyToClose                        bool
+	Project, ID, Title, State, Progress, Health string
+	Next                                        []string
+	LateDays                                    *int
+	ReadyToClose                                bool
 }
 
 func (c *cli) printEpicList(data json.RawMessage) error {
@@ -436,6 +451,9 @@ func (c *cli) printEpicList(data json.RawMessage) error {
 	fmt.Fprintln(tw, "PROJECT\tEPIC\tSTATE\tPROGRESS\tLATE\tNEXT")
 	for _, r := range rows {
 		state := r.State
+		if r.Health != "" {
+			state += ", " + healthText(r.Health)
+		}
 		if r.ReadyToClose {
 			state += ", ready to close"
 		}
@@ -443,6 +461,9 @@ func (c *cli) printEpicList(data json.RawMessage) error {
 	}
 	return tw.Flush()
 }
+
+// healthText is "at risk" for at_risk.
+func healthText(h string) string { return strings.ReplaceAll(h, "_", " ") }
 
 type forecast struct {
 	Start, End string
@@ -486,11 +507,11 @@ func (s slot) key() string {
 
 func (c *cli) printEpic(data json.RawMessage) error {
 	var e struct {
-		Title, State, URL, Goal, StartDate, TargetDate string
-		Forecast                                       forecast
-		Relations                                      relations
-		Progress                                       struct{ Done, Total, Open, Started int }
-		Steps                                          []struct {
+		Title, State, URL, Goal, StartDate, TargetDate, Health string
+		Forecast                                               forecast
+		Relations                                              relations
+		Progress                                               struct{ Done, Total, Open, Started int }
+		Steps                                                  []struct {
 			slot
 			Number      int
 			WaitsOnStep *int
@@ -504,6 +525,9 @@ func (c *cli) printEpic(data json.RawMessage) error {
 	line := fmt.Sprintf("State: %s. Progress: %d of %d done, %d started. Forecast: %s.", e.State, e.Progress.Done, e.Progress.Total, e.Progress.Started, e.Forecast)
 	if e.StartDate != "" || e.TargetDate != "" {
 		line += fmt.Sprintf(" Dates: %s to %s.", dash(e.StartDate), dash(e.TargetDate))
+	}
+	if e.Health != "" {
+		line += " Health: " + healthText(e.Health) + "."
 	}
 	fmt.Fprintln(c.out, line)
 	if e.Goal != "" {

@@ -10,11 +10,12 @@
   "actorType": "agent",
   "actor": "codex",
   "via": "app@mba",
-  "summary": "Project Plan tab updated: state, targetDate",
+  "summary": "Project Plan tab updated: state, health, note",
   "payload": {
     "epic": "3f9a2c1b-4d5e-4f60-8a7b-9c0d1e2f3a4b",
     "title": "Project Plan tab",
-    "fields": ["state", "targetDate"],
-    "state": "active"
+    "fields": ["state", "health", "note"],
+    "state": "active",
+    "health": "at_risk"
   }
 }

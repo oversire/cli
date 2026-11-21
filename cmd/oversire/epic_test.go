@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -484,5 +485,78 @@ func TestProjectRefresh(t *testing.T) {
 		if err := c.dispatch(context.Background(), args); exitCode(err) != 2 {
 			t.Errorf("%v: %v", args, err)
 		}
+	}
+}
+
+func TestEpicUpdateHealthAndNote(t *testing.T) {
+	c, out, _ := testCLI(t, "")
+	app := appDaemon(t, c)
+	c.in = strings.NewReader("Two items slip.\n")
+	err := c.dispatch(context.Background(), []string{"epic", "update", "Plan", "--project", "OVERSIRE", "--health", "at_risk", "--note-file", "-", "--target", "2026-12-01"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := app.args(t)
+	if app.last(t).Action != "epic.update" || a["health"] != "at_risk" || a["note"] != "Two items slip.\n" || a["targetDate"] != "2026-12-01" || len(a) != 5 {
+		t.Fatal(a)
+	}
+	if out.String() != "ok.\n" {
+		t.Fatal(out)
+	}
+	big := t.TempDir() + "/note.md"
+	if err := os.WriteFile(big, bytes.Repeat([]byte("x"), 1<<20+1), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err = c.dispatch(context.Background(), []string{"epic", "update", "Plan", "--project", "OVERSIRE", "--note-file", big})
+	if e, ok := errors.AsType[*exitError](err); !ok || e.code != 2 {
+		t.Fatal(err)
+	}
+}
+
+func TestEpicUpdateHealthOnlyCounts(t *testing.T) {
+	c, _, _ := testCLI(t, "")
+	app := appDaemon(t, c)
+	if err := c.dispatch(context.Background(), []string{"epic", "update", "Plan", "--project", "OVERSIRE", "--health", "on_track"}); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := json.Marshal(app.args(t)); string(b) != `{"epic":"Plan","health":"on_track","project":"OVERSIRE"}` {
+		t.Fatal(string(b))
+	}
+}
+
+func TestEpicUpdateHealthRefusalExit1(t *testing.T) {
+	c, _, _ := testCLI(t, "")
+	app := appDaemon(t, c)
+	app.answer = func(call wire.AppCall) wire.AppCallResult {
+		return wire.AppCallResult{ID: call.ID, Status: wire.AppCallNotAllowed, Summary: "Plane has no epic health."}
+	}
+	err := c.dispatch(context.Background(), []string{"epic", "update", "Plan", "--project", "OVERSIRE", "--health", "at_risk"})
+	if e, ok := errors.AsType[*exitError](err); !ok || e.code != 1 || err.Error() != "Plane has no epic health." {
+		t.Fatal(err)
+	}
+}
+
+func TestEpicShowAndListHealth(t *testing.T) {
+	c, out, _ := testCLI(t, "")
+	app := appDaemon(t, c)
+	app.answer = func(call wire.AppCall) wire.AppCallResult {
+		data := `[{"project":"ACME","id":"e1","title":"Invoicing v2","state":"active","health":"at_risk","progress":"1 of 2 done","next":[]}]`
+		if call.Action == "epic.show" {
+			data = `{"title":"Invoicing v2","state":"active","health":"off_track","forecast":{"start":"2026-11-19"},"progress":{"done":1,"total":2,"open":1,"started":0}}`
+		}
+		return wire.AppCallResult{ID: call.ID, Status: wire.AppCallOK, Summary: "ok.", Data: json.RawMessage(data)}
+	}
+	if err := c.dispatch(context.Background(), []string{"epic", "list", "--project", "ACME"}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "active, at risk") {
+		t.Fatal(out)
+	}
+	out.Reset()
+	if err := c.dispatch(context.Background(), []string{"epic", "show", "Invoicing v2", "--project", "ACME"}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "Health: off track.") {
+		t.Fatal(out)
 	}
 }

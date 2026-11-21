@@ -2191,6 +2191,13 @@
           },
           "state": {
             "type": "string"
+          },
+          "health": {
+            "enum": [
+              "on_track",
+              "at_risk",
+              "off_track"
+            ]
           }
         },
         "additionalProperties": false,
