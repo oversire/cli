@@ -17,6 +17,9 @@ const (
 	MirrorActivity MirrorKind = "activity"
 	MirrorSettings MirrorKind = "settings"
 	MirrorCatalog  MirrorKind = "catalog"
+	MirrorCIJobs   MirrorKind = "ciJobs"
+	MirrorCIChecks MirrorKind = "ciChecks"
+	MirrorCIState  MirrorKind = "ciState"
 )
 
 // Valid tells if k is a kind of the contract.
@@ -25,10 +28,19 @@ func (k MirrorKind) Valid() bool {
 	case MirrorProject, MirrorItem, MirrorRuns, MirrorPRs, MirrorActivity, MirrorSettings, MirrorCatalog:
 		return true
 	}
+	return k.IsCI()
+}
+
+// IsCI tells if k is one of the CI kinds. A reader asks for them with the query with=ci.
+func (k MirrorKind) IsCI() bool {
+	switch k {
+	case MirrorCIJobs, MirrorCIChecks, MirrorCIState:
+		return true
+	}
 	return false
 }
 
-// MirrorDoc is one doc of the feed. The daemon does not read Body. The source does not set Hash and Seq.
+// MirrorDoc is one doc of the feed. The daemon reads the bodies of runs, prs and the CI kinds (package ci). The source does not set Hash and Seq.
 type MirrorDoc struct {
 	Kind    MirrorKind      `json:"kind"`
 	ID      string          `json:"id"`

@@ -215,6 +215,8 @@ const (
 	FeatureAppCalls     = "app-calls"     // the /v1/app-calls routes: the oversire commands that the app runs
 	FeatureMirror       = "mirror"        // the /v1/mirror routes: the mirror feed for the client apps
 	FeatureMemberCalls  = "member-calls"  // the /v1/member-calls routes: the clicks of a client app
+	FeatureMirrorCI     = "mirror-ci"     // the mirror kinds ciJobs, ciChecks and ciState, and the query with=ci
+	FeatureCI           = "ci"            // the /v1/ci routes: CI reads and wait
 )
 
 // UpdateStatus is the last self-update check of a daemon.

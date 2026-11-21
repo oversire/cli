@@ -74,7 +74,7 @@ func TestPutSameHashIsNoop(t *testing.T) {
 	if res, _ = s.Put(put(s, d), Source{}); res.Applied != 1 || res.Head.Head != 3 {
 		t.Fatalf("a new body: %+v", res)
 	}
-	idx := s.Index()
+	idx := s.Index(false)
 	if len(idx.Docs) != 1 || len(idx.Docs[0].Hash) != 64 {
 		t.Fatalf("index: %+v", idx)
 	}
@@ -125,22 +125,22 @@ func TestPageAfterCursor(t *testing.T) {
 		t.Fatal(err)
 	}
 	epoch := s.Head().Epoch
-	p, err := s.Page(1, 500, epoch)
+	p, err := s.Page(1, 500, epoch, Filter{})
 	if err != nil || p.Reset || p.More || len(p.Docs) != 2 || p.Docs[0].Seq != 2 || p.Docs[1].Seq != 3 || p.Next != 3 || p.Epoch != epoch {
 		t.Fatalf("%+v %v", p, err)
 	}
 	if string(p.Docs[1].Body) != `{"n":3}` || p.Docs[1].Hash == "" {
 		t.Fatalf("%+v", p.Docs[1])
 	}
-	p, _ = s.Page(0, 2, "")
+	p, _ = s.Page(0, 2, "", Filter{})
 	if p.Reset || !p.More || len(p.Docs) != 2 || p.Next != 2 {
 		t.Fatalf("a first read in pages: %+v", p)
 	}
-	p, _ = s.Page(p.Next, 2, epoch)
+	p, _ = s.Page(p.Next, 2, epoch, Filter{})
 	if p.Reset || p.More || len(p.Docs) != 1 || p.Next != 3 {
 		t.Fatalf("the last page: %+v", p)
 	}
-	p, _ = s.Page(3, 500, epoch)
+	p, _ = s.Page(3, 500, epoch, Filter{})
 	if p.Reset || p.More || len(p.Docs) != 0 || p.Next != 3 {
 		t.Fatalf("no news: %+v", p)
 	}
@@ -158,7 +158,7 @@ func TestPageStopsAfterManyBytes(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	p, err := s.Page(0, 500, "")
+	p, err := s.Page(0, 500, "", Filter{})
 	if err != nil || !p.More || len(p.Docs) != 8 || p.Next != 8 {
 		t.Fatalf("%d docs, more %v, next %d, %v", len(p.Docs), p.More, p.Next, err)
 	}
@@ -185,16 +185,16 @@ func TestPageResetBehindFloor(t *testing.T) {
 		t.Fatalf("%+v", h)
 	}
 	// A reader that holds seq 1 missed the tombstone.
-	p, _ := s.Page(1, 500, epoch)
+	p, _ := s.Page(1, 500, epoch, Filter{})
 	if !p.Reset || len(p.Docs) != 0 || p.Next != 0 {
 		t.Fatalf("%+v", p)
 	}
 	// A reader that starts at 0 has no old docs, so it needs no reset. It gets the live docs.
-	p, _ = s.Page(0, 500, epoch)
+	p, _ = s.Page(0, 500, epoch, Filter{})
 	if p.Reset || len(p.Docs) != 1 || p.Docs[0].ID != "p/A-2" {
 		t.Fatalf("%+v", p)
 	}
-	if p, _ = s.Page(3, 500, epoch); p.Reset {
+	if p, _ = s.Page(3, 500, epoch, Filter{}); p.Reset {
 		t.Fatal("a reader at the floor continues")
 	}
 }
@@ -204,14 +204,14 @@ func TestPageResetOnOtherEpoch(t *testing.T) {
 	if _, err := s.Put(put(s, doc(wire.MirrorItem, "p/A-1", `{}`)), Source{}); err != nil {
 		t.Fatal(err)
 	}
-	p, _ := s.Page(0, 500, "other")
+	p, _ := s.Page(0, 500, "other", Filter{})
 	if !p.Reset || len(p.Docs) != 0 || p.Epoch != s.Head().Epoch {
 		t.Fatalf("%+v", p)
 	}
-	if p, _ = s.Page(1, 500, ""); !p.Reset {
+	if p, _ = s.Page(1, 500, "", Filter{}); !p.Reset {
 		t.Fatal("a cursor with no epoch")
 	}
-	if p, _ = s.Page(9, 500, s.Head().Epoch); !p.Reset {
+	if p, _ = s.Page(9, 500, s.Head().Epoch, Filter{}); !p.Reset {
 		t.Fatal("a cursor above the head")
 	}
 }
@@ -279,11 +279,11 @@ func TestDeleteMakesATombstone(t *testing.T) {
 	if res, _ = s.Put(put(s, tomb(wire.MirrorItem, "p/A-1")), Source{}); res.Same != 1 {
 		t.Fatalf("a second delete: %+v", res)
 	}
-	p, _ := s.Page(1, 500, s.Head().Epoch)
+	p, _ := s.Page(1, 500, s.Head().Epoch, Filter{})
 	if len(p.Docs) != 1 || !p.Docs[0].Deleted || p.Docs[0].Body != nil || p.Docs[0].Hash != "" {
 		t.Fatalf("%+v", p)
 	}
-	if len(s.Index().Docs) != 0 {
+	if len(s.Index(false).Docs) != 0 {
 		t.Fatal("a tombstone is in the index")
 	}
 	// The doc comes back with a new seq.
@@ -312,7 +312,7 @@ func TestTakeHomeResets(t *testing.T) {
 	if _, ok := s.Source(); ok {
 		t.Fatal("a source after a reset")
 	}
-	if len(s.Index().Docs) != 0 {
+	if len(s.Index(false).Docs) != 0 {
 		t.Fatal("docs after a reset")
 	}
 	// The old epoch does not fit any more.
@@ -356,5 +356,66 @@ func TestStateSurvivesAReopen(t *testing.T) {
 	defer s.Close()
 	if g := s.Head(); g.Epoch != h.Epoch || g.Head != 1 {
 		t.Fatalf("%+v", g)
+	}
+}
+
+func putCI(t *testing.T, s *Store) {
+	t.Helper()
+	_, err := s.Put(put(s, doc(wire.MirrorRuns, "o/r", `{"runs":[]}`), doc(wire.MirrorCIJobs, "o/r/1/1", `{"repo":"o/r"}`)), Source{})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPageHidesCIKinds(t *testing.T) {
+	s, _ := newStore(t)
+	putCI(t, s)
+	p, err := s.Page(0, 500, s.Head().Epoch, Filter{})
+	if err != nil || len(p.Docs) != 1 || p.Docs[0].Kind != wire.MirrorRuns || p.Next != 2 || p.More {
+		t.Fatalf("no filter: %+v %v", p, err)
+	}
+	p, _ = s.Page(1, 500, s.Head().Epoch, Filter{})
+	if len(p.Docs) != 0 || p.Next != 2 {
+		t.Fatalf("after the first doc: %+v", p)
+	}
+	p, _ = s.Page(0, 500, s.Head().Epoch, Filter{WithCI: true})
+	if len(p.Docs) != 2 {
+		t.Fatalf("with CI: %+v", p)
+	}
+}
+
+func TestPageOnlyKinds(t *testing.T) {
+	s, _ := newStore(t)
+	putCI(t, s)
+	p, _ := s.Page(0, 500, s.Head().Epoch, Filter{WithCI: true, Kinds: []wire.MirrorKind{wire.MirrorRuns}})
+	if len(p.Docs) != 1 || p.Docs[0].Kind != wire.MirrorRuns || p.Next != 2 {
+		t.Fatalf("%+v", p)
+	}
+	p, _ = s.Page(0, 500, s.Head().Epoch, Filter{WithCI: true, Kinds: []wire.MirrorKind{wire.MirrorCIJobs, wire.MirrorPRs}})
+	if len(p.Docs) != 1 || p.Docs[0].Kind != wire.MirrorCIJobs {
+		t.Fatalf("%+v", p)
+	}
+	p, _ = s.Page(0, 500, s.Head().Epoch, Filter{Kinds: []wire.MirrorKind{wire.MirrorCIJobs}})
+	if len(p.Docs) != 0 {
+		t.Fatalf("a CI kind without WithCI: %+v", p)
+	}
+}
+
+func TestIndexWithCI(t *testing.T) {
+	s, _ := newStore(t)
+	putCI(t, s)
+	if n := len(s.Index(false).Docs); n != 1 {
+		t.Errorf("without CI: %d docs", n)
+	}
+	if n := len(s.Index(true).Docs); n != 2 {
+		t.Errorf("with CI: %d docs", n)
+	}
+}
+
+func TestPutAcceptsCIKinds(t *testing.T) {
+	s, _ := newStore(t)
+	res, err := s.Put(put(s, doc(wire.MirrorCIState, "home", `{"repos":[]}`)), Source{})
+	if err != nil || res.Applied != 1 {
+		t.Fatalf("%+v %v", res, err)
 	}
 }

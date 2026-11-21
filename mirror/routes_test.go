@@ -395,3 +395,31 @@ func TestDocsQueryRules(t *testing.T) {
 		}
 	}
 }
+
+func TestRoutesWithCI(t *testing.T) {
+	f := newFixture(t, nil)
+	f.caller = mbaApp
+	if code, data := f.put(t, doc(wire.MirrorRuns, "o/r", `{"runs":[]}`), doc(wire.MirrorCIJobs, "o/r/1/1", `{"repo":"o/r"}`)); code != 200 {
+		t.Fatalf("put: %d %s", code, data)
+	}
+	count := func(path string) int {
+		_, data, _ := f.do(t, "GET", path, nil)
+		var v struct{ Docs []json.RawMessage }
+		if err := json.Unmarshal(data, &v); err != nil {
+			t.Fatalf("%s: %s", path, data)
+		}
+		return len(v.Docs)
+	}
+	if n := count("/v1/mirror/index"); n != 1 {
+		t.Errorf("index without with=ci: %d", n)
+	}
+	if n := count("/v1/mirror/index?with=ci"); n != 2 {
+		t.Errorf("index with=ci: %d", n)
+	}
+	if n := count("/v1/mirror/docs"); n != 1 {
+		t.Errorf("docs without with=ci: %d", n)
+	}
+	if n := count("/v1/mirror/docs?with=ci"); n != 2 {
+		t.Errorf("docs with=ci: %d", n)
+	}
+}

@@ -15,6 +15,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -291,10 +292,33 @@ func (s *Store) Source() (src Source, ok bool) {
 	return Source{App: m.source, Device: m.sourceDevice, Name: m.sourceCaller, Machine: m.sourceMachine, Loopback: m.sourceLoopback}, true
 }
 
+// Filter picks the kinds of a page. The zero value gives all kinds except the CI kinds. An empty Kinds means all kinds.
+type Filter struct {
+	WithCI bool
+	Kinds  []wire.MirrorKind
+}
+
+// where gives the SQL condition of the filter and its args.
+func (f Filter) where() (string, []any) {
+	var args []any
+	var b strings.Builder
+	if !f.WithCI {
+		b.WriteString(" AND kind NOT IN ('ciJobs','ciChecks','ciState')")
+	}
+	if len(f.Kinds) > 0 {
+		b.WriteString(" AND kind IN (?" + strings.Repeat(",?", len(f.Kinds)-1) + ")")
+		for _, k := range f.Kinds {
+			args = append(args, string(k))
+		}
+	}
+	return b.String(), args
+}
+
 // Page gives the docs with seq above after, up to limit (default and most PageLimit). A page also ends after 8 MiB of bodies.
 // Reset is true when the reader has to drop its docs and read from 0: epoch is not the epoch of the feed (an empty epoch is a
 // first read), or after is above the head, or after is below the floor. A reset page has no docs and next is 0.
-func (s *Store) Page(after int64, limit int, epoch string) (wire.MirrorPage, error) {
+// The filter f picks the kinds. When no more doc matches, next is the head, so a client does not loop.
+func (s *Store) Page(after int64, limit int, epoch string, f Filter) (wire.MirrorPage, error) {
 	if limit <= 0 || limit > PageLimit {
 		limit = PageLimit
 	}
@@ -307,7 +331,10 @@ func (s *Store) Page(after int64, limit int, epoch string) (wire.MirrorPage, err
 	if epoch != "" && epoch != m.epoch || stale {
 		return wire.MirrorPage{Epoch: m.epoch, Docs: []wire.MirrorDoc{}, Reset: true}, nil
 	}
-	rows, err := s.db.Query("SELECT kind, id, v, hash, seq, at, deleted, body FROM docs WHERE seq > ? ORDER BY seq LIMIT ?", after, limit+1)
+	cond, kargs := f.where()
+	args := append([]any{after}, kargs...)
+	rows, err := s.db.Query("SELECT kind, id, v, hash, seq, at, deleted, body FROM docs WHERE seq > ?"+cond+" ORDER BY seq LIMIT ?",
+		append(args, limit+1)...)
 	if err != nil {
 		return wire.MirrorPage{}, err
 	}
@@ -342,15 +369,16 @@ func (s *Store) Page(after int64, limit int, epoch string) (wire.MirrorPage, err
 	return p, nil
 }
 
-// Index gives the kind, id and hash of each live doc.
-func (s *Store) Index() wire.MirrorIndex {
+// Index gives the kind, id and hash of each live doc. The CI kinds are in it only with withCI.
+func (s *Store) Index(withCI bool) wire.MirrorIndex {
 	m, err := readMeta(s.db)
 	idx := wire.MirrorIndex{Epoch: m.epoch, Head: m.head, Docs: []wire.MirrorIndexEntry{}}
 	if err != nil {
 		s.fail("index", err)
 		return idx
 	}
-	rows, err := s.db.Query("SELECT kind, id, hash FROM docs WHERE deleted = 0 ORDER BY kind, id")
+	cond, _ := Filter{WithCI: withCI}.where()
+	rows, err := s.db.Query("SELECT kind, id, hash FROM docs WHERE deleted = 0" + cond + " ORDER BY kind, id")
 	if err != nil {
 		s.fail("index", err)
 		return idx

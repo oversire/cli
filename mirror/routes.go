@@ -130,7 +130,7 @@ func (r *Routes) page(w http.ResponseWriter, req *http.Request) {
 	q := req.URL.Query()
 	after, _ := strconv.ParseInt(q.Get("after"), 10, 64)
 	limit, _ := strconv.Atoi(q.Get("limit"))
-	p, err := r.store.Page(after, limit, q.Get("epoch"))
+	p, err := r.store.Page(after, limit, q.Get("epoch"), Filter{WithCI: q.Get("with") == "ci"})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorBody{Error: err.Error()})
 		return
@@ -153,8 +153,8 @@ func (r *Routes) page(w http.ResponseWriter, req *http.Request) {
 	_ = zw.Close()
 }
 
-func (r *Routes) index(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, r.store.Index())
+func (r *Routes) index(w http.ResponseWriter, req *http.Request) {
+	writeJSON(w, http.StatusOK, r.store.Index(req.URL.Query().Get("with") == "ci"))
 }
 
 func (r *Routes) put(w http.ResponseWriter, req *http.Request) {
