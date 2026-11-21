@@ -117,13 +117,14 @@ func (rt *Runtime) RemoveWorkspace(ctx context.Context, id string, force, _ bool
 		if vs.State == agentvisor.StateExited {
 			continue
 		}
+		var stopErr error
 		if s, err := rt.session(wire.SessionRef{ID: vs.Labels[LabelSession]}); err == nil {
-			err = s.stop(ctx)
+			stopErr = s.stop(ctx)
 		} else {
-			err = rt.host.Stop(ctx, vs.ID)
+			stopErr = rt.host.Stop(ctx, vs.ID)
 		}
-		if err != nil {
-			return none, err
+		if stopErr != nil {
+			return none, stopErr
 		}
 	}
 	if err := rt.host.RemoveWorkdir(ctx, found.ID, force); err != nil {
