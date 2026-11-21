@@ -52,13 +52,13 @@ type fakeHooks struct {
 	calls []string
 }
 
-func (f *fakeHooks) Ingest(_ context.Context, harness string, env wire.HookEnv, payload []byte) error {
+func (f *fakeHooks) Ingest(_ context.Context, harness string, call HookCall) error {
 	if harness == "bad" {
 		return errors.New("unknown harness")
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.calls = append(f.calls, harness+" "+env.PaneKey+" "+string(payload))
+	f.calls = append(f.calls, harness+" "+call.Env.PaneKey+" "+string(call.Payload))
 	return nil
 }
 

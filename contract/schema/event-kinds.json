@@ -144,6 +144,10 @@
             "type": "integer",
             "minimum": 0
           },
+          "ciRedirects": {
+            "type": "integer",
+            "minimum": 0
+          },
           "interrupted": {
             "type": "boolean"
           },

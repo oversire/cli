@@ -74,6 +74,28 @@ func (i *Installer) Install(names ...string) ([]wire.HarnessHooks, error) {
 	return i.Status(), nil
 }
 
+// RefreshOutdated installs again the harnesses whose state is outdated, so an update gets the new hook table.
+// It skips a harness that needs the trust of the user (Codex): the user must approve the new entries there.
+// It gives the names that it changed.
+func (i *Installer) RefreshOutdated() ([]string, error) {
+	var done []string
+	for _, st := range i.Status() {
+		if st.Hooks != wire.HooksOutdated {
+			continue
+		}
+		for _, h := range i.harnesses {
+			if _, trusting := h.(Trusting); trusting || h.Name() != st.Name {
+				continue
+			}
+			if _, err := i.Install(h.Name()); err != nil {
+				return done, err
+			}
+			done = append(done, h.Name())
+		}
+	}
+	return done, nil
+}
+
 // Remove takes out only our entries. No names means all harnesses.
 func (i *Installer) Remove(names ...string) error {
 	hs, err := i.pick(names)

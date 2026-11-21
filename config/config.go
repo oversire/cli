@@ -123,6 +123,18 @@ type Config struct {
 	Serve   *ServeConfig  `json:"serve,omitempty"`
 	Log     *LogConfig    `json:"log,omitempty"`
 	Review  *ReviewConfig `json:"review,omitempty"`
+	Hooks   *HooksConfig  `json:"hooks,omitempty"`
+}
+
+// HooksConfig sets the agent hooks of this machine.
+type HooksConfig struct {
+	// CIRedirect turns the refusal of CI polls on or off. nil is on.
+	CIRedirect *bool `json:"ciRedirect,omitempty"`
+}
+
+// CIRedirect tells if the hooks refuse gh and glab CI polls. The default is on.
+func (c Config) CIRedirect() bool {
+	return c.Hooks == nil || c.Hooks.CIRedirect == nil || *c.Hooks.CIRedirect
 }
 
 // ReviewConfig sets the review gate.

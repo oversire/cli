@@ -44,7 +44,7 @@ func golden(t *testing.T, path string, got []byte) {
 }
 
 func TestCommand(t *testing.T) {
-	want := `: oversire-hook=1; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook claude; else cat >/dev/null; fi`
+	want := `: oversire-hook=2; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook claude; else cat >/dev/null; fi`
 	if got := Command(testExe, "claude"); got != want {
 		t.Fatalf("got %s", got)
 	}
@@ -82,7 +82,7 @@ func TestClaudeInstallRemove(t *testing.T) {
 
 func TestClaudeOutdated(t *testing.T) {
 	installed := read(t, "claude/settings.installed.json")
-	old := bytes.ReplaceAll(installed, []byte("oversire-hook=1;"), []byte("oversire-hook=0;"))
+	old := bytes.ReplaceAll(installed, []byte("oversire-hook=2;"), []byte("oversire-hook=1;"))
 	old = bytes.ReplaceAll(old, []byte("/usr/local/bin/oversire"), []byte("/opt/old/oversire"))
 	if s := (Claude{}).Status(old, nil); s.Hooks != wire.HooksOutdated {
 		t.Fatalf("status: %s", s.Hooks)
@@ -200,5 +200,31 @@ func TestInstaller(t *testing.T) {
 	}
 	if string(fs[filepath.Join("/h", ".codex", "hooks.json")]) != "{}\n" {
 		t.Fatalf("codex: %s", fs[filepath.Join("/h", ".codex", "hooks.json")])
+	}
+}
+
+func TestRefreshOutdated(t *testing.T) {
+	claudePath, codexPath := filepath.Join("/h", ".claude", "settings.json"), filepath.Join("/h", ".codex", "hooks.json")
+	old := func(b []byte) []byte {
+		return bytes.ReplaceAll(b, []byte("oversire-hook=2;"), []byte("oversire-hook=1;"))
+	}
+	// The installed fixtures use /usr/local/bin/oversire.
+	fs := memFS{claudePath: old(read(t, "claude/settings.installed.json")), codexPath: old(read(t, "codex/hooks.installed.json"))}
+	i := NewInstaller("/h", testExe).WithFS(fs)
+	if st := i.Status(); st[0].Hooks != wire.HooksOutdated || st[1].Hooks != wire.HooksOutdated {
+		t.Fatalf("before: %+v", st)
+	}
+	done, err := i.RefreshOutdated()
+	if err != nil || len(done) != 1 || done[0] != "claude" {
+		t.Fatalf("done %v %v", done, err)
+	}
+	if !bytes.Equal(fs[claudePath], read(t, "claude/settings.installed.json")) {
+		t.Fatal("claude was not installed again")
+	}
+	if !bytes.Equal(fs[codexPath], old(read(t, "codex/hooks.installed.json"))) {
+		t.Fatal("codex was changed")
+	}
+	if done, err := i.RefreshOutdated(); err != nil || len(done) != 0 {
+		t.Fatalf("second run %v %v", done, err)
 	}
 }

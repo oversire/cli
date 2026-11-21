@@ -17,6 +17,8 @@ type Event struct {
 	Env     wire.HookEnv
 	At      time.Time
 	Session string // the session book id that Map gave
+	// Redirected is true when the hook refused this PreToolUse call.
+	Redirected bool
 }
 
 // QuestionSink gets each hook event after the book applied it (questions.Channel).

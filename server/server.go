@@ -52,6 +52,8 @@ type Health struct {
 type HookCall struct {
 	Env     wire.HookEnv    `json:"env"`
 	Payload json.RawMessage `json:"payload"`
+	// Redirected is true when the hook refused the tool call of this PreToolUse payload.
+	Redirected bool `json:"redirected,omitempty"`
 }
 
 type addrSource interface {
@@ -480,7 +482,7 @@ func (s *Server) hook(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusBadRequest, "bad hook call")
 		return
 	}
-	if err := s.hooks.Ingest(r.Context(), r.PathValue("harness"), call.Env, call.Payload); err != nil {
+	if err := s.hooks.Ingest(r.Context(), r.PathValue("harness"), call); err != nil {
 		WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}

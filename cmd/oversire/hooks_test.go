@@ -67,3 +67,66 @@ func TestHookCommandSpools(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestHooksCIRedirectCommand(t *testing.T) {
+	c, out, _ := testCLI(t, "")
+	c.home = t.TempDir()
+	run := func(args ...string) string {
+		t.Helper()
+		out.Reset()
+		if err := c.hooks(context.Background(), args); err != nil {
+			t.Fatal(err)
+		}
+		return out.String()
+	}
+	if got := run("ci-redirect"); got != "CI redirect: on\n" {
+		t.Fatalf("default %q", got)
+	}
+	run("ci-redirect", "off")
+	if got := run("status"); !strings.HasSuffix(got, "CI redirect: off\n") {
+		t.Fatalf("status %q", got)
+	}
+	if got := run("ci-redirect", "on"); got != "CI redirect: on\n" {
+		t.Fatalf("on %q", got)
+	}
+	if err := c.hooks(context.Background(), []string{"ci-redirect", "maybe"}); err == nil {
+		t.Fatal("a bad value must fail")
+	}
+}
+
+func TestHookCommandUsesConfig(t *testing.T) {
+	payload := `{"session_id":"s1","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"gh run watch 9"},"cwd":"/tmp"}`
+	for _, on := range []bool{true, false} {
+		c, out, _ := testCLI(t, payload)
+		ln, _ := net.Listen("tcp", "127.0.0.1:0")
+		port := ln.Addr().(*net.TCPAddr).Port
+		ln.Close()
+		cfg := config.Config{DataDir: t.TempDir(), Serve: &config.ServeConfig{Port: port}, Hooks: &config.HooksConfig{CIRedirect: &on}}
+		if err := c.paths.SaveConfig(cfg); err != nil {
+			t.Fatal(err)
+		}
+		if err := c.hook(context.Background(), []string{"claude"}); err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Contains(out.String(), `"permissionDecision":"deny"`); got != on {
+			t.Fatalf("ciRedirect %v: stdout %q", on, out.String())
+		}
+		if !on && out.String() != "{}\n" {
+			t.Fatalf("stdout %q", out.String())
+		}
+	}
+	// A config with no hooks key: the default is on. The port is free, so the real daemon gets no call.
+	c, out, _ := testCLI(t, payload)
+	ln, _ := net.Listen("tcp", "127.0.0.1:0")
+	port := ln.Addr().(*net.TCPAddr).Port
+	ln.Close()
+	if err := c.paths.SaveConfig(config.Config{DataDir: t.TempDir(), Serve: &config.ServeConfig{Port: port}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.hook(context.Background(), []string{"claude"}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "oversire ci wait 9") {
+		t.Fatalf("stdout %q", out.String())
+	}
+}

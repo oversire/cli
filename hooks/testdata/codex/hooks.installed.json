@@ -14,7 +14,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ": oversire-hook=1; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook codex; else cat >/dev/null; fi",
+            "command": ": oversire-hook=2; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook codex; else cat >/dev/null; fi",
             "timeout": 5
           }
         ]
@@ -34,7 +34,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ": oversire-hook=1; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook codex; else cat >/dev/null; fi",
+            "command": ": oversire-hook=2; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook codex; else cat >/dev/null; fi",
             "timeout": 5
           }
         ]
@@ -51,11 +51,11 @@
         ]
       },
       {
-        "matcher": "request_user_input",
+        "matcher": "request_user_input|Bash",
         "hooks": [
           {
             "type": "command",
-            "command": ": oversire-hook=1; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook codex; else cat >/dev/null; fi",
+            "command": ": oversire-hook=2; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook codex; else cat >/dev/null; fi",
             "timeout": 5
           }
         ]
@@ -75,7 +75,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ": oversire-hook=1; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook codex; else cat >/dev/null; fi",
+            "command": ": oversire-hook=2; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook codex; else cat >/dev/null; fi",
             "timeout": 5
           }
         ]
@@ -106,7 +106,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ": oversire-hook=1; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook codex; else cat >/dev/null; fi",
+            "command": ": oversire-hook=2; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook codex; else cat >/dev/null; fi",
             "timeout": 5
           }
         ]

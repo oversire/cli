@@ -154,6 +154,7 @@ The budget of the order has caps: 50 earlier turns, 10 last turns and 20000 char
 | `oversire hooks install [--harness claude,codex]` | Add or update the OverSire agent hooks. Other hooks stay. |
 | `oversire hooks remove [--harness claude,codex]` | Remove only the OverSire agent hooks. |
 | `oversire hooks status [--json]` | Show the hook state of each harness. |
+| `oversire hooks ci-redirect [on\|off]` | Show or set the refusal of `gh` and `glab` CI polls in the hooks. |
 | `oversire ci status [REF] [--repo R] [--fresh] [--json]` | Show the CI state of a commit, a branch, a PR or a run. The default REF is `HEAD`. The default repo is the origin of the git folder. |
 | `oversire ci ls [--branch B] [--sha S] [--pr N] [--workflow W] [--state S] [--limit N] [--json]` | List the CI runs of the repo. |
 | `oversire ci show RUN [--jobs] [--attempt N] [--fresh] [--json]` | Show a run, with its jobs and failures. |
@@ -271,6 +272,19 @@ The daemon looks for the tailnet addresses again each 30 s. It never binds `0.0.
 ### Hooks and questions
 
 The agent hooks call `oversire hook <harness>` with the event on stdin. The command posts it to `POST /v1/hooks/{harness}` and ends at once. In a visor session (the env has `AGENT_VISOR_SESSION` and `AGENT_VISOR_SOCKET`), the command gives the event to the visor of the session and not to the daemon, so the session book gets no second session. When that visor does not answer, the event goes to the spool of the visor. When the daemon does not answer, it writes the event to a spool file, and the daemon reads the spool each 10 s. The app reads, installs and removes the hooks with `GET`, `POST` and `DELETE /v1/hooks/install`, body `{"harnesses":[...]}` (loopback only).
+
+The hooks also refuse CI polls (OVERSIRE-555). The hook table has a `PreToolUse` entry with the matcher `Bash` for Claude and Codex. The hook command reads the payload first. When the shell command polls CI, the command prints a deny reply and the agent does not run the command. The reply names the `oversire ci` command that replaces it. The decision is local to the hook process. It adds no daemon call. The hook table is version 2. The daemon installs the Claude hooks again at start when their state is `outdated`. Codex needs the trust of the user for the new entry.
+
+| Command | Replacement |
+|---|---|
+| `gh run watch [RUN]` | `oversire ci wait [RUN]` |
+| `gh run view RUN` | `oversire ci show RUN`. With `--log-failed`: `why RUN`. With `--log`: `logs RUN`. With `--job J`: `logs J`. With `--json`: `show RUN --json`. |
+| `gh run view` (no RUN) | `oversire ci status` |
+| `gh run list` | `oversire ci ls`. The flags `-b -w -L -c -s -R` map to `--branch --workflow --limit --sha --state --repo`. |
+| `gh pr checks [N]` | `oversire ci status '#N'`. With `--watch`: `oversire ci wait '#N'`. |
+| `glab ci status`, `glab ci view` | `oversire ci status [BRANCH]`. With `--live`: `oversire ci wait [BRANCH]`. |
+
+The hook refuses every poll, also for a repo that OverSire does not track. A command with the env prefix `OVERSIRE_CI_REDIRECT=0` passes. The deny text names this prefix. A command that does not parse (an open quote) passes. The switch is `hooks.ciRedirect` in `config.json` (absent means on). Set it with `oversire hooks ci-redirect on|off`, or with `GET` and `PUT /v1/hooks/settings`, body `{"ciRedirect":true}` (loopback only). `oversire hooks status` shows it. A refused call counts in `ciRedirects` of the `turn.ended` row. The feature `ci-redirect` in `GET /v1/whoami` tells that the routes exist.
 
 The daemon finds the open questions of the agent sessions: forms and permission prompts on the Orca screen, and a turn that ends with a question. `GET /v1/questions` lists them. `POST /v1/questions/{id}/answer` types the answer into the terminal. `GET /v1/questions/{id}/given` tells the answer that the user gave in the terminal.
 

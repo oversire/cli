@@ -2,17 +2,19 @@ package hooks
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/oversire/cli/server"
+	"github.com/oversire/cli/wire"
 )
 
 type harnessesBody struct {
 	Harnesses []string `json:"harnesses"`
 }
 
-// Routes let the app on this machine read, install and remove the hooks after the user agrees. Loopback only.
-func (i *Installer) Routes() []server.Route {
+// Routes let the app on this machine read, install and remove the hooks after the user agrees, and set the hook switches. Loopback only.
+func (i *Installer) Routes(s *Settings) []server.Route {
 	reply := func(w http.ResponseWriter, v any, err error) {
 		w.Header().Set("Content-Type", "application/json")
 		if err != nil {
@@ -42,6 +44,27 @@ func (i *Installer) Routes() []server.Route {
 			}
 			st, err := i.Install(n...)
 			reply(w, st, err)
+		}},
+		{Pattern: "GET /v1/hooks/settings", Access: server.LoopbackOnly, Handle: func(w http.ResponseWriter, r *http.Request) {
+			v, err := s.Get()
+			reply(w, v, err)
+		}},
+		{Pattern: "PUT /v1/hooks/settings", Access: server.LoopbackOnly, Handle: func(w http.ResponseWriter, r *http.Request) {
+			var in struct {
+				CIRedirect *bool `json:"ciRedirect"`
+			}
+			dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10))
+			dec.DisallowUnknownFields()
+			if err := dec.Decode(&in); err != nil {
+				reply(w, nil, err)
+				return
+			}
+			if in.CIRedirect == nil {
+				reply(w, nil, errors.New("ciRedirect is missing"))
+				return
+			}
+			v, err := s.Set(wire.HookSettings{CIRedirect: *in.CIRedirect})
+			reply(w, v, err)
 		}},
 		{Pattern: "DELETE /v1/hooks/install", Access: server.LoopbackOnly, Handle: func(w http.ResponseWriter, r *http.Request) {
 			n, err := names(r)

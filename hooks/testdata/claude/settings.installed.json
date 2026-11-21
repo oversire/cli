@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ": oversire-hook=1; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook claude; else cat >/dev/null; fi",
+            "command": ": oversire-hook=2; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook claude; else cat >/dev/null; fi",
             "timeout": 5
           }
         ]
@@ -47,7 +47,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ": oversire-hook=1; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook claude; else cat >/dev/null; fi",
+            "command": ": oversire-hook=2; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook claude; else cat >/dev/null; fi",
             "timeout": 5
           }
         ]
@@ -67,7 +67,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ": oversire-hook=1; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook claude; else cat >/dev/null; fi",
+            "command": ": oversire-hook=2; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook claude; else cat >/dev/null; fi",
             "timeout": 5
           }
         ]
@@ -93,11 +93,11 @@
         ]
       },
       {
-        "matcher": "AskUserQuestion|ExitPlanMode",
+        "matcher": "AskUserQuestion|ExitPlanMode|Bash",
         "hooks": [
           {
             "type": "command",
-            "command": ": oversire-hook=1; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook claude; else cat >/dev/null; fi",
+            "command": ": oversire-hook=2; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook claude; else cat >/dev/null; fi",
             "timeout": 5
           }
         ]
@@ -117,7 +117,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ": oversire-hook=1; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook claude; else cat >/dev/null; fi",
+            "command": ": oversire-hook=2; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook claude; else cat >/dev/null; fi",
             "timeout": 5
           }
         ]
@@ -145,7 +145,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ": oversire-hook=1; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook claude; else cat >/dev/null; fi",
+            "command": ": oversire-hook=2; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook claude; else cat >/dev/null; fi",
             "timeout": 5
           }
         ]
@@ -165,7 +165,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ": oversire-hook=1; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook claude; else cat >/dev/null; fi",
+            "command": ": oversire-hook=2; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook claude; else cat >/dev/null; fi",
             "timeout": 5
           }
         ]
@@ -176,7 +176,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ": oversire-hook=1; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook claude; else cat >/dev/null; fi",
+            "command": ": oversire-hook=2; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook claude; else cat >/dev/null; fi",
             "timeout": 5
           }
         ]
@@ -187,7 +187,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ": oversire-hook=1; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook claude; else cat >/dev/null; fi",
+            "command": ": oversire-hook=2; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook claude; else cat >/dev/null; fi",
             "timeout": 5
           }
         ]
@@ -198,7 +198,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ": oversire-hook=1; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook claude; else cat >/dev/null; fi",
+            "command": ": oversire-hook=2; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook claude; else cat >/dev/null; fi",
             "timeout": 5
           }
         ]
@@ -209,7 +209,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ": oversire-hook=1; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook claude; else cat >/dev/null; fi",
+            "command": ": oversire-hook=2; if [ -x '/usr/local/bin/oversire' ]; then '/usr/local/bin/oversire' hook claude; else cat >/dev/null; fi",
             "timeout": 5
           }
         ]

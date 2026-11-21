@@ -38,6 +38,7 @@ Usage:
   oversire hooks install [--harness claude,codex]      add or update the OverSire agent hooks
   oversire hooks remove [--harness claude,codex]       remove only the OverSire agent hooks
   oversire hooks status [--json]                       show the hook state of each harness
+  oversire hooks ci-redirect [on|off]                  show or set the refusal of gh and glab CI polls
   oversire group show [--json]                         show the machines and apps of the group
   oversire group invite | requests | approve <id> | deny <id>
   oversire group request-code | admit <machine> <code>

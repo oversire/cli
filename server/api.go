@@ -24,7 +24,7 @@ type Sessions interface {
 
 // HookSink takes the payload of `oversire hook <harness>` (hooks.Ingest).
 type HookSink interface {
-	Ingest(ctx context.Context, harness string, env wire.HookEnv, payload []byte) error
+	Ingest(ctx context.Context, harness string, call HookCall) error
 }
 
 // Verifier checks group credentials (group.Store).

@@ -49,7 +49,7 @@ func newIngest(t *testing.T) (*Ingest, *sessions.Book, *sink, *hints) {
 
 func ingest(t *testing.T, g *Ingest, harness, file string, env wire.HookEnv) {
 	t.Helper()
-	if err := g.Ingest(context.Background(), harness, env, read(t, filepath.Join("payloads", harness, file+".json"))); err != nil {
+	if err := g.Ingest(context.Background(), harness, server.HookCall{Env: env, Payload: read(t, filepath.Join("payloads", harness, file+".json"))}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -108,10 +108,10 @@ func TestIngestIgnores(t *testing.T) {
 	if len(book.All()) != 0 || len(s.evs) != 0 {
 		t.Fatalf("%+v", book.All())
 	}
-	if err := g.Ingest(context.Background(), "cursor", wire.HookEnv{}, []byte(`{}`)); err == nil {
+	if err := g.Ingest(context.Background(), "cursor", server.HookCall{Payload: []byte(`{}`)}); err == nil {
 		t.Fatal("an unknown harness must fail")
 	}
-	if err := g.Ingest(context.Background(), "claude", wire.HookEnv{}, []byte(`{`)); err == nil {
+	if err := g.Ingest(context.Background(), "claude", server.HookCall{Payload: []byte(`{`)}); err == nil {
 		t.Fatal("bad JSON must fail")
 	}
 }
@@ -170,11 +170,11 @@ func TestDrainSpool(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "spool", "hooks.jsonl")
 	h := NewHook("http://127.0.0.1:1", path)
 	h.Getenv = func(string) string { return "" }
-	h.spool("claude", wire.HookEnv{}, read(t, "payloads/claude/UserPromptSubmit.json"))
+	h.spool("claude", server.HookCall{Payload: read(t, "payloads/claude/UserPromptSubmit.json")})
 	f, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
 	f.WriteString("not json\n")
 	f.Close()
-	h.spool("codex", wire.HookEnv{}, read(t, "payloads/codex/UserPromptSubmit.json"))
+	h.spool("codex", server.HookCall{Payload: read(t, "payloads/codex/UserPromptSubmit.json")})
 
 	if err := g.DrainSpool(path); err != nil {
 		t.Fatal(err)

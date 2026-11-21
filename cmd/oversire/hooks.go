@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/oversire/cli/ciredirect"
 	"github.com/oversire/cli/config"
 	"github.com/oversire/cli/hooks"
 	"github.com/oversire/cli/wire"
@@ -20,11 +21,12 @@ const hooksUsage = `Usage:
   oversire hooks install [--harness claude,codex]   add or update the OverSire hooks in the agent configs
   oversire hooks remove [--harness claude,codex]    remove only the OverSire hooks
   oversire hooks status [--json]                    show the hook state of each harness
+  oversire hooks ci-redirect [on|off]               show or set the refusal of gh and glab CI polls
 `
 
 func (c *cli) installer() *hooks.Installer { return hooks.NewInstaller(c.home, c.exe) }
 
-// hooks runs `oversire hooks <install|remove|status>`.
+// hooks runs `oversire hooks <install|remove|status|ci-redirect>`.
 func (c *cli) hooks(_ context.Context, args []string) error {
 	if len(args) == 0 {
 		return &exitError{2, fmt.Errorf("a hooks command is missing\n\n%s", hooksUsage)}
@@ -50,19 +52,55 @@ func (c *cli) hooks(_ context.Context, args []string) error {
 		if err != nil {
 			return err
 		}
-		return c.printHooks(st, *asJSON)
+		return c.printHooks(st, c.hookSettings(), *asJSON)
 	case "remove", "uninstall":
 		if err := i.Remove(names...); err != nil {
 			return err
 		}
-		return c.printHooks(i.Status(), *asJSON)
+		return c.printHooks(i.Status(), c.hookSettings(), *asJSON)
 	case "status":
-		return c.printHooks(i.Status(), *asJSON)
+		return c.printHooks(i.Status(), c.hookSettings(), *asJSON)
+	case "ci-redirect":
+		return c.ciRedirect(fs.Args())
 	}
 	return &exitError{2, fmt.Errorf("unknown hooks command %q\n\n%s", sub, hooksUsage)}
 }
 
-func (c *cli) printHooks(st []wire.HarnessHooks, asJSON bool) error {
+// hookSettings reads the hook switches. A config that does not load gives the defaults.
+func (c *cli) hookSettings() wire.HookSettings {
+	v, err := hooks.NewSettings(c.paths).Get()
+	if err != nil {
+		return wire.HookSettings{CIRedirect: true}
+	}
+	return v
+}
+
+func onOff(on bool) string {
+	if on {
+		return "on"
+	}
+	return "off"
+}
+
+// ciRedirect shows or sets the refusal of CI polls.
+func (c *cli) ciRedirect(args []string) error {
+	s := hooks.NewSettings(c.paths)
+	switch {
+	case len(args) == 0:
+		fmt.Fprintf(c.out, "CI redirect: %s\n", onOff(c.hookSettings().CIRedirect))
+		return nil
+	case len(args) == 1 && (args[0] == "on" || args[0] == "off"):
+		v, err := s.Set(wire.HookSettings{CIRedirect: args[0] == "on"})
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(c.out, "CI redirect: %s\n", onOff(v.CIRedirect))
+		return nil
+	}
+	return &exitError{2, fmt.Errorf("use on or off\n\n%s", hooksUsage)}
+}
+
+func (c *cli) printHooks(st []wire.HarnessHooks, set wire.HookSettings, asJSON bool) error {
 	if asJSON {
 		b, _ := json.MarshalIndent(st, "", "  ")
 		fmt.Fprintln(c.out, string(b))
@@ -77,6 +115,7 @@ func (c *cli) printHooks(st []wire.HarnessHooks, asJSON bool) error {
 			fmt.Fprintln(c.out, "         Run `oversire hooks install` to update the hooks.")
 		}
 	}
+	fmt.Fprintf(c.out, "CI redirect: %s\n", onOff(set.CIRedirect))
 	return nil
 }
 
@@ -96,10 +135,12 @@ func (c *cli) hook(ctx context.Context, args []string) error {
 		return nil
 	}
 	port, spool, home := config.DefaultPort, "", ""
+	redirect := true
 	if c.paths.Dir != "" {
 		cfg, _, err := c.paths.LoadConfig()
 		if err == nil {
 			port = cfg.ServeOrDefault().ListenPort()
+			redirect = cfg.CIRedirect()
 		}
 		if data, err := cfg.Data(); err == nil {
 			spool, home = hooks.SpoolPath(data), filepath.Join(data, "visor")
@@ -107,6 +148,9 @@ func (c *cli) hook(ctx context.Context, args []string) error {
 	}
 	h := hooks.NewHook("http://127.0.0.1:"+strconv.Itoa(port), spool)
 	h.Visor = visorHook(os.Getenv, home)
+	if redirect {
+		h.Gate = ciredirect.NewGate()
+	}
 	h.Run(ctx, args[0], c.in, c.out)
 	return nil
 }

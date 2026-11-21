@@ -42,10 +42,10 @@ type sessionTrack struct {
 }
 
 type turnTrack struct {
-	n, tools, toolErrors, testsRun, testsFailed int
-	id                                          string
-	at                                          time.Time
-	files                                       map[string]bool
+	n, tools, toolErrors, testsRun, testsFailed, ciRedirects int
+	id                                                       string
+	at                                                       time.Time
+	files                                                    map[string]bool
 }
 
 type waitTrack struct {
@@ -127,7 +127,7 @@ func (r *recorder) rows(ev Event, p payload, session string, reason wire.Session
 			return
 		}
 		pl := map[string]any{"turn": t.n, "tools": t.tools, "durationSec": secs(at.Sub(t.at))}
-		for k, v := range map[string]int{"toolErrors": t.toolErrors, "filesEdited": len(t.files), "testsRun": t.testsRun, "testsFailed": t.testsFailed} {
+		for k, v := range map[string]int{"toolErrors": t.toolErrors, "filesEdited": len(t.files), "testsRun": t.testsRun, "testsFailed": t.testsFailed, "ciRedirects": t.ciRedirects} {
 			if v > 0 {
 				pl[k] = v
 			}
@@ -152,10 +152,12 @@ func (r *recorder) rows(ev Event, p payload, session string, reason wire.Session
 		}
 		s.turn = nil
 	}
+	// A refused call gets no PostToolUse, so its PreToolUse counts it.
+	refused := ev.Redirected && name == "PreToolUse"
 	// A subagent call only counts its tools.
 	if p.AgentID != "" && name != "SubagentStop" {
-		if name == "PostToolUse" && s.turn != nil {
-			s.turn.count(p)
+		if (name == "PostToolUse" || refused) && s.turn != nil {
+			s.turn.count(p, refused)
 		}
 		return nil
 	}
@@ -198,6 +200,9 @@ func (r *recorder) rows(ev Event, p payload, session string, reason wire.Session
 		prompt.Private, prompt.Corr = true, start.ID
 		out = append(out, prompt, start)
 	case "PreToolUse":
+		if refused && s.turn != nil {
+			s.turn.count(p, true)
+		}
 		switch {
 		case reason == wire.ReasonQuestion:
 			startWait("question", p.ToolName, firstQuestion(p.ToolInput))
@@ -209,7 +214,7 @@ func (r *recorder) rows(ev Event, p payload, session string, reason wire.Session
 	case "PostToolUse":
 		endWait(wire.ActorHuman)
 		if s.turn != nil {
-			s.turn.count(p)
+			s.turn.count(p, false)
 		}
 	case "PermissionRequest":
 		why := "permission"
@@ -262,9 +267,12 @@ func (r *recorder) rows(ev Event, p payload, session string, reason wire.Session
 	return out
 }
 
-// count adds one tool call to the turn.
-func (t *turnTrack) count(p payload) {
+// count adds one tool call to the turn. redirected is true for a call that the hook refused.
+func (t *turnTrack) count(p payload, redirected bool) {
 	t.tools++
+	if redirected {
+		t.ciRedirects++
+	}
 	var resp map[string]any
 	_ = json.Unmarshal(p.ToolResponse, &resp)
 	if e, _ := resp["is_error"].(bool); e {

@@ -94,6 +94,14 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	}
 	ingest := hooks.NewIngest(book, asks).WithHinter(watcher).WithEvents(capt)
 	installer := c.installer()
+	// An update can change the hook table. Install the Claude hooks again, so that the daemon and the hooks match.
+	if c.home != "" {
+		if done, err := installer.RefreshOutdated(); err != nil {
+			c.log.Warn("hooks: refresh", "err", err)
+		} else if len(done) > 0 {
+			c.log.Info("hooks: installed again", "harnesses", done)
+		}
+	}
 	spool := hooks.SpoolPath(data)
 	if err := ingest.DrainSpool(spool); err != nil {
 		c.log.Warn("hook spool", "err", err)
@@ -173,7 +181,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 		d := wire.DaemonInfo{Machine: cfg.Machine(), Version: version, Contract: wire.DaemonContract, Roles: cfg.Roles, Runtimes: reg.IDs(), Harnesses: installer.Status()}
 		d.Group, d.Home = store.Info()
 		d.Update = updates.Status()
-		d.Features = []string{wire.FeatureLaunchEnv, wire.FeatureAgentSecrets, wire.FeatureAppCalls, wire.FeatureMirror, wire.FeatureMemberCalls, wire.FeatureMirrorCI, wire.FeatureCI}
+		d.Features = []string{wire.FeatureLaunchEnv, wire.FeatureAgentSecrets, wire.FeatureAppCalls, wire.FeatureMirror, wire.FeatureMemberCalls, wire.FeatureMirrorCI, wire.FeatureCI, wire.FeatureCIRedirect}
 		return d
 	}
 	srv = server.NewServer(serveCfg, info, store, hints, book, ingest)
@@ -212,7 +220,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	srv.Handle(ci.NewExplainer(ciIndex, oplog, members, ci.NewLimiter(10*time.Minute, time.Now), store.Self).Routes(ciFwd)...)
 	asker := ask.NewAsker(book, screen, reg, time.Now)
 	srv.Handle(asker.Routes()...)
-	srv.Handle(installer.Routes()...)
+	srv.Handle(installer.Routes(hooks.NewSettings(c.paths))...)
 	srv.Handle(updates.Routes()...)
 	runtimeAPI := runtime.NewAPI(reg, filepath.Join(data, "files"), time.Now)
 	runtimeAPI.Log = c.log

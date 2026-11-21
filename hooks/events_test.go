@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/oversire/cli/server"
 	"github.com/oversire/cli/sessions"
 	"github.com/oversire/cli/wire"
 )
@@ -29,7 +30,7 @@ func TestRecordedClaudeSession(t *testing.T) {
 	defer f.Close()
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
-		if err := g.Ingest(context.Background(), "claude", wire.HookEnv{}, sc.Bytes()); err != nil {
+		if err := g.Ingest(context.Background(), "claude", server.HookCall{Payload: append([]byte(nil), sc.Bytes()...)}); err != nil {
 			t.Fatal(err)
 		}
 	}

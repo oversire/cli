@@ -8,7 +8,7 @@ import (
 )
 
 // Version is the shape of the hook command. Increase it when the command changes. Then Status reports outdated.
-const Version = 1
+const Version = 2
 
 // marker starts each command that we install. It finds our entries next to the entries of the user and of Orca.
 const marker = ": oversire-hook="

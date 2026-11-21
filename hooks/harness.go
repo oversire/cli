@@ -37,7 +37,7 @@ type Claude struct{}
 var claudeTable = table{timeout: 5, events: []hookEvent{
 	{Name: "SessionStart"},
 	{Name: "UserPromptSubmit"},
-	{Name: "PreToolUse", Matcher: "AskUserQuestion|ExitPlanMode"},
+	{Name: "PreToolUse", Matcher: "AskUserQuestion|ExitPlanMode|Bash"},
 	{Name: "PostToolUse"}, // all tools: the counts of the turn (OVERSIRE-380)
 	{Name: "PermissionRequest"},
 	{Name: "Notification"},
@@ -73,7 +73,7 @@ type Codex struct{}
 var codexTable = table{timeout: 5, events: []hookEvent{
 	{Name: "SessionStart"},
 	{Name: "UserPromptSubmit"},
-	{Name: "PreToolUse", Matcher: "request_user_input"},
+	{Name: "PreToolUse", Matcher: "request_user_input|Bash"},
 	{Name: "PermissionRequest"},
 	{Name: "Stop"},
 }}

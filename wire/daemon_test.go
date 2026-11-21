@@ -55,6 +55,7 @@ func TestDaemonFixtures(t *testing.T) {
 	roundTrip[AgentSecretList](t, "agent-secret-list")
 	roundTrip[AgentSecretResolve](t, "agent-secret-resolve")
 	roundTrip[AgentSecretValues](t, "agent-secret-values")
+	roundTrip[HookSettings](t, "hook-settings")
 }
 
 func TestSessionSubject(t *testing.T) {

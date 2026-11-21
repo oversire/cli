@@ -2,6 +2,7 @@ package config
 
 import (
 	"bytes"
+	"encoding/json"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -97,5 +98,19 @@ func TestShortHost(t *testing.T) {
 		if got := shortHost(in); got != want {
 			t.Errorf("shortHost(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestCIRedirectDefault(t *testing.T) {
+	var c Config
+	if !c.CIRedirect() {
+		t.Fatal("nil Hooks must be on")
+	}
+	if err := json.Unmarshal([]byte(`{"hooks":{}}`), &c); err != nil || !c.CIRedirect() {
+		t.Fatalf("empty hooks: %v", err)
+	}
+	c = Config{}
+	if err := json.Unmarshal([]byte(`{"hooks":{"ciRedirect":false}}`), &c); err != nil || c.CIRedirect() {
+		t.Fatalf("off: %v", err)
 	}
 }

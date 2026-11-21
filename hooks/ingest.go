@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/oversire/cli/digest"
+	"github.com/oversire/cli/server"
 	"github.com/oversire/cli/sessions"
 	"github.com/oversire/cli/wire"
 )
@@ -69,8 +70,8 @@ func (g *Ingest) WithClock(c func() time.Time) *Ingest {
 	return g
 }
 
-func (g *Ingest) Ingest(_ context.Context, harness string, env wire.HookEnv, payload []byte) error {
-	return g.apply(harness, env, payload, g.clock())
+func (g *Ingest) Ingest(_ context.Context, harness string, call server.HookCall) error {
+	return g.apply(harness, call, g.clock())
 }
 
 // Transcript gives the last transcript_path of a session, or "".
@@ -80,7 +81,8 @@ func (g *Ingest) Transcript(session string) string {
 	return g.transcripts[session]
 }
 
-func (g *Ingest) apply(harness string, env wire.HookEnv, payload []byte, at time.Time) error {
+func (g *Ingest) apply(harness string, call server.HookCall, at time.Time) error {
+	env, payload := call.Env, call.Payload
 	// Sessions of the oversire runtime report through agent-wire.
 	if env.OversireSession != "" {
 		return nil
@@ -93,7 +95,7 @@ func (g *Ingest) apply(harness string, env wire.HookEnv, payload []byte, at time
 		return errors.New("the hook payload is not JSON")
 	}
 	p := readPayload(payload)
-	ev := Event{Harness: harness, Name: p.HookEventName, Payload: json.RawMessage(payload), Env: env, At: at}
+	ev := Event{Harness: harness, Name: p.HookEventName, Payload: json.RawMessage(payload), Env: env, At: at, Redirected: call.Redirected}
 	patch, ok := h.Map(ev)
 	if !ok {
 		// PreCompact, SubagentStop and the tools of a subagent change no session, but they make rows.
@@ -181,7 +183,7 @@ func (g *Ingest) DrainSpool(path string) error {
 		if l.At.IsZero() {
 			l.At = g.clock()
 		}
-		_ = g.apply(l.Harness, l.Env, l.Payload, l.At)
+		_ = g.apply(l.Harness, l.HookCall, l.At)
 	}
 	err = sc.Err()
 	f.Close()

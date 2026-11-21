@@ -35,6 +35,25 @@ type Replying interface{ Reply() []byte }
 
 func (Claude) Reply() []byte { return []byte("{}\n") }
 
+// Gate decides if a tool call is refused. ciredirect.Gate implements it.
+type Gate interface {
+	Refuse(tool string, input json.RawMessage) (reason string, refused bool)
+}
+
+// Denying is a harness that can refuse a PreToolUse call.
+type Denying interface{ Deny(reason string) []byte }
+
+func denyReply(reason string) []byte {
+	b, _ := json.Marshal(map[string]any{"hookSpecificOutput": map[string]string{
+		"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": reason}})
+	return append(b, '\n')
+}
+
+func (Claude) Deny(reason string) []byte { return denyReply(reason) }
+
+// Deny uses the Claude format. The Codex deny format is not checked against a live Codex run.
+func (Codex) Deny(reason string) []byte { return denyReply(reason) }
+
 // Forwarder sends the hook call of a session of the daemon to the visor of the session.
 type Forwarder interface {
 	Forward(ctx context.Context, harness string, payload []byte)
@@ -50,6 +69,8 @@ type Hook struct {
 	Clock  func() time.Time
 	// Visor gets all calls of a visor session and of an Orca pane. nil else.
 	Visor Forwarder
+	// Gate refuses tool calls. nil: no refusal.
+	Gate Gate
 }
 
 // NewHook uses the env of this process and the timeouts of the hook.
@@ -70,14 +91,12 @@ func (h *Hook) Env() wire.HookEnv {
 
 // Run reads the payload, prints the reply of the harness and sends the call. It spools the call when the daemon does not take it.
 func (h *Hook) Run(ctx context.Context, harness string, in io.Reader, out io.Writer) {
-	for _, hs := range Harnesses() {
-		if r, ok := hs.(Replying); ok && hs.Name() == harness {
-			_, _ = out.Write(r.Reply())
-		}
-	}
 	data, _ := io.ReadAll(io.LimitReader(in, MaxPayload+1))
 	_, _ = io.Copy(io.Discard, in)
-	if len(data) > MaxPayload || !json.Valid(data) {
+	valid := len(data) <= MaxPayload && json.Valid(data)
+	reply, redirected := h.reply(harness, data, valid)
+	_, _ = out.Write(reply)
+	if !valid {
 		return
 	}
 	env := h.Env()
@@ -92,14 +111,36 @@ func (h *Hook) Run(ctx context.Context, harness string, in io.Reader, out io.Wri
 	if env.OversireSession != "" {
 		return
 	}
-	if h.post(ctx, harness, env, data) {
+	call := server.HookCall{Env: env, Payload: data, Redirected: redirected}
+	if h.post(ctx, harness, call) {
 		return
 	}
-	h.spool(harness, env, data)
+	h.spool(harness, call)
 }
 
-func (h *Hook) post(ctx context.Context, harness string, env wire.HookEnv, payload []byte) bool {
-	body, err := json.Marshal(server.HookCall{Env: env, Payload: payload})
+// reply gives the stdout of the hook: a deny for a refused PreToolUse call, else the normal reply of the harness.
+func (h *Hook) reply(harness string, data []byte, valid bool) (out []byte, redirected bool) {
+	for _, hs := range Harnesses() {
+		if hs.Name() != harness {
+			continue
+		}
+		if valid && h.Gate != nil {
+			if d, ok := hs.(Denying); ok {
+				p := readPayload(data)
+				if reason, refused := h.Gate.Refuse(p.ToolName, p.ToolInput); refused && p.HookEventName == "PreToolUse" {
+					return d.Deny(reason), true
+				}
+			}
+		}
+		if r, ok := hs.(Replying); ok {
+			return r.Reply(), false
+		}
+	}
+	return nil, false
+}
+
+func (h *Hook) post(ctx context.Context, harness string, call server.HookCall) bool {
+	body, err := json.Marshal(call)
 	if err != nil {
 		return false
 	}
@@ -120,11 +161,11 @@ func (h *Hook) post(ctx context.Context, harness string, env wire.HookEnv, paylo
 	return resp.StatusCode < 500
 }
 
-func (h *Hook) spool(harness string, env wire.HookEnv, payload []byte) {
+func (h *Hook) spool(harness string, call server.HookCall) {
 	if h.Spool == "" {
 		return
 	}
-	line, err := json.Marshal(spoolLine{Harness: harness, At: h.Clock(), HookCall: server.HookCall{Env: env, Payload: payload}})
+	line, err := json.Marshal(spoolLine{Harness: harness, At: h.Clock(), HookCall: call})
 	if err != nil {
 		return
 	}

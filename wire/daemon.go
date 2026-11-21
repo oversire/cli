@@ -180,6 +180,11 @@ const (
 	HooksUnsupported HookState = "unsupported"
 )
 
+// HookSettings is the body of GET and PUT /v1/hooks/settings. Loopback only.
+type HookSettings struct {
+	CIRedirect bool `json:"ciRedirect"`
+}
+
 type HarnessHooks struct {
 	Name  string    `json:"name"`
 	Hooks HookState `json:"hooks"`
@@ -217,6 +222,7 @@ const (
 	FeatureMemberCalls  = "member-calls"  // the /v1/member-calls routes: the clicks of a client app
 	FeatureMirrorCI     = "mirror-ci"     // the mirror kinds ciJobs, ciChecks and ciState, and the query with=ci
 	FeatureCI           = "ci"            // the /v1/ci routes: CI reads and wait
+	FeatureCIRedirect   = "ci-redirect"   // the /v1/hooks/settings routes: the switch for the CI poll refusal
 )
 
 // UpdateStatus is the last self-update check of a daemon.

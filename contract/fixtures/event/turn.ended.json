@@ -22,6 +22,7 @@
     "filesEdited": 4,
     "testsRun": 2,
     "testsFailed": 1,
+    "ciRedirects": 1,
     "interrupted": false,
     "durationSec": 410
   }
