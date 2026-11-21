@@ -1929,7 +1929,8 @@
       "kind": "intake.accepted",
       "domain": "tracker",
       "actorTypes": [
-        "human"
+        "human",
+        "agent"
       ],
       "private": false,
       "summary": "the new item",
@@ -1941,6 +1942,134 @@
           },
           "title": {
             "type": "string"
+          },
+          "commented": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "kind": "intake.declined",
+      "domain": "tracker",
+      "actorTypes": [
+        "human",
+        "agent"
+      ],
+      "private": false,
+      "summary": "the title",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "intake": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "commented": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "kind": "intake.snoozed",
+      "domain": "tracker",
+      "actorTypes": [
+        "human",
+        "agent"
+      ],
+      "private": false,
+      "summary": "the title",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "intake": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "until": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "kind": "intake.duplicated",
+      "domain": "tracker",
+      "actorTypes": [
+        "human",
+        "agent"
+      ],
+      "private": false,
+      "summary": "the title",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "intake": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "of": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "kind": "intake.deleted",
+      "domain": "tracker",
+      "actorTypes": [
+        "human",
+        "agent"
+      ],
+      "private": false,
+      "summary": "the title",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "intake": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "kind": "intake.updated",
+      "domain": "tracker",
+      "actorTypes": [
+        "human",
+        "agent"
+      ],
+      "private": false,
+      "summary": "the title",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "intake": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "additionalProperties": false

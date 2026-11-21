@@ -86,6 +86,17 @@ Usage:
   oversire item attach <KEY> <FILE> [--name N]         upload a file (at most 10 MB)
   oversire intake create --project P --title T [--body-file F|-] [--priority X]
                                                        make an intake item and print its key
+  oversire intake list [--project P] [--status pending|snoozed|all] [--detail] [--limit N]
+                                                       list the intake items
+  oversire intake show <KEY> [--project P]             show one intake item with its body
+  oversire intake accept|decline <KEY> [--comment-file F|-]
+                                                       accept or decline an intake item
+  oversire intake snooze <KEY> --until YYYY-MM-DD | --days N [--comment-file F|-]
+                                                       snooze an intake item
+  oversire intake duplicate <KEY> --of KEEP [--comment-file F|-]
+                                                       close an intake item as a duplicate
+  oversire intake edit <KEY> [--title T] [--body-file F|-] [--priority X] [--parent KEY|none] [--blocks|--blocked-by|--relates-to|--duplicate-of OTHER]
+                                                       change an intake item and keep it in the intake
   oversire people list [--project P] [--json]          list the people of the trackers, code hosts and machines
   oversire activity list [--project P] [--unread] [--limit N] [--json]
                                                        list the tracker activity, newest first

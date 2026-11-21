@@ -1,0 +1,20 @@
+{
+  "seq": 139,
+  "id": "app:intake-3a9:declined",
+  "at": "2026-11-20T10:00:00Z",
+  "seenAt": "2026-11-20T10:00:01Z",
+  "kind": "intake.declined",
+  "item": "OVERSIRE-371",
+  "project": "oversire",
+  "machine": "mba",
+  "provider": "plane",
+  "actorType": "agent",
+  "actor": "claude",
+  "via": "cli",
+  "summary": "Agents merge on their own",
+  "payload": {
+    "intake": "3a9",
+    "title": "Agents merge on their own",
+    "commented": true
+  }
+}
