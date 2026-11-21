@@ -178,8 +178,25 @@ func TestTimeoutGives504(t *testing.T) {
 	if err := x.relay.Deliver(x.sock.frames[0].Call.ID, wire.AppCallResult{Status: wire.AppCallOK}, mbaApp); !errors.Is(err, ErrUnknown) {
 		t.Fatal(err)
 	}
-	code, body := x.post(t, "/v1/member-calls", `{"action":"item.setStatus","args":{}}`)
-	if code != 504 || !strings.Contains(body, "mba did not answer. Try again.") {
+	code, body := x.post(t, "/v1/member-calls", `{"action":"item.setStatus","args":{"key":"A-1","status":"Done"}}`)
+	if code != 504 || !strings.Contains(body, "mba did not answer in time. The change can be made already") ||
+		!strings.Contains(body, "oversire item show A-1") || strings.Contains(body, "Try again.") {
+		t.Fatal(code, body)
+	}
+}
+
+func TestTimeoutForAReadSaysTryAgain(t *testing.T) {
+	x := newRig(t, 10*time.Millisecond)
+	code, body := x.post(t, "/v1/member-calls", `{"action":"mirror.read","args":{"what":"comments","item":"A-1"}}`)
+	if code != 504 || !strings.Contains(body, "mba did not answer in time. Try again.") || strings.Contains(body, "change") {
+		t.Fatal(code, body)
+	}
+}
+
+func TestTimeoutForACreateGivesACheck(t *testing.T) {
+	x := newRig(t, 10*time.Millisecond)
+	code, body := x.post(t, "/v1/member-calls", `{"action":"item.create","args":{"project":"SLING","title":"Fix x"}}`)
+	if code != 504 || !strings.Contains(body, `oversire item list --project SLING --text \"Fix x\"`) {
 		t.Fatal(code, body)
 	}
 }

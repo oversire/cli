@@ -105,7 +105,8 @@ func (r *Relay) Do(ctx context.Context, call wire.MemberCall) (wire.AppCallResul
 	case res := <-ch:
 		return res, nil
 	case <-ctx.Done():
-		r.Log.Warn("member call: no result", "id", call.ID, "action", call.Action, "from", call.From.Machine, "err", ctx.Err())
+		r.Log.Warn("member call: no result", "id", call.ID, "action", call.Action, "from", call.From.Machine,
+			"change", appcall.Action{Name: call.Action, Args: call.Args}.Changes(), "err", ctx.Err())
 		return wire.AppCallResult{}, ctx.Err()
 	}
 }
@@ -226,7 +227,7 @@ func (r *Relay) serveCall(w http.ResponseWriter, req *http.Request) {
 	case errors.Is(err, ErrBusy):
 		reply(w, http.StatusTooManyRequests, errorBody{Error: r.sourceName() + " is busy. Try again."})
 	case errors.Is(err, context.DeadlineExceeded):
-		reply(w, http.StatusGatewayTimeout, errorBody{Error: r.sourceName() + " did not answer. Try again."})
+		reply(w, http.StatusGatewayTimeout, errorBody{Error: appcall.Action{Name: in.Action, Args: in.Args}.TimeoutMessage(r.sourceName())})
 	case err != nil:
 		reply(w, http.StatusServiceUnavailable, errorBody{Error: err.Error()})
 	default:

@@ -425,7 +425,7 @@ The routes need member access, and only the home member serves them: another mem
 
 - 503 `{"error":"The OverSire app on <source> is not open."}`: the mirror has no source, or the source app has no WebSocket.
 - 429 `{"error":"<source> is busy. Try again."}`: 8 calls wait already.
-- 504 `{"error":"<source> did not answer. Try again."}`: the wait of 60 s ended.
+- 504 `{"error":"..."}`: the source app did not answer in time (60 s). For a read action the text is `"<source> did not answer in time. Try again."`. For a change action (and an unknown action) the text says that the change can be made already, and gives a command to check it before a retry.
 
 ### Direct orders
 
