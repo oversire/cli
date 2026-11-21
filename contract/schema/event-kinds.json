@@ -2115,6 +2115,38 @@
       }
     },
     {
+      "kind": "project.settings_changed",
+      "domain": "human",
+      "actorTypes": [
+        "human",
+        "agent"
+      ],
+      "private": false,
+      "summary": "the project and the changed fields",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "project",
+          "fields"
+        ]
+      }
+    },
+    {
       "kind": "agent.changed",
       "domain": "human",
       "actorTypes": [

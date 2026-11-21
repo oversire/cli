@@ -1,0 +1,14 @@
+{
+  "seq": 251,
+  "id": "app:mbp:-:settings:1795013600000",
+  "at": "2026-11-18T14:13:20Z",
+  "seenAt": "2026-11-18T14:13:21Z",
+  "kind": "project.settings_changed",
+  "project": "oversire",
+  "machine": "mbp",
+  "actorType": "human",
+  "actor": "flarco@gmail.com",
+  "via": "app@mba",
+  "summary": "Settings of OVERSIRE changed: features",
+  "payload": { "project": "OVERSIRE", "fields": ["features"] }
+}
