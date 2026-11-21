@@ -338,3 +338,115 @@ func TestUnseenKeyedSessionExpires(t *testing.T) {
 		t.Fatal("a reported session lost its key")
 	}
 }
+
+func TestNextDue(t *testing.T) {
+	b, _ := newBook("")
+	if _, ok := b.nextDue(); ok {
+		t.Fatal("empty book has a due time")
+	}
+	b.Apply(orca("a", 0, wire.PhaseWorking))
+	b.Apply(orca("b", 100*time.Millisecond, wire.PhaseWorking))
+	if d, ok := b.nextDue(); !ok || !d.Equal(at(Coalesce)) {
+		t.Fatalf("got %v %v", d, ok)
+	}
+	b.Flush(at(time.Second))
+	if _, ok := b.nextDue(); ok {
+		t.Fatal("due time after the flush")
+	}
+	p := orca("a", 2*time.Second, wire.PhaseWorking)
+	p.LastMessage = ptr("hello")
+	b.Apply(p)
+	if _, ok := b.nextDue(); ok {
+		t.Fatal("a message change opened a window")
+	}
+}
+
+func TestRunSendsAtTheEndOfTheWindow(t *testing.T) {
+	l := &memLog{}
+	b := NewBook("mini", "", l, time.Now)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error)
+	go func() { done <- b.Run(ctx) }()
+	start := time.Now()
+	b.Apply(Patch{ID: "s", Source: SourceHook, Runtime: ptr(wire.RuntimeCLI), State: ptr(wire.PhaseWorking)})
+	for l.actions() == "" && time.Since(start) < 2*time.Second {
+		time.Sleep(5 * time.Millisecond)
+	}
+	got := time.Since(start)
+	cancel()
+	<-done
+	if got < Coalesce || got >= houseInterval-100*time.Millisecond {
+		t.Fatalf("event after %v", got)
+	}
+}
+
+func TestRunSavesOnTheHouseTick(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sessions.json")
+	b := NewBook("mini", path, nil, time.Now)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error)
+	go func() { done <- b.Run(ctx) }()
+	b.Apply(Patch{ID: "s", Source: SourceHook, Runtime: ptr(wire.RuntimeCLI), State: ptr(wire.PhaseWorking)})
+	limit := houseInterval + persistGap + time.Second
+	start := time.Now()
+	for time.Since(start) < limit {
+		if _, err := os.Stat(path); err == nil {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	_, err := os.Stat(path)
+	// Cancel only after the check: Save(true) at stop would hide a missing tick save.
+	if err != nil {
+		cancel()
+		<-done
+		t.Fatalf("not saved in %v", limit)
+	}
+	cancel()
+	<-done
+}
+
+func TestApplyDoesNotBlockOnKick(t *testing.T) {
+	b, _ := newBook("")
+	done := make(chan struct{})
+	go func() {
+		for i := 0; i < 1000; i++ {
+			b.Apply(orca("s"+strconv.Itoa(i), 0, wire.PhaseWorking))
+		}
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Apply blocks")
+	}
+}
+
+func TestRunWithConcurrentApply(t *testing.T) {
+	b := NewBook("mini", "", &memLog{}, time.Now)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error)
+	go func() { done <- b.Run(ctx) }()
+	var wg sync.WaitGroup
+	for g := 0; g < 8; g++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < 200; i++ {
+				id := "s" + strconv.Itoa(g) + "-" + strconv.Itoa(i%10)
+				st := wire.PhaseWorking
+				if i%2 == 0 {
+					st = wire.PhaseWaiting
+				}
+				b.Apply(Patch{ID: id, Source: SourceHook, Runtime: ptr(wire.RuntimeCLI), State: &st})
+				b.Get(id)
+				b.All()
+			}
+		}()
+	}
+	wg.Wait()
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}

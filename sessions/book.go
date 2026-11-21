@@ -33,9 +33,10 @@ const (
 	DoneTTL   = 24 * time.Hour
 	CLIEndTTL = 10 * time.Minute
 	// UnseenTTL is how long a keyed session that no source reported stays.
-	UnseenTTL   = 10 * time.Minute
-	persistGap  = 2 * time.Second
-	runInterval = 100 * time.Millisecond
+	UnseenTTL  = 10 * time.Minute
+	persistGap = 2 * time.Second
+	// houseInterval is the period of Prune and Save in Run.
+	houseInterval = time.Second
 )
 
 // Patch is a partial update from one source. A nil field does not change.
@@ -89,6 +90,8 @@ type Book struct {
 	saved   time.Time
 	watch   watchers
 	onSend  func(s wire.DaemonSession, action string, at time.Time)
+	// kick tells Run that a coalesce window is open.
+	kick chan struct{}
 }
 
 // NewBook reads path when it exists. An empty path keeps the sessions in memory only.
@@ -96,7 +99,7 @@ func NewBook(machine, path string, log Appender, clock func() time.Time) *Book {
 	if clock == nil {
 		clock = time.Now
 	}
-	b := &Book{machine: machine, byID: map[string]*entry{}, log: log, clock: clock, path: path}
+	b := &Book{machine: machine, byID: map[string]*entry{}, log: log, clock: clock, path: path, kick: make(chan struct{}, 1)}
 	b.load()
 	return b
 }
@@ -154,6 +157,10 @@ func (b *Book) Apply(p Patch) {
 	// The first change opens the window. The state at its end goes out.
 	if e.differs() && !e.pending {
 		e.pending, e.due = true, p.At.Add(Coalesce)
+		select {
+		case b.kick <- struct{}{}:
+		default:
+		}
 	}
 	b.flush(p.At)
 }
@@ -240,7 +247,7 @@ func (e *entry) differs() bool {
 	return e.s.State != e.sent.State || e.s.Reason != e.sent.Reason || e.s.Question != e.sent.Question
 }
 
-// Flush sends the changes whose coalesce window is over. Run calls it often.
+// Flush sends the changes whose coalesce window is over.
 func (b *Book) Flush(now time.Time) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -368,20 +375,50 @@ func (b *Book) Tool(id string) (tool, input string) {
 	return "", ""
 }
 
-// Run flushes coalesced changes, prunes, and writes the sessions file at most each 2 s.
+// nextDue gives the earliest end of an open coalesce window.
+func (b *Book) nextDue() (time.Time, bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	var next time.Time
+	found := false
+	for _, e := range b.byID {
+		if e.pending && e.differs() && (!found || e.due.Before(next)) {
+			next, found = e.due, true
+		}
+	}
+	return next, found
+}
+
+// Run sends each change at the end of its coalesce window. Each houseInterval it prunes and saves the sessions file.
 func (b *Book) Run(ctx context.Context) error {
-	t := time.NewTicker(runInterval)
-	defer t.Stop()
+	house := time.NewTicker(houseInterval)
+	defer house.Stop()
+	due := time.NewTimer(0)
+	defer due.Stop()
+	rearm := func() {
+		if d, ok := b.nextDue(); ok {
+			due.Reset(max(0, d.Sub(b.clock())))
+		} else {
+			due.Stop()
+		}
+	}
+	rearm()
 	for {
 		select {
 		case <-ctx.Done():
 			b.Save(true)
 			return nil
-		case <-t.C:
+		case <-house.C:
 			now := b.clock()
 			b.Flush(now)
 			b.Prune(now)
 			b.Save(false)
+			rearm()
+		case <-b.kick:
+			rearm()
+		case <-due.C:
+			b.Flush(b.clock())
+			rearm()
 		}
 	}
 }
