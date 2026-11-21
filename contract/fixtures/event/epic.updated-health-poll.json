@@ -1,0 +1,20 @@
+{
+  "seq": 252,
+  "id": "bigtimer:epic-3f9a2c1b-4d5e-4f60-8a7b-9c0d1e2f3a4b:health:1795013400000",
+  "at": "2026-11-18T14:10:00Z",
+  "seenAt": "2026-11-18T14:10:30Z",
+  "kind": "epic.updated",
+  "item": "EPIC-3F9A2C1B4D5E",
+  "project": "oversire",
+  "machine": "mba",
+  "actorType": "provider",
+  "actor": "bigtimer",
+  "via": "poll",
+  "summary": "Project Plan tab: health At risk",
+  "payload": {
+    "epic": "3f9a2c1b-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+    "title": "Project Plan tab",
+    "fields": ["health"],
+    "health": "at_risk"
+  }
+}
