@@ -1881,11 +1881,34 @@
       }
     },
     {
+      "kind": "item.areas_set",
+      "domain": "human",
+      "actorTypes": [
+        "human",
+        "agent"
+      ],
+      "private": false,
+      "summary": "the areas",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "areas": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "kind": "intake.created",
       "domain": "tracker",
       "actorTypes": [
         "human",
-        "provider"
+        "provider",
+        "agent"
       ],
       "private": false,
       "summary": "the title",

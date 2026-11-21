@@ -1,0 +1,15 @@
+{
+  "seq": 261,
+  "id": "app:mba:OVERSIRE-12:areas:1795100100000",
+  "at": "2026-11-19T10:15:00Z",
+  "seenAt": "2026-11-19T10:15:01Z",
+  "kind": "item.areas_set",
+  "item": "OVERSIRE-12",
+  "project": "oversire",
+  "machine": "mba",
+  "actorType": "agent",
+  "actor": "codex s1",
+  "via": "app@mba",
+  "summary": "cli, contract",
+  "payload": { "areas": ["cli", "contract"] }
+}
