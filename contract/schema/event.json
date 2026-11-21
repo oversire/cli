@@ -30,7 +30,7 @@
         "actorType": { "$ref": "#/$defs/ActorType" },
         "actor": { "description": "An email, harness/model (claude/opus-5-5), queue, runbook:<name>, github-actions.", "type": "string", "minLength": 1 },
         "onBehalf": { "description": "The human who started it, for agent and system rows.", "type": "string" },
-        "via": { "description": "hook, git, app@<machine>, cli, poll, webhook, daemon.", "type": "string", "minLength": 1 },
+        "via": { "description": "hook, git, app@<machine>, cli, cli@<machine> (an `oversire` command on another machine), poll, webhook, daemon.", "type": "string", "minLength": 1 },
         "summary": { "description": "At most 200 code points. The only text that leaves the home daemon, and only when private is false.", "type": "string", "maxLength": 200 },
         "payload": { "description": "The fields of the kind (event-kinds.json). At most 4 KB. Kept 90 days on the home, never mirrored.", "type": "object" },
         "private": { "description": "True for prompt text: the summary does not leave the user's Macs either. Absent means false.", "const": true }
