@@ -490,25 +490,47 @@ func TestStartAddsTheModelFlags(t *testing.T) {
 }
 
 // slowRun answers each call after delay and counts the calls that run at the same time.
+// When hold is set, a call other than a terminal call waits for hold to close.
 type slowRun struct {
 	delay     time.Duration
+	hold      chan struct{}
 	calls     atomic.Int64
 	now, most atomic.Int64
 	reply     string
 }
 
-func (s *slowRun) Run(ctx context.Context, _ string, _ []string, _ []byte) ([]byte, []byte, error) {
+func (s *slowRun) Run(ctx context.Context, _ string, args []string, _ []byte) ([]byte, []byte, error) {
 	s.calls.Add(1)
 	n := s.now.Add(1)
 	defer s.now.Add(-1)
 	for m := s.most.Load(); n > m && !s.most.CompareAndSwap(m, n); m = s.most.Load() {
 	}
+	var held chan struct{}
+	var after <-chan time.Time
+	if s.hold != nil && args[0] != "terminal" {
+		held = s.hold
+	} else {
+		after = time.After(s.delay)
+	}
 	select {
-	case <-time.After(s.delay):
+	case <-held:
+	case <-after:
 	case <-ctx.Done():
 		return nil, nil, ctx.Err()
 	}
 	return []byte(s.reply), nil, nil
+}
+
+func waitFor(t *testing.T, ok func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if ok() {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("timeout")
 }
 
 func TestCallsHaveALimit(t *testing.T) {
@@ -527,19 +549,24 @@ func TestCallsHaveALimit(t *testing.T) {
 		t.Fatalf("most %d, calls %d", run.most.Load(), run.calls.Load())
 	}
 	// A queued call stops when its context ends, and it starts no process.
+	// The holders keep all slots until release.
+	run.hold = make(chan struct{})
+	release := sync.OnceFunc(func() { close(run.hold) })
+	defer release()
 	for range maxCalls {
 		wg.Go(func() { _, _ = o.call(context.Background(), time.Second, "repo", "list") })
 	}
-	time.Sleep(5 * time.Millisecond)
+	waitFor(t, func() bool { return run.now.Load() == maxCalls })
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
 	defer cancel()
-	if _, err := o.call(ctx, time.Second, "repo", "list"); !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatal(err)
+	if _, err := o.call(ctx, time.Second, "repo", "list"); !errors.Is(err, context.DeadlineExceeded) || run.calls.Load() != 12+maxCalls {
+		t.Fatalf("err %v, calls %d", err, run.calls.Load())
 	}
 	// A wait for an agent takes no slot.
 	if _, err := o.call(context.Background(), time.Second, "terminal", "wait"); err != nil {
 		t.Fatal(err)
 	}
+	release()
 	wg.Wait()
 	if run.calls.Load() != 13+maxCalls || run.most.Load() != maxCalls+1 {
 		t.Fatalf("calls %d, most %d", run.calls.Load(), run.most.Load())
