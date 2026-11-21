@@ -23,8 +23,8 @@ var readActions = map[string]bool{
 	"queue.list": true, "run.explain": true, "run.log": true,
 	"runbook.get": true, "runbook.list": true, "runbook.status": true, "runbook.validate": true,
 	"work.context": true,
-	"vendor.list":  true,
-	"ci.log":       true, "ci.jobs": true, "ci.workflows": true, "ci.refresh": true,
+	"vendor.list":  true, "vendor.skill": true,
+	"ci.log": true, "ci.jobs": true, "ci.workflows": true, "ci.refresh": true,
 }
 
 var safeWord = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)

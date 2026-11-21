@@ -137,6 +137,8 @@ func TestVendorRunUsage(t *testing.T) {
 		{"vendor", "run", "--project", "9x", "--", "wi", "list"},
 		{"vendor", "run", "--bogus", "--", "wi", "list"},
 		{"vendor", "ls", "extra"},
+		{"vendor", "skill"},
+		{"vendor", "skill", "a", "b"},
 	} {
 		if err := c.dispatch(context.Background(), args); exitCode(err) != 2 {
 			t.Errorf("%v: %v", args, err)
@@ -163,6 +165,69 @@ func TestVendorRunTimeoutPartial(t *testing.T) {
 	}
 	if out.String() != "part" || errOut.String() != "slow\n" {
 		t.Fatalf("out %q err %q", out, errOut)
+	}
+}
+
+func TestVendorRunHelpFirst(t *testing.T) {
+	c, _, _, app := vendorCLI(t)
+	answerWith(app, wire.AppCallOK, "ok.", vendorOut(t, wire.VendorRunOutput{Vendor: "plane-cli", Account: "plane:ocral"}))
+	if err := c.dispatch(context.Background(), []string{"vendor", "run", "--project", "X", "--", "--help"}); err != nil {
+		t.Fatal(err)
+	}
+	var got wire.VendorRunArgs
+	if err := json.Unmarshal(app.last(t).Args, &got); err != nil || !reflect.DeepEqual(got.Args, []string{"--help"}) {
+		t.Fatalf("got %+v %v", got, err)
+	}
+}
+
+func skillOut(t *testing.T, o wire.VendorSkillOutput) string {
+	t.Helper()
+	b, err := json.Marshal(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func TestVendorSkillPrintsMarkdown(t *testing.T) {
+	c, out, _, app := vendorCLI(t)
+	md := "# Plane (plane): plane-cli through OverSire\n\n## plane-cli reference\n\n# plane-cli\n"
+	answerWith(app, wire.AppCallOK, "The skill of plane-cli.",
+		skillOut(t, wire.VendorSkillOutput{Vendor: "plane", Binary: "plane-cli", Path: "/usr/local/bin/plane-cli", Reference: "skill", Markdown: md}))
+	if err := c.dispatch(context.Background(), []string{"vendor", "skill", "plane"}); err != nil {
+		t.Fatal(err)
+	}
+	if call, a := app.last(t), app.args(t); call.Action != "vendor.skill" || len(a) != 1 || a["vendor"] != "plane" {
+		t.Fatalf("%s %s", call.Action, call.Args)
+	}
+	if want := "The skill of plane-cli.\n\n" + md; out.String() != want {
+		t.Fatalf("got %q", out)
+	}
+}
+
+func TestVendorSkillJSON(t *testing.T) {
+	c, out, _, app := vendorCLI(t)
+	data := skillOut(t, wire.VendorSkillOutput{Vendor: "github", Binary: "gh", Reference: "help", Markdown: "# GitHub\n"})
+	answerWith(app, wire.AppCallOK, "gh has no skill text. Read its help.", data)
+	if err := c.dispatch(context.Background(), []string{"vendor", "skill", "github", "--json"}); err != nil {
+		t.Fatal(err)
+	}
+	var res wire.AppCallResult
+	err := json.Unmarshal(out.Bytes(), &res)
+	var want, got any
+	json.Unmarshal([]byte(data), &want)
+	json.Unmarshal(res.Data, &got)
+	if err != nil || res.Status != wire.AppCallOK || !jsonEqual(want, got) {
+		t.Fatalf("%s %v", out, err)
+	}
+}
+
+func TestVendorSkillNotAllowedExit1(t *testing.T) {
+	c, out, _, app := vendorCLI(t)
+	answerWith(app, wire.AppCallNotAllowed, "OverSire has no vendor linear. Give bigtimer, github or plane.", "")
+	err := c.dispatch(context.Background(), []string{"vendor", "skill", "linear"})
+	if exitCode(err) != 1 || err.Error() != "OverSire has no vendor linear. Give bigtimer, github or plane." || out.Len() != 0 {
+		t.Fatal(err, out)
 	}
 }
 
@@ -240,7 +305,7 @@ func TestVendorNoAppExit3(t *testing.T) {
 	port := ln.Addr().(*net.TCPAddr).Port
 	ln.Close()
 	c.paths.SaveConfig(config.Config{Roles: []string{config.RoleServe}, Serve: &config.ServeConfig{Port: port}})
-	for _, args := range [][]string{{"vendor", "ls"}, {"vendor", "run", "--project", "X", "--", "wi", "list"}} {
+	for _, args := range [][]string{{"vendor", "ls"}, {"vendor", "run", "--project", "X", "--", "wi", "list"}, {"vendor", "skill", "plane"}} {
 		if err := c.dispatch(context.Background(), args); exitCode(err) != 3 {
 			t.Errorf("%v: %v", args, err)
 		}

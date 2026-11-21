@@ -95,7 +95,7 @@
       "additionalProperties": false
     },
     "VendorRunArgs": {
-      "description": "The args of the app call vendor.run. The app runs the vendor CLI of an account with the token of its Keychain (OVERSIRE-567). Give exactly one of project and account. project is a project key and the app takes its tracker account. account is <provider>:<id> or <id>. args is the command of the vendor CLI with its flags, command first. cwd is the working folder. The app serves vendor.list and vendor.run only from the local CLI, never from a member call.",
+      "description": "The args of the app call vendor.run. The app runs the vendor CLI of an account with the token of its Keychain (OVERSIRE-567). Give exactly one of project and account. project is a project key and the app takes its tracker account. account is <provider>:<id> or <id>. args is the command of the vendor CLI with its flags, command first. cwd is the working folder. The app serves vendor.list, vendor.run and vendor.skill only from the local CLI, never from a member call.",
       "type": "object",
       "properties": {
         "project": { "type": "string", "minLength": 1 },
@@ -139,6 +139,28 @@
         "projects": { "type": "array", "items": { "type": "string" } }
       },
       "required": ["provider", "vendor", "binary", "accounts", "projects"],
+      "additionalProperties": false
+    },
+    "VendorSkillArgs": {
+      "description": "The args of the app call vendor.skill. vendor is a provider id: plane, bigtimer or github. The app serves vendor.skill only from the local CLI, never from a member call. It is a read and writes no event.",
+      "type": "object",
+      "properties": {
+        "vendor": { "type": "string", "minLength": 1 }
+      },
+      "required": ["vendor"],
+      "additionalProperties": false
+    },
+    "VendorSkillOutput": {
+      "description": "The data of a vendor.skill result. markdown is an OverSire header, then the skill text of the vendor CLI (reference skill), a pointer to its help (help), or the install text (notInstalled). path is absent when the vendor CLI is not installed.",
+      "type": "object",
+      "properties": {
+        "vendor": { "description": "The provider id.", "type": "string", "minLength": 1 },
+        "binary": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 },
+        "reference": { "type": "string", "enum": ["skill", "help", "notInstalled"] },
+        "markdown": { "type": "string" }
+      },
+      "required": ["vendor", "binary", "reference", "markdown"],
       "additionalProperties": false
     }
   }

@@ -106,6 +106,7 @@ Usage:
   oversire vendor ls [--json]                          list the vendor CLIs that the app can run, with the version and the state
   oversire vendor run [--project P | --account A] -- <command> [flags]
                                                        run the vendor CLI of the account with the token of the app
+  oversire vendor skill <vendor>                       print how to use the vendor CLI through OverSire
   oversire review ready [--key K] [--kind code|plan] [--note <text>] [--plan <file.md>]
                                                        hand off a group or a plan for review (the agent runs it)
   oversire review reply [--key K] <comment id> "<text>"  answer a review comment (the agent runs it)

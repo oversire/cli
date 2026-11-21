@@ -40,6 +40,9 @@ func TestVendorListIsRead(t *testing.T) {
 	if (Action{Name: "vendor.list"}).Changes() {
 		t.Fatal("vendor.list changes data")
 	}
+	if (Action{Name: "vendor.skill"}).Changes() {
+		t.Fatal("vendor.skill changes data")
+	}
 	if !(Action{Name: "vendor.run"}).Changes() {
 		t.Fatal("vendor.run is a read")
 	}

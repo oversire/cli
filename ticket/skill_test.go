@@ -199,9 +199,16 @@ func TestDoneBodyUsesVendorRun(t *testing.T) {
 
 func TestMainBodyNamesThePassThrough(t *testing.T) {
 	b, _ := NewSkill().Body("", Context{})
-	for _, want := range []string{"oversire vendor run", "oversire vendor ls", "oversire intake"} {
+	for _, want := range []string{"oversire vendor run", "oversire vendor ls", "oversire intake", "oversire vendor skill"} {
 		if !strings.Contains(b, want) {
 			t.Errorf("main body has no %q", want)
 		}
+	}
+}
+
+func TestMainBodyHasNoVendorSkillLoad(t *testing.T) {
+	b, _ := NewSkill().Body("", Context{})
+	if strings.Contains(b, "Load the skill of that vendor CLI") {
+		t.Error("main body still tells the agent to load the vendor skill")
 	}
 }

@@ -40,7 +40,7 @@ Then run `oversire ticket skill <command>` and do its steps.
 - When a command answers "<Tracker> has no X", the tracker does not have that feature. Skip the step and tell the user.
 - Use `oversire` commands first.
 - For tracker work that no `oversire` command does (for example the list and delete of attachments), use the pass-through: `oversire vendor run --project <PROJECT> -- <command> [flags]`. The app on this Mac runs the CLI of the tracker of the project with its own token. Put the command first, then its flags. Do not give a host or a token flag.
-- `oversire vendor ls` shows the vendor CLIs, their accounts and projects. Load the skill of that vendor CLI for its commands. Do not run a vendor CLI directly.
+- `oversire vendor ls` shows the vendor CLIs, their accounts and projects. Before the first `vendor run` for a vendor, run `oversire vendor skill <vendor>` (<vendor> is the PROVIDER of `oversire vendor ls`: plane, bigtimer or github). Do not run a vendor CLI directly.
 - The pass-through sends no stdin. For files, give a path in your folder. The output has at most 1 MB.
 - For the epics and the north star of a project, use `oversire epic` and `oversire project north-star`. The OverSire app on this Mac runs them. Run `oversire epic` with no arguments to see the commands.
 - For CI, use `oversire ci status`, `oversire ci wait` and `oversire ci why`. When a run fails, run `oversire ci why RUN`. For a short cause and fix, run `oversire ci explain RUN`. Do not poll with `gh run watch`, `gh run view` or `gh pr checks`: these calls use the shared GitHub quota. Exit 3 means that no OverSire app answers.

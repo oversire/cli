@@ -1,0 +1,7 @@
+{
+  "vendor": "plane",
+  "binary": "plane-cli",
+  "path": "/usr/local/bin/plane-cli",
+  "reference": "skill",
+  "markdown": "# Plane (plane): plane-cli through OverSire\n\n- Accounts: plane:ocral. Projects: OVERSIRE.\n\n## plane-cli reference\n\n# plane-cli\nUse wi list.\n"
+}

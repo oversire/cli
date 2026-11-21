@@ -1,0 +1,6 @@
+{
+  "vendor": "bigtimer",
+  "binary": "big-timer-cli",
+  "reference": "notInstalled",
+  "markdown": "# Big Timer (bigtimer): big-timer-cli through OverSire\n\n## big-timer-cli reference\n\nbig-timer-cli is not installed. Run `oversire vendor install bigtimer`.\n"
+}

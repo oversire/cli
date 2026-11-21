@@ -15,15 +15,19 @@ import (
 const vendorUsage = `usage:
   oversire vendor ls [--json]
   oversire vendor run [--project P | --account A] [--json] -- <command of the vendor CLI> [its flags]
+  oversire vendor skill <vendor> [--json]
 The app on this Mac runs the vendor CLI of the account (plane-cli, big-timer-cli or gh) with the token of its Keychain.
 --project picks the tracker account of the project. --account is <provider>:<id> or <id>, for example github:oversire.
 vendor ls shows the version, the source (oversire or path) and the state (ok, old, missing) of each vendor CLI.
 vendor run refuses a missing vendor CLI, or one that is older than the version that OverSire needs.
-Put the vendor command first, then its flags. The app refuses the host and token flags, the login and config
-commands, and the stream commands. The output has at most 1 MB. The vendor CLI has 45 s.
+Put the vendor command first, or give help or --help first. The app refuses the host and token flags, the login and
+config commands, and the stream commands. The output has at most 1 MB. The vendor CLI has 45 s.
+On Plane the app sets the workspace, and with --project the project: do not give -w, or -p with --project.
+<vendor> is the PROVIDER of vendor ls: plane, bigtimer or github. vendor skill prints how to use the vendor CLI
+through OverSire. Run it before the first vendor run for a vendor.
 Exit codes: 0 ok, 1 failed, refused, or a vendor exit that is not 0, 2 usage, 3 no daemon or no app.`
 
-// vendor runs `oversire vendor ls|run`.
+// vendor runs `oversire vendor ls|run|skill`.
 func (c *cli) vendor(ctx context.Context, args []string) error {
 	if len(args) == 0 {
 		return &exitError{2, errors.New(vendorUsage)}
@@ -33,6 +37,8 @@ func (c *cli) vendor(ctx context.Context, args []string) error {
 		return c.vendorList(ctx, args[1:])
 	case "run":
 		return c.vendorRun(ctx, args[1:])
+	case "skill":
+		return c.vendorSkill(ctx, args[1:])
 	}
 	return &exitError{2, errors.New(vendorUsage)}
 }
@@ -47,6 +53,27 @@ func (c *cli) vendorList(ctx context.Context, args []string) error {
 		return f.usage(vendorUsage, nil)
 	}
 	return c.runApp(ctx, f, "vendor.list", map[string]any{}, c.printVendors)
+}
+
+func (c *cli) vendorSkill(ctx context.Context, args []string) error {
+	f := newAppFlags("vendor skill")
+	pos, err := f.parse(args)
+	if err != nil {
+		return f.usage(vendorUsage, err)
+	}
+	if len(pos) != 1 {
+		return f.usage(vendorUsage, nil)
+	}
+	return c.runApp(ctx, f, "vendor.skill", map[string]any{"vendor": pos[0]}, c.printVendorSkill)
+}
+
+func (c *cli) printVendorSkill(data json.RawMessage) error {
+	var out wire.VendorSkillOutput
+	if err := json.Unmarshal(data, &out); err != nil {
+		return fmt.Errorf("The app answer is not valid: %w", err)
+	}
+	fmt.Fprint(c.out, "\n"+strings.TrimRight(out.Markdown, "\n")+"\n")
+	return nil
 }
 
 // vendorRun writes the stdout and the stderr of the vendor CLI as they are. A vendor exit that is not 0 gives exit 1.

@@ -59,6 +59,8 @@ func TestDaemonFixtures(t *testing.T) {
 	roundTrip[VendorRunArgs](t, "vendor-run-args")
 	roundTrip[VendorRunOutput](t, "vendor-run-output")
 	roundTrip[VendorCLIRow](t, "vendor-cli-row")
+	roundTrip[VendorSkillArgs](t, "vendor-skill-args")
+	roundTrip[VendorSkillOutput](t, "vendor-skill-output")
 }
 
 func TestSessionSubject(t *testing.T) {
