@@ -46,6 +46,7 @@ func heldVisor(t *testing.T, home, gate string) *agentvisor.Visor {
 // TestRestartDuringTurn restarts the daemon (the runtime and its visor) during a turn. The session goes on,
 // its state stays right, and it is not "working" after the turn ends.
 func TestRestartDuringTurn(t *testing.T) {
+	t.Parallel()
 	home, data := shortHome(t), t.TempDir()
 	gate := filepath.Join(home, "gate")
 	repo := gitRepo(t)
@@ -124,6 +125,7 @@ func TestRestartDuringTurn(t *testing.T) {
 // TestBootAfterOtherSessions boots when the last events of the visor belong to a session of
 // another backend. The filtered replay never gets to the visor head.
 func TestBootAfterOtherSessions(t *testing.T) {
+	t.Parallel()
 	f := setup(t, chat, Options{})
 	ctx := context.Background()
 	ref := f.launch(t, "A-1", runtime.Order{ID: "o1"})

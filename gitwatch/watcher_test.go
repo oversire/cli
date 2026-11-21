@@ -87,6 +87,7 @@ func byKind(got []wire.EventDraft) map[string][]wire.EventDraft {
 }
 
 func TestReflogRows(t *testing.T) {
+	t.Parallel()
 	root, out, mk := setup(t, nil)
 	ctx := context.Background()
 	w := mk()
@@ -169,6 +170,7 @@ func TestReflogRows(t *testing.T) {
 }
 
 func TestAgentCommit(t *testing.T) {
+	t.Parallel()
 	var sessions book
 	root, out, mk := setup(t, &sessions)
 	ctx := context.Background()
@@ -197,6 +199,7 @@ func TestAgentCommit(t *testing.T) {
 
 // A turn that ends before the scan still owns its commit. A commit after the turn is human.
 func TestCommitBeforeTheTurnEnded(t *testing.T) {
+	t.Parallel()
 	var sessions book
 	root, out, mk := setup(t, &sessions)
 	ctx := context.Background()

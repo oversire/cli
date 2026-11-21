@@ -31,12 +31,6 @@ func newWS(t *testing.T) *ws {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("no git")
 	}
-	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
-	for _, k := range []string{"GIT_AUTHOR", "GIT_COMMITTER"} {
-		t.Setenv(k+"_NAME", "t")
-		t.Setenv(k+"_EMAIL", "t@t")
-	}
 	root, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)

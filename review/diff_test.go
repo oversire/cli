@@ -11,6 +11,7 @@ import (
 )
 
 func TestParseDiff(t *testing.T) {
+	t.Parallel()
 	long := "@@ -0,0 +1,3005 @@\n" + strings.Repeat("+x\n", 3005)
 	tests := []struct {
 		name      string
@@ -104,6 +105,7 @@ func TestParseDiff(t *testing.T) {
 }
 
 func TestFileDiff(t *testing.T) {
+	t.Parallel()
 	var d wire.FileDiff
 	fileDiff([]byte("a\r\nb\n"), &d, MaxDiffLines)
 	want := []wire.DiffHunk{{NewStart: 1, NewLines: 2, Lines: []wire.DiffLine{{Kind: wire.DiffAdd, New: 1, Text: "a"}, {Kind: wire.DiffAdd, New: 2, Text: "b"}}}}
@@ -128,6 +130,7 @@ func TestFileDiff(t *testing.T) {
 }
 
 func TestExcerpt(t *testing.T) {
+	t.Parallel()
 	d := wire.FileDiff{Hunks: []wire.DiffHunk{{Lines: []wire.DiffLine{
 		{Kind: wire.DiffCtx, Old: 1, New: 1, Text: "a"},
 		{Kind: wire.DiffDel, Old: 2, Text: "b"},
@@ -151,6 +154,7 @@ func TestExcerpt(t *testing.T) {
 }
 
 func TestParseNameStatus(t *testing.T) {
+	t.Parallel()
 	out := "M\x00lib.go\x00A\x00new.go\x00D\x00old.go\x00R087\x00a.go\x00b.go\x00C100\x00x.go\x00y.go\x00T\x00link\x00"
 	got := parseNameStatus("app", out)
 	want := []wire.ReviewFile{
@@ -167,6 +171,7 @@ func TestParseNameStatus(t *testing.T) {
 }
 
 func TestParseLog(t *testing.T) {
+	t.Parallel()
 	log := "b2\x1f2026-11-01T10:00:00+01:00\x1fSecond\x1fBody\n\nItem: app-3, APP-4\n\x1e\n" +
 		"a1\x1f2026-11-01T08:00:00Z\x1fFirst\x1fItem: APP-1\x1e\n"
 	commits, newest := parseLog(log)
@@ -180,6 +185,7 @@ func TestParseLog(t *testing.T) {
 }
 
 func TestOrderSort(t *testing.T) {
+	t.Parallel()
 	got := Order{"agent-binder", "oversire", "cloud", "cli"}.Sort([]string{"cli", "zeta", "oversire", "alpha", "agent-binder"})
 	if fmt.Sprint(got) != "[agent-binder oversire cli alpha zeta]" {
 		t.Fatal(got)
@@ -190,6 +196,7 @@ func TestOrderSort(t *testing.T) {
 }
 
 func TestValidKey(t *testing.T) {
+	t.Parallel()
 	for k, ok := range map[string]bool{"OVERSIRE-365": true, "APP_1": true, "app-1": false, "": false, "-A": false, "A/B": false} {
 		if validKey(k) != ok {
 			t.Errorf("%q", k)

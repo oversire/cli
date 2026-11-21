@@ -23,6 +23,7 @@ type stopFailHost struct {
 func (h *stopFailHost) Stop(context.Context, string) error { return h.err }
 
 func TestRemoveWorkspaceKeepsTheWorkdirWhenStopFails(t *testing.T) {
+	t.Parallel()
 	errStop := errors.New("stop failed")
 	f := setupWith(t, chat, Options{}, func(v *agentvisor.Visor) Host { return &stopFailHost{Host: v, err: errStop} })
 	ref := f.launch(t, "APP-3", runtime.Order{ID: "o1"})
@@ -42,6 +43,7 @@ func TestRemoveWorkspaceKeepsTheWorkdirWhenStopFails(t *testing.T) {
 }
 
 func TestRemoveWorkspaceRemovesAWorktree(t *testing.T) {
+	t.Parallel()
 	f := setup(t, chat, Options{})
 	ref := f.launch(t, "APP-3", runtime.Order{ID: "o1"})
 	f.rec.wait(t, ref.ID, wire.SessionWaitingInput)

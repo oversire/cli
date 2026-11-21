@@ -49,6 +49,7 @@ func readers(root string) func(string) (digest.Reader, error) {
 }
 
 func TestHistory(t *testing.T) {
+	t.Parallel()
 	f := setup(t, withID, Options{})
 	root := projects(t)
 	f.rt.digests = readers(root)
@@ -88,6 +89,7 @@ func TestHistory(t *testing.T) {
 }
 
 func TestHistoryOfOldSession(t *testing.T) {
+	t.Parallel()
 	data := t.TempDir()
 	os.MkdirAll(filepath.Join(data, "sessions"), 0o700)
 	os.WriteFile(filepath.Join(data, "sessions", "s-0b.json"), []byte(`{"agent":"fake","harnessSession":"sess-1"}`), 0o600)
@@ -99,6 +101,7 @@ func TestHistoryOfOldSession(t *testing.T) {
 }
 
 func TestHistoryWithoutHarnessID(t *testing.T) {
+	t.Parallel()
 	f := setup(t, chat, Options{})
 	f.rt.digests = readers(t.TempDir())
 	ref := f.launch(t, "APP-8", runtime.Order{ID: "o1"})

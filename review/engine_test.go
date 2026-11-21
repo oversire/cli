@@ -15,6 +15,7 @@ import (
 )
 
 func TestOneRepo(t *testing.T) {
+	t.Parallel()
 	w := newWS(t)
 	w.repo("app")
 	g := w.group("app-1", "app")
@@ -69,6 +70,7 @@ func TestOneRepo(t *testing.T) {
 }
 
 func TestThreeReposWithLink(t *testing.T) {
+	t.Parallel()
 	w := newWS(t)
 	for _, n := range []string{"cli", "cloud", "oversire"} {
 		w.repo(n)
@@ -108,6 +110,7 @@ func TestThreeReposWithLink(t *testing.T) {
 }
 
 func TestBaseMoved(t *testing.T) {
+	t.Parallel()
 	w := newWS(t)
 	app := w.repo("app")
 	g := w.group("app-1", "app")
@@ -126,6 +129,7 @@ func TestBaseMoved(t *testing.T) {
 }
 
 func TestConflictState(t *testing.T) {
+	t.Parallel()
 	w := newWS(t)
 	app := w.repo("app")
 	g := w.group("app-1", "app")
@@ -139,6 +143,7 @@ func TestConflictState(t *testing.T) {
 }
 
 func TestUntrackedAndDirty(t *testing.T) {
+	t.Parallel()
 	w := newWS(t)
 	w.repo("app")
 	g := w.group("app-1", "app")
@@ -163,6 +168,7 @@ func TestUntrackedAndDirty(t *testing.T) {
 }
 
 func TestRenameAndBinary(t *testing.T) {
+	t.Parallel()
 	w := newWS(t)
 	w.repo("app")
 	g := w.group("app-1", "app")
@@ -200,6 +206,7 @@ func TestRenameAndBinary(t *testing.T) {
 }
 
 func TestEmptyGroupNotListed(t *testing.T) {
+	t.Parallel()
 	w := newWS(t)
 	w.repo("app")
 	w.group("app-1", "app")
@@ -213,6 +220,7 @@ func TestEmptyGroupNotListed(t *testing.T) {
 }
 
 func TestSessionLookup(t *testing.T) {
+	t.Parallel()
 	w := newWS(t)
 	w.repo("app")
 	g := w.group("app-1", "app")
@@ -284,6 +292,7 @@ func numbered(n int, change map[int]string) string {
 }
 
 func TestFullDiff(t *testing.T) {
+	t.Parallel()
 	w := newWS(t)
 	w.commit(w.repo("app"), "Add the file", map[string]string{"big.txt": numbered(100, nil)})
 	g := w.group("app-1", "app")
@@ -308,6 +317,7 @@ func TestFullDiff(t *testing.T) {
 }
 
 func TestFullDiffOfAnUntrackedFile(t *testing.T) {
+	t.Parallel()
 	w := newWS(t)
 	w.repo("app")
 	g := w.group("app-1", "app")
@@ -325,6 +335,7 @@ func TestFullDiffOfAnUntrackedFile(t *testing.T) {
 }
 
 func TestFullDiffOfALongFileFallsBack(t *testing.T) {
+	t.Parallel()
 	w := newWS(t)
 	n := MaxFullDiffLines + 1
 	w.commit(w.repo("app"), "Add the file", map[string]string{"long.txt": numbered(n, nil)})
@@ -342,6 +353,7 @@ func TestFullDiffOfALongFileFallsBack(t *testing.T) {
 }
 
 func TestGroupRepos(t *testing.T) {
+	t.Parallel()
 	w := newWS(t)
 	w.repo("app")
 	g := w.group("app-1", "app")

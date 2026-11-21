@@ -23,6 +23,7 @@ func codeRig(t *testing.T) (*ws, *rig, string) {
 }
 
 func TestCommentRules(t *testing.T) {
+	t.Parallel()
 	_, r, _ := codeRig(t)
 	ctx := context.Background()
 	for name, d := range map[string]wire.CommentDraft{
@@ -87,6 +88,7 @@ func TestCommentRules(t *testing.T) {
 }
 
 func TestReadyConflict(t *testing.T) {
+	t.Parallel()
 	w := newWS(t)
 	app := w.repo("app")
 	g := w.group("app-1", "app")
@@ -115,6 +117,7 @@ func TestReadyConflict(t *testing.T) {
 }
 
 func TestPlan(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	root := t.TempDir()
 	ctx := context.Background()
@@ -181,6 +184,7 @@ func TestPlan(t *testing.T) {
 }
 
 func TestStoreKeepsReviews(t *testing.T) {
+	t.Parallel()
 	w := newWS(t)
 	w.repo("app")
 	g := w.group("app-1", "app")
@@ -217,6 +221,7 @@ func TestStoreKeepsReviews(t *testing.T) {
 }
 
 func TestAChangeClearsTheViewedMark(t *testing.T) {
+	t.Parallel()
 	w := newWS(t)
 	w.repo("app")
 	g := w.group("app-2", "app")

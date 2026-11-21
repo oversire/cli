@@ -21,6 +21,7 @@ func TestLive(t *testing.T) {
 	if os.Getenv("OVERSIRE_LIVE") != "1" {
 		t.Skip("set OVERSIRE_LIVE=1 to run a real harness")
 	}
+	t.Parallel()
 	agent := cmp.Or(os.Getenv("OVERSIRE_LIVE_AGENT"), "claude")
 	repo := gitRepo(t)
 	v, err := agentvisor.New(context.Background(), agentvisor.Options{Home: shortHome(t), Client: "oversire-live"})

@@ -42,6 +42,7 @@ func (f fixture) inspect(t *testing.T, ref wire.SessionRef) runtime.Inspection {
 }
 
 func TestSpecAddsTheOverseerLabelAndAuto(t *testing.T) {
+	t.Parallel()
 	var spy *startSpy
 	f := setupWith(t, chat, Options{}, func(v *agentvisor.Visor) Host {
 		spy = &startSpy{Visor: v}
@@ -66,6 +67,7 @@ func TestSpecAddsTheOverseerLabelAndAuto(t *testing.T) {
 }
 
 func TestAdoptedSessionKeepsTheOverseer(t *testing.T) {
+	t.Parallel()
 	f := setup(t, chat, Options{})
 	ref := f.overseen(t, "APP-22")
 	f.rec.wait(t, ref.ID, wire.SessionWaitingInput)
@@ -80,6 +82,7 @@ func TestAdoptedSessionKeepsTheOverseer(t *testing.T) {
 }
 
 func TestFirstPromptOfAnOverseenStartIsOverseer(t *testing.T) {
+	t.Parallel()
 	f := setup(t, chat, Options{})
 	ref := f.overseen(t, "APP-23")
 	f.rec.wait(t, ref.ID, wire.SessionWaitingInput)
@@ -90,6 +93,7 @@ func TestFirstPromptOfAnOverseenStartIsOverseer(t *testing.T) {
 }
 
 func TestResultUsageAddsTokens(t *testing.T) {
+	t.Parallel()
 	f := setup(t, counted, Options{})
 	ref := f.launch(t, "APP-24", runtime.Order{ID: "o1"})
 	f.rec.wait(t, ref.ID, wire.SessionWaitingInput)
@@ -101,6 +105,7 @@ func TestResultUsageAddsTokens(t *testing.T) {
 }
 
 func TestInspectGivesTheLastTurnAndAnUnknownSessionIsNotFound(t *testing.T) {
+	t.Parallel()
 	f := setup(t, chat, Options{})
 	ref := f.launch(t, "APP-25", runtime.Order{ID: "o1"})
 	f.rec.wait(t, ref.ID, wire.SessionWaitingInput)
@@ -114,6 +119,7 @@ func TestInspectGivesTheLastTurnAndAnUnknownSessionIsNotFound(t *testing.T) {
 }
 
 func TestPublishHidesTheAskOfAnOverseenSession(t *testing.T) {
+	t.Parallel()
 	f := setup(t, asks, Options{})
 	ref := f.overseen(t, "APP-26")
 	s := f.rec.wait(t, ref.ID, wire.SessionWaitingPermission)
@@ -134,6 +140,7 @@ func TestPublishHidesTheAskOfAnOverseenSession(t *testing.T) {
 }
 
 func TestEscalateNilPublishesTheOpenAsk(t *testing.T) {
+	t.Parallel()
 	f := setup(t, asks, Options{})
 	ref := f.overseen(t, "APP-27")
 	f.rec.wait(t, ref.ID, wire.SessionWaitingPermission)
@@ -159,6 +166,7 @@ func escalation(id string) *wire.RunnerQuestion {
 }
 
 func TestEscalateQuestionSurvivesATurnEnd(t *testing.T) {
+	t.Parallel()
 	f := setup(t, chat, Options{})
 	ctx := context.Background()
 	ref := f.overseen(t, "APP-28")
@@ -192,6 +200,7 @@ func TestEscalateQuestionSurvivesATurnEnd(t *testing.T) {
 }
 
 func TestEscalateAnswerGoesToTheWorkerAsUserText(t *testing.T) {
+	t.Parallel()
 	var host *recordingHost
 	f := setupWith(t, chat, Options{}, func(v *agentvisor.Visor) Host { host = &recordingHost{Host: v}; return host })
 	ctx := context.Background()
@@ -220,6 +229,7 @@ func TestEscalateAnswerGoesToTheWorkerAsUserText(t *testing.T) {
 }
 
 func TestEscalateAnswerNeedsText(t *testing.T) {
+	t.Parallel()
 	f := setup(t, chat, Options{})
 	ctx := context.Background()
 	ref := f.overseen(t, "APP-30")
@@ -237,6 +247,7 @@ func TestEscalateAnswerNeedsText(t *testing.T) {
 }
 
 func TestOverseenPermissionUsesTheLongTimeout(t *testing.T) {
+	t.Parallel()
 	f := setup(t, asks, Options{PermissionTimeout: time.Minute, OverseenTimeout: 2 * time.Hour})
 	ref := f.overseen(t, "APP-31")
 	plain := f.launch(t, "APP-32", runtime.Order{ID: "o2"})
@@ -254,6 +265,7 @@ func TestOverseenPermissionUsesTheLongTimeout(t *testing.T) {
 }
 
 func TestNewDefaultsTheOverseenTimeout(t *testing.T) {
+	t.Parallel()
 	if got := New(Options{}, nil, nil, nil).opts.OverseenTimeout; got != 40*time.Minute {
 		t.Fatal(got)
 	}

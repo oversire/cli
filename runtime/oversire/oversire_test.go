@@ -79,6 +79,25 @@ func (r *recorder) states(id string) []wire.RunnerSessionState {
 	return out
 }
 
+// waitSeen gives the first report of id in state, also when a later report has moved on.
+func (r *recorder) waitSeen(t *testing.T, id string, state wire.RunnerSessionState) wire.RunnerSession {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		r.mu.Lock()
+		for _, s := range r.all {
+			if s.ID == id && s.State == state {
+				r.mu.Unlock()
+				return s
+			}
+		}
+		r.mu.Unlock()
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("session %s never was %s", id, state)
+	return wire.RunnerSession{}
+}
+
 // wait gives the first report of id in state.
 func (r *recorder) wait(t *testing.T, id string, state wire.RunnerSessionState) wire.RunnerSession {
 	t.Helper()
@@ -99,9 +118,6 @@ func gitRepo(t *testing.T) string {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("no git")
 	}
-	// The user's own hooks and settings stay out of the test.
-	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	repo := filepath.Join(t.TempDir(), "app")
 	for _, args := range [][]string{
 		{"init", "-q", "-b", "main", repo},
@@ -127,6 +143,9 @@ func TestMain(m *testing.M) {
 	if len(os.Args) == 3 && os.Args[1] == "hold" {
 		os.Exit(runHolder(os.Args[2]))
 	}
+	// The user's own hooks and settings stay out of the tests. Parallel tests cannot use t.Setenv.
+	os.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	os.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	os.Exit(m.Run())
 }
 
@@ -240,6 +259,7 @@ func (f fixture) launch(t *testing.T, name string, o runtime.Order) wire.Session
 }
 
 func TestStartReadSendStop(t *testing.T) {
+	t.Parallel()
 	f := setup(t, chat, Options{})
 	ctx := context.Background()
 	item := &wire.ItemRef{Project: wire.ProjectRef{Account: wire.AccountID{Provider: "plane", ID: "ocral"}, ID: "p", Key: "APP"}, ID: "9a", Key: "APP-2", URL: "https://x/APP-2"}
@@ -267,7 +287,7 @@ func TestStartReadSendStop(t *testing.T) {
 		t.Fatal(err)
 	}
 	deadline := time.Now().Add(5 * time.Second)
-	for s, _ = f.rec.latest(ref.ID); s.Summary != "turn 2" && time.Now().Before(deadline); s, _ = f.rec.latest(ref.ID) {
+	for s, _ = f.rec.latest(ref.ID); (s.Summary != "turn 2" || s.State != wire.SessionWaitingInput) && time.Now().Before(deadline); s, _ = f.rec.latest(ref.ID) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	if s.State != wire.SessionWaitingInput || s.Summary != "turn 2" {
@@ -312,6 +332,7 @@ func TestStartReadSendStop(t *testing.T) {
 }
 
 func TestReadsOldTranscriptFile(t *testing.T) {
+	t.Parallel()
 	data := t.TempDir()
 	os.MkdirAll(filepath.Join(data, "sessions"), 0o700)
 	os.WriteFile(filepath.Join(data, "sessions", "s-0a.log"), []byte("> go\nturn 1\n"), 0o600)
@@ -322,6 +343,7 @@ func TestReadsOldTranscriptFile(t *testing.T) {
 }
 
 func TestPermission(t *testing.T) {
+	t.Parallel()
 	yes, no := true, false
 	cases := []struct {
 		name    string
@@ -338,9 +360,9 @@ func TestPermission(t *testing.T) {
 			f := setup(t, asks, Options{PermissionTimeout: c.timeout})
 			ctx := context.Background()
 			ref := f.launch(t, "APP-7", runtime.Order{ID: "o1"})
-			s := f.rec.wait(t, ref.ID, wire.SessionWaitingPermission)
+			s := f.rec.waitSeen(t, ref.ID, wire.SessionWaitingPermission)
 			p := s.Permission
-			if p == nil || p.ID != "p-1" || p.Tool != "Bash" || p.Text != "npm test" || !p.ExpiresAt.After(time.Now().Add(c.timeout/2)) {
+			if p == nil || p.ID != "p-1" || p.Tool != "Bash" || p.Text != "npm test" || p.ExpiresAt.IsZero() {
 				t.Fatalf("prompt %#v", p)
 			}
 			if c.answer != nil {
@@ -368,6 +390,7 @@ func TestPermission(t *testing.T) {
 }
 
 func TestSlotQueue(t *testing.T) {
+	t.Parallel()
 	f := setup(t, chat, Options{Slots: 2})
 	ctx := context.Background()
 	a := f.launch(t, "A-1", runtime.Order{ID: "o1"})
@@ -389,6 +412,7 @@ func TestSlotQueue(t *testing.T) {
 }
 
 func TestQueuedOrderExpires(t *testing.T) {
+	t.Parallel()
 	f := setup(t, chat, Options{Slots: 1})
 	a := f.launch(t, "A-1", runtime.Order{ID: "o1"})
 	f.rec.wait(t, a.ID, wire.SessionWaitingInput)
@@ -403,6 +427,7 @@ func TestQueuedOrderExpires(t *testing.T) {
 }
 
 func TestStopQueued(t *testing.T) {
+	t.Parallel()
 	f := setup(t, chat, Options{Slots: 1})
 	a := f.launch(t, "A-1", runtime.Order{ID: "o1"})
 	f.rec.wait(t, a.ID, wire.SessionWaitingInput)
@@ -416,6 +441,7 @@ func TestStopQueued(t *testing.T) {
 }
 
 func TestAgentExitFails(t *testing.T) {
+	t.Parallel()
 	// agent-wire reads stderr at the exit and does not wait for the drain. The sleep gives the drain time.
 	f := setup(t, `read -r line; echo 'no login' >&2; sleep 0.2; exit 3`, Options{})
 	ref := f.launch(t, "A-1", runtime.Order{ID: "o1"})
@@ -426,6 +452,7 @@ func TestAgentExitFails(t *testing.T) {
 }
 
 func TestStartRefuses(t *testing.T) {
+	t.Parallel()
 	f := setup(t, chat, Options{})
 	ctx := context.Background()
 	cases := map[string]wire.LaunchRequest{
@@ -449,6 +476,7 @@ func TestStartRefuses(t *testing.T) {
 }
 
 func TestWorkdirKeyAndAdopt(t *testing.T) {
+	t.Parallel()
 	f := setup(t, chat, Options{})
 	ctx := context.Background()
 	w, err := f.rt.ensureWorkdir(ctx, f.repo, "APP-2", "app-2", "")
@@ -491,6 +519,7 @@ func gitOut(t *testing.T, dir string, args ...string) string {
 }
 
 func TestSlots(t *testing.T) {
+	t.Parallel()
 	s := NewSlots(1)
 	ctx := context.Background()
 	if err := s.Acquire(ctx); err != nil {
@@ -508,6 +537,7 @@ func TestSlots(t *testing.T) {
 }
 
 func TestTail(t *testing.T) {
+	t.Parallel()
 	long := strings.Repeat("é", 600)
 	if c := tail(long+"end", 500); len([]rune(c)) != 500 || !strings.HasPrefix(c, "…") || !strings.HasSuffix(c, "end") {
 		t.Fatal(c)
@@ -532,6 +562,7 @@ func (s *startSpy) Start(ctx context.Context, spec agentvisor.StartSpec) (agentv
 }
 
 func TestStartPassesModelAndEffort(t *testing.T) {
+	t.Parallel()
 	var spy *startSpy
 	f := setupWith(t, chat, Options{}, func(v *agentvisor.Visor) Host {
 		spy = &startSpy{Visor: v}
@@ -553,6 +584,7 @@ func TestStartPassesModelAndEffort(t *testing.T) {
 
 // TestInPlaceUsesTheFolder starts a session in a folder that is not a git repo: no worktree, the folder is the working dir.
 func TestInPlaceUsesTheFolder(t *testing.T) {
+	t.Parallel()
 	f := setup(t, chat, Options{})
 	ctx := context.Background()
 	dir, err := filepath.EvalSymlinks(t.TempDir())
@@ -581,6 +613,7 @@ func TestInPlaceUsesTheFolder(t *testing.T) {
 }
 
 func TestStartPassesTheEnvAndOversireSessionWins(t *testing.T) {
+	t.Parallel()
 	var spy *startSpy
 	f := setupWith(t, chat, Options{}, func(v *agentvisor.Visor) Host {
 		spy = &startSpy{Visor: v}

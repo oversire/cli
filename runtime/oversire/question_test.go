@@ -94,6 +94,7 @@ func setupAsk(t *testing.T, script string) (fixture, *askHarness) {
 }
 
 func TestAskUserQuestion(t *testing.T) {
+	t.Parallel()
 	f, h := setupAsk(t, askScript(true))
 	ctx := context.Background()
 	ref := f.launch(t, "APP-8", runtime.Order{ID: "o1"})
@@ -144,6 +145,7 @@ func TestAskUserQuestion(t *testing.T) {
 }
 
 func TestAssistantClearsQuestion(t *testing.T) {
+	t.Parallel()
 	f, h := setupAsk(t, askScript(false))
 	ref := f.launch(t, "APP-9", runtime.Order{ID: "o1"})
 	s := f.rec.wait(t, ref.ID, wire.SessionWaitingInput)
@@ -175,6 +177,7 @@ func TestAssistantClearsQuestion(t *testing.T) {
 }
 
 func TestBadAskInputIsAPermission(t *testing.T) {
+	t.Parallel()
 	f, _ := setupAsk(t, `read -r line
 echo '{"type":"permission","id":"q-1","tool":"AskUserQuestion","question":"not json"}'
 while read -r l; do :; done`)

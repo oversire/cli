@@ -77,6 +77,7 @@ func next(t *testing.T, live <-chan wire.SessionTurn) wire.SessionTurn {
 }
 
 func TestChatTurns(t *testing.T) {
+	t.Parallel()
 	f := setup(t, tools, Options{})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -143,6 +144,7 @@ func TestChatTurns(t *testing.T) {
 }
 
 func TestChatOfOldSession(t *testing.T) {
+	t.Parallel()
 	data := t.TempDir()
 	os.MkdirAll(filepath.Join(data, "sessions"), 0o700)
 	lines := `{"seq":1,"role":"user","at":"2026-01-01T00:00:00Z","text":"go"}
@@ -162,6 +164,7 @@ func TestChatOfOldSession(t *testing.T) {
 }
 
 func TestChatDeltasThenFullBlock(t *testing.T) {
+	t.Parallel()
 	f := setup(t, tools, Options{})
 	ref := f.launch(t, "APP-9", runtime.Order{ID: "o1"})
 	f.rec.wait(t, ref.ID, wire.SessionWaitingInput)
@@ -191,6 +194,7 @@ func TestChatDeltasThenFullBlock(t *testing.T) {
 }
 
 func TestChatClipsTools(t *testing.T) {
+	t.Parallel()
 	l := newTurnLog()
 	l.tool(&agentwire.ToolEvent{ID: "t", Name: "Bash", Input: strings.Repeat("a", 300), Status: "started"}, time.Now())
 	l.tool(&agentwire.ToolEvent{ID: "t", Name: "Bash", Output: strings.Repeat("b", 3000), Status: "failed"}, time.Now())
@@ -209,6 +213,7 @@ func TestChatClipsTools(t *testing.T) {
 }
 
 func TestChatFromTranscript(t *testing.T) {
+	t.Parallel()
 	f := setup(t, withID, Options{})
 	root := projects(t)
 	ctx := context.Background()
@@ -246,6 +251,7 @@ var (
 )
 
 func TestChatInterrupt(t *testing.T) {
+	t.Parallel()
 	f := setup(t, tools, Options{})
 	ref := f.launch(t, "APP-10", runtime.Order{ID: "o1"})
 	f.rec.wait(t, ref.ID, wire.SessionWaitingInput)
@@ -305,6 +311,7 @@ func (h *recordingHost) last() agentvisor.Input {
 }
 
 func TestSayMarksTheUserTurnWithTheOrigin(t *testing.T) {
+	t.Parallel()
 	var host *recordingHost
 	f := setupWith(t, chat, Options{}, func(v *agentvisor.Visor) Host { host = &recordingHost{Host: v}; return host })
 	ref := f.launch(t, "APP-11", runtime.Order{ID: "o1"})
@@ -327,6 +334,7 @@ func TestSayMarksTheUserTurnWithTheOrigin(t *testing.T) {
 }
 
 func TestOriginSurvivesTheReplay(t *testing.T) {
+	t.Parallel()
 	f := setup(t, chat, Options{})
 	ref := f.launch(t, "APP-12", runtime.Order{ID: "o1"})
 	f.rec.wait(t, ref.ID, wire.SessionWaitingInput)
@@ -346,6 +354,7 @@ func TestOriginSurvivesTheReplay(t *testing.T) {
 }
 
 func TestRestartPromptGivesOriginSystem(t *testing.T) {
+	t.Parallel()
 	f := setup(t, chat, Options{})
 	ref := f.launch(t, "APP-13", runtime.Order{ID: "o1"})
 	f.rec.wait(t, ref.ID, wire.SessionWaitingInput)
@@ -361,6 +370,7 @@ func TestRestartPromptGivesOriginSystem(t *testing.T) {
 }
 
 func TestUserTurnWithNoKindIsUser(t *testing.T) {
+	t.Parallel()
 	f := setup(t, chat, Options{})
 	ref := f.launch(t, "APP-14", runtime.Order{ID: "o1"})
 	f.rec.wait(t, ref.ID, wire.SessionWaitingInput)
@@ -376,6 +386,7 @@ func TestUserTurnWithNoKindIsUser(t *testing.T) {
 }
 
 func TestChatSendGivesOriginUser(t *testing.T) {
+	t.Parallel()
 	f := setup(t, chat, Options{})
 	ref := f.launch(t, "APP-15", runtime.Order{ID: "o1"})
 	f.rec.wait(t, ref.ID, wire.SessionWaitingInput)

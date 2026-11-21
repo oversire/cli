@@ -76,6 +76,7 @@ func waitOutput(t *testing.T, snap term.Snapshot, ch <-chan term.Chunk, want str
 }
 
 func TestHandoverToTerminalAndBack(t *testing.T) {
+	t.Parallel()
 	f := setupDriver(t, agentwire.FakeDriver{Script: vendorChat}, Options{}, func(v *agentvisor.Visor) Host { return v }, resumeTUI)
 	ctx := context.Background()
 	ref := f.launch(t, "tui", runtime.Order{ID: "o1"})
@@ -101,7 +102,15 @@ func TestHandoverToTerminalAndBack(t *testing.T) {
 	}
 	actx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	snap, ch, err := src.Attach(actx, term.Viewport{Cols: 80, Rows: 24})
+	// The view flips before the process is up. Attach again until it is.
+	var snap term.Snapshot
+	var ch <-chan term.Chunk
+	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		snap, ch, err = src.Attach(actx, term.Viewport{Cols: 80, Rows: 24})
+		if !errors.Is(err, agentvisor.ErrState) || time.Now().After(deadline) {
+			break
+		}
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,8 +121,16 @@ func TestHandoverToTerminalAndBack(t *testing.T) {
 	waitOutput(t, term.Snapshot{}, ch, "got:hello")
 
 	// The move to chat waits until the agent CLI exits.
-	if err := f.rt.Handover(ctx, ref.ID, wire.SessionViewChat); err != nil {
-		t.Fatal(err)
+	// The first move can still run when the view flips. Ask again until it ends.
+	var err2 error
+	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		err2 = f.rt.Handover(ctx, ref.ID, wire.SessionViewChat)
+		if err2 == nil || !strings.Contains(err2.Error(), "moves now") || time.Now().After(deadline) {
+			break
+		}
+	}
+	if err2 != nil {
+		t.Fatal(err2)
 	}
 	if err := f.rt.Handover(ctx, ref.ID, wire.SessionViewChat); !errors.Is(err, runtime.ErrConflict) {
 		t.Fatalf("a second move: %v", err)
@@ -140,6 +157,7 @@ func TestHandoverToTerminalAndBack(t *testing.T) {
 }
 
 func TestHandoverRefusals(t *testing.T) {
+	t.Parallel()
 	f := setupDriver(t, agentwire.FakeDriver{Script: vendorChat}, Options{}, func(v *agentvisor.Visor) Host { return v }, TerminalCommand)
 	ctx := context.Background()
 	if err := f.rt.Handover(ctx, "s-none", wire.SessionViewTerminal); !errors.Is(err, runtime.ErrNotFound) {
@@ -160,6 +178,7 @@ func TestHandoverRefusals(t *testing.T) {
 }
 
 func TestTerminalCommand(t *testing.T) {
+	t.Parallel()
 	sess := agentvisor.Session{VendorID: "v1"}
 	for _, c := range []struct {
 		l    agentvisor.Launch

@@ -15,6 +15,7 @@ import (
 )
 
 func TestMergeFastForward(t *testing.T) {
+	t.Parallel()
 	w := newWS(t)
 	app := w.repo("app")
 	remote := filepath.Join(t.TempDir(), "app.git")
@@ -64,6 +65,7 @@ func TestMergeFastForward(t *testing.T) {
 }
 
 func TestMergeRebasesFirst(t *testing.T) {
+	t.Parallel()
 	w := newWS(t)
 	app := w.repo("app")
 	g := w.group("app-1", "app")
@@ -81,6 +83,7 @@ func TestMergeRebasesFirst(t *testing.T) {
 }
 
 func TestMergeConflict(t *testing.T) {
+	t.Parallel()
 	w := newWS(t)
 	app := w.repo("app")
 	g := w.group("app-1", "app")
@@ -109,6 +112,7 @@ func TestMergeConflict(t *testing.T) {
 }
 
 func TestMergeAllOrNone(t *testing.T) {
+	t.Parallel()
 	w := newWS(t)
 	ov, cli := w.repo("oversire"), w.repo("cli")
 	g := w.group("os-5", "cli", "oversire")
@@ -135,6 +139,7 @@ func TestMergeAllOrNone(t *testing.T) {
 }
 
 func TestMergeChecks(t *testing.T) {
+	t.Parallel()
 	w := newWS(t)
 	app := w.repo("app")
 	g := w.group("app-1", "app")
@@ -169,6 +174,7 @@ func TestMergeChecks(t *testing.T) {
 }
 
 func TestMergeRemovesGroup(t *testing.T) {
+	t.Parallel()
 	w := newWS(t)
 	for _, n := range []string{"cli", "cloud", "oversire"} {
 		w.repo(n)
@@ -216,6 +222,7 @@ func TestMergeRemovesGroup(t *testing.T) {
 
 // A change in the primary checkout in a file that the branch does not change stays through the merge.
 func TestMergeKeepsPrimaryChanges(t *testing.T) {
+	t.Parallel()
 	w := newWS(t)
 	app := w.repo("app")
 	g := w.group("app-1", "app")
@@ -235,6 +242,7 @@ func TestMergeKeepsPrimaryChanges(t *testing.T) {
 }
 
 func TestMergeKeepsUnknownFiles(t *testing.T) {
+	t.Parallel()
 	w := newWS(t)
 	w.repo("app")
 	g := w.group("app-1", "app")
@@ -251,6 +259,7 @@ func TestMergeKeepsUnknownFiles(t *testing.T) {
 }
 
 func TestNotPushedItems(t *testing.T) {
+	t.Parallel()
 	w := newWS(t)
 	app := w.repo("app")
 	remote := filepath.Join(t.TempDir(), "app.git")

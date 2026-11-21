@@ -41,6 +41,7 @@ func session(id string, state wire.SessionPhase, since time.Time, cwd string) wi
 }
 
 func TestSubmitIdle(t *testing.T) {
+	t.Parallel()
 	w, r, g := codeRig(t)
 	ctx := context.Background()
 	r.book.put(session("s1", wire.PhaseWaiting, r.clock.now(), filepath.Join(g, "app")))
@@ -80,6 +81,7 @@ func TestSubmitIdle(t *testing.T) {
 }
 
 func TestSubmitWorkingQueuesTwoBatches(t *testing.T) {
+	t.Parallel()
 	_, r, g := codeRig(t)
 	ctx := context.Background()
 	t0 := r.clock.now()
@@ -130,6 +132,7 @@ func TestSubmitWorkingQueuesTwoBatches(t *testing.T) {
 }
 
 func TestSubmitEndedStartsSession(t *testing.T) {
+	t.Parallel()
 	w, r, g := codeRig(t)
 	ctx := context.Background()
 	// The session of the group was seen once, then it went away.
@@ -164,6 +167,7 @@ func TestSubmitEndedStartsSession(t *testing.T) {
 }
 
 func TestSubmitFailures(t *testing.T) {
+	t.Parallel()
 	_, r, g := codeRig(t)
 	ctx := context.Background()
 	// No session and no agent: the round keeps the error, the call works.
@@ -193,6 +197,7 @@ func TestSubmitFailures(t *testing.T) {
 }
 
 func TestSubmitPlan(t *testing.T) {
+	t.Parallel()
 	r := newRig(t)
 	root := t.TempDir()
 	ctx := context.Background()
@@ -216,6 +221,7 @@ func TestSubmitPlan(t *testing.T) {
 }
 
 func TestFixPrompt(t *testing.T) {
+	t.Parallel()
 	w := newWS(t)
 	app := w.repo("app")
 	g := w.group("app-1", "app")

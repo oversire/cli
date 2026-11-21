@@ -70,6 +70,7 @@ func decodeAs[T any](t *testing.T, body string) T {
 }
 
 func TestRoutes(t *testing.T) {
+	t.Parallel()
 	w, r, g := codeRig(t)
 	loop, tailnet := serve(t, r.Engine)
 	app := []string{"Authorization", "Bearer good"}

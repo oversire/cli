@@ -14,6 +14,7 @@ import (
 // TestConformance runs the cases of RuntimeConformance in the app (OverSireTestKit) that apply to
 // a runner: launch, send, tail and close, through the registry as the hub orders them.
 func TestConformance(t *testing.T) {
+	t.Parallel()
 	f := setup(t, chat, Options{})
 	reg := runtime.NewRegistry(f.rt)
 	ctx := context.Background()

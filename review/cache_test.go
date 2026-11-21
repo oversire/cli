@@ -45,6 +45,7 @@ func countRig(t *testing.T, root string) (*rig, *countRunner) {
 }
 
 func TestCacheReadMakesNoGitCall(t *testing.T) {
+	t.Parallel()
 	w := newWS(t)
 	w.repo("app")
 	g := w.group("app-1", "app")
@@ -61,6 +62,7 @@ func TestCacheReadMakesNoGitCall(t *testing.T) {
 
 // The bug of OVERSIRE-421: a conflict that the agent fixed must not stay in the list.
 func TestCacheLiveAfterRefChange(t *testing.T) {
+	t.Parallel()
 	w := newWS(t)
 	app := w.repo("app")
 	g := w.group("app-1", "app")
@@ -80,6 +82,7 @@ func TestCacheLiveAfterRefChange(t *testing.T) {
 }
 
 func TestCacheLoopSettles(t *testing.T) {
+	t.Parallel()
 	w := newWS(t)
 	w.repo("app")
 	g := w.group("app-1", "app")
@@ -117,6 +120,7 @@ func TestCacheLoopSettles(t *testing.T) {
 }
 
 func TestCacheSettleMax(t *testing.T) {
+	t.Parallel()
 	m := mark{}
 	start := time.Date(2026, 11, 1, 9, 0, 0, 0, time.UTC)
 	m.done(start, nil)
@@ -131,6 +135,7 @@ func TestCacheSettleMax(t *testing.T) {
 }
 
 func TestCacheGoneGroup(t *testing.T) {
+	t.Parallel()
 	w := newWS(t)
 	app := w.repo("app")
 	g := w.group("app-1", "app")
@@ -150,6 +155,7 @@ func TestCacheGoneGroup(t *testing.T) {
 }
 
 func TestCacheStoppedRequestKeepsResult(t *testing.T) {
+	t.Parallel()
 	w := newWS(t)
 	w.repo("app")
 	g := w.group("app-1", "app")
@@ -169,6 +175,7 @@ func TestCacheStoppedRequestKeepsResult(t *testing.T) {
 }
 
 func TestCacheParallel(t *testing.T) {
+	t.Parallel()
 	w := newWS(t)
 	w.repo("app")
 	w.repo("cli")
@@ -187,6 +194,7 @@ func TestCacheParallel(t *testing.T) {
 }
 
 func TestCacheNotPushed(t *testing.T) {
+	t.Parallel()
 	w := newWS(t)
 	app := w.repo("app")
 	remote := filepath.Join(t.TempDir(), "app.git")

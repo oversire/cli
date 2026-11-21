@@ -28,6 +28,7 @@ func write(t *testing.T, path, text string) {
 }
 
 func TestChangedPaths(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	write(t, filepath.Join(repo, "a.txt"), "a")
 	write(t, filepath.Join(repo, "src", "b.txt"), "b")
@@ -81,6 +82,7 @@ func (r *pathsRecorder) all() []wire.Paths {
 }
 
 func TestTurnReportsChangedPathsOnce(t *testing.T) {
+	t.Parallel()
 	f := setup(t, chat, Options{})
 	rec := &pathsRecorder{}
 	f.rt.report = rec
