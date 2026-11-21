@@ -4,9 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/oversire/cli/config"
@@ -65,8 +68,27 @@ type Escalation struct {
 	At       time.Time        `json:"at"`
 }
 
+// clone gives a copy that shares no map or pointer with r.
+func (r Record) clone() Record {
+	r.Cursors = maps.Clone(r.Cursors)
+	if r.Escalation != nil {
+		esc := *r.Escalation
+		r.Escalation = &esc
+	}
+	return r
+}
+
 // Store keeps one JSON file for each worker session in its folder: <dir>/<session>.json.
-type Store struct{ dir string }
+// It reads the folder one time and keeps the records in memory. Each Save writes the file first.
+// The daemon is the only writer, so it sees a hand edit of a file only after a restart.
+type Store struct {
+	dir string
+
+	mu     sync.Mutex
+	loaded bool
+	recs   map[string]Record // by file name without .json
+	bad    map[string]error  // files that do not decode
+}
 
 func NewStore(dir string) *Store { return &Store{dir: dir} }
 
@@ -77,57 +99,97 @@ func (s *Store) path(session string) (string, error) {
 	return filepath.Join(s.dir, session+".json"), nil
 }
 
-// Load reads the record of the session. A file that is not there gives an empty Record.
-func (s *Store) Load(session string) (Record, error) {
-	path, err := s.path(session)
-	if err != nil {
-		return Record{}, err
+// load reads the folder when it did not yet. The caller holds s.mu.
+func (s *Store) load() error {
+	if s.loaded {
+		return nil
 	}
-	data, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return Record{}, nil
+	entries, err := os.ReadDir(s.dir)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
 	}
-	if err != nil {
-		return Record{}, err
+	recs, bad := map[string]Record{}, map[string]error{}
+	for _, e := range entries {
+		name, ok := strings.CutSuffix(e.Name(), ".json")
+		if !ok || e.IsDir() {
+			continue
+		}
+		path, err := s.path(name)
+		if err != nil {
+			continue
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			bad[name] = err
+			continue
+		}
+		var r Record
+		if err := json.Unmarshal(data, &r); err != nil {
+			bad[name] = fmt.Errorf("%s: %w", e.Name(), err)
+			continue
+		}
+		recs[name] = r
 	}
-	var r Record
-	if err := json.Unmarshal(data, &r); err != nil {
-		return Record{}, fmt.Errorf("%s: %w", filepath.Base(path), err)
-	}
-	return r, nil
+	s.recs, s.bad, s.loaded = recs, bad, true
+	return nil
 }
 
-// Save writes the record.
+// Load gives the record of the session. A session with no record gives an empty Record.
+func (s *Store) Load(session string) (Record, error) {
+	if _, err := s.path(session); err != nil {
+		return Record{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.load(); err != nil {
+		return Record{}, err
+	}
+	if err := s.bad[session]; err != nil {
+		return Record{}, err
+	}
+	return s.recs[session].clone(), nil
+}
+
+// Save writes the file, then keeps the record in memory.
 func (s *Store) Save(r Record) error {
 	path, err := s.path(r.Session)
 	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.load(); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(r, "", "  ")
 	if err != nil {
 		return err
 	}
-	return config.WriteFile(path, data, 0o600)
+	if err := config.WriteFile(path, data, 0o600); err != nil {
+		return err
+	}
+	s.recs[r.Session] = r.clone()
+	delete(s.bad, r.Session)
+	return nil
 }
 
-// List gives all records. A bad file is skipped.
+// List gives all records in the order of the file names. A bad file is skipped.
 func (s *Store) List() ([]Record, error) {
-	entries, err := os.ReadDir(s.dir)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	}
-	if err != nil {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.load(); err != nil {
 		return nil, err
 	}
+	names := make([]string, 0, len(s.recs))
+	for name, r := range s.recs {
+		if r.Session != "" {
+			names = append(names, name)
+		}
+	}
+	sort.Slice(names, func(i, j int) bool { return names[i]+".json" < names[j]+".json" })
 	var out []Record
-	for _, e := range entries {
-		name, ok := strings.CutSuffix(e.Name(), ".json")
-		if !ok || e.IsDir() {
-			continue
-		}
-		if r, err := s.Load(name); err == nil && r.Session != "" {
-			out = append(out, r)
-		}
+	for _, name := range names {
+		out = append(out, s.recs[name].clone())
 	}
 	return out, nil
 }
