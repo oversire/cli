@@ -154,6 +154,13 @@ The budget of the order has caps: 50 earlier turns, 10 last turns and 20000 char
 | `oversire hooks install [--harness claude,codex]` | Add or update the OverSire agent hooks. Other hooks stay. |
 | `oversire hooks remove [--harness claude,codex]` | Remove only the OverSire agent hooks. |
 | `oversire hooks status [--json]` | Show the hook state of each harness. |
+| `oversire ci status [REF] [--repo R] [--fresh] [--json]` | Show the CI state of a commit, a branch, a PR or a run. The default REF is `HEAD`. The default repo is the origin of the git folder. |
+| `oversire ci ls [--branch B] [--sha S] [--pr N] [--workflow W] [--state S] [--limit N] [--json]` | List the CI runs of the repo. |
+| `oversire ci show RUN [--jobs] [--attempt N] [--fresh] [--json]` | Show a run, with its jobs and failures. |
+| `oversire ci why RUN [--json]` | Show why a run failed: job, step, messages and the end of the log. |
+| `oversire ci logs RUN\|JOB [--failed] [--lines N] [--fresh] [--json]` | Print the end of a job log. With `--failed`, the argument is a run. |
+| `oversire ci workflows [--fresh] [--json]` | List the workflows of the repo. |
+| `oversire ci wait [REF] [--timeout 30m] [--fail-fast] [--settle 60s] [--workflow W]... [--log-lines 40] [--json\|--events]` | Block until the CI ends. Exit 0: success. 1: failed or cancelled. 2: usage. 3: no daemon, or no app answers. 4: timeout. 5: no run started. |
 | `oversire orca pair` | Read an Orca runtime pairing link on stdin and pair the live Orca view. The link is never an argument. |
 | `oversire orca unpair` | Forget the Orca pairing. Remove the device in Orca › Settings too. |
 | `oversire orca status [--json]` | Show the state of the live Orca view. |
@@ -394,7 +401,9 @@ The routes need member access. A member that is not home answers 409 `{"error":"
 
 ### Mirror feed
 
-The home member keeps the mirror feed in `<data>/mirror.db`, also when the group has a cloud. The feed carries the provider data (projects, items, CI runs, pull requests, activity, shared settings and the catalog) for the apps in Client mode. The app that holds the lease `automations` (the source) writes it. Each other app reads it with a cursor. The daemon does not read the bodies. The store does not hold this data: a record of the store has a limit of 32 KB, and each app syncs the store. The bodies are in `contract/schema/mirror.json`. The feature is `mirror` in `GET /v1/whoami`.
+The home member keeps the mirror feed in `<data>/mirror.db`, also when the group has a cloud. The feed carries the provider data (projects, items, CI runs, pull requests, activity, shared settings and the catalog) for the apps in Client mode. The app that holds the lease `automations` (the source) writes it. Each other app reads it with a cursor. The daemon reads the bodies of the kinds `runs`, `prs` and the CI kinds (see CI below). It does not read the others. The store does not hold this data: a record of the store has a limit of 32 KB, and each app syncs the store. The bodies are in `contract/schema/mirror.json`. The feature is `mirror` in `GET /v1/whoami`. The feature `mirror-ci` means that the daemon accepts the CI kinds.
+
+The CI kinds are `ciJobs` (id `<owner>/<repo>/<run>/<attempt>`), `ciChecks` (id `<owner>/<repo>/<sha>`) and `ciState` (id `home`). `GET /v1/mirror/docs` and `GET /v1/mirror/index` show them only with `?with=ci`, so an older app does not read them.
 
 | Route | What it does |
 | --- | --- |
@@ -426,6 +435,32 @@ The routes need member access, and only the home member serves them: another mem
 - 503 `{"error":"The OverSire app on <source> is not open."}`: the mirror has no source, or the source app has no WebSocket.
 - 429 `{"error":"<source> is busy. Try again."}`: 8 calls wait already.
 - 504 `{"error":"..."}`: the source app did not answer in time (60 s). For a read action the text is `"<source> did not answer in time. Try again."`. For a change action (and an unknown action) the text says that the change can be made already, and gives a command to check it before a retry.
+
+### CI
+
+The daemon at home answers CI questions from the mirror feed. The feature is `ci` in `GET /v1/whoami`. The routes need member access. The data comes from the source app, so a question about a repo that the app does not track gives 404. The index reads the feed in memory. `<data>/ci.db` keeps the run history (7 days), the job logs and the workflow lists. Every answer has the flat fields `asOf`, `source` (`webhook` or `poll`), `stale` and `degraded`. `stale` is true when the source app is offline, or when the data is more than 5 min old. `degraded` is true when the GitHub quota is low.
+
+| Route | What it does |
+| --- | --- |
+| `GET /v1/ci/status?repo=&ref=[&fresh=1]` | Answers the `CIRollup` of the commit that `ref` names: `state` (`failure`, `running`, `pending`, `cancelled`, `success` or `none`), `done`, `rev`, the runs and the other checks. `ref` is a SHA, a branch, `#PR`, a PR URL, a run id or a run URL. `rev` is the first 12 hex digits of a SHA-256 of the state, the runs and the checks. It does not change with the clock. |
+| `GET /v1/ci/wait?repo=&ref=&since=&timeout=&settle=&started=&failFast=&workflow=` | Holds the request until `rev` differs from `since`, the state is final, or `timeout` (1 to 300 s, default 60) ends. `settle` (0 to 600 s, default 60) is how long a ref with no run can stay `none`. After that, `done` is true. `started` (Unix seconds) keeps the settle time over many calls. `failFast=1` ends at the first failure. `workflow` (repeatable) limits the runs. The server has no write timeout. |
+| `GET /v1/ci/runs?repo=&branch=&sha=&pr=&workflow=&state=&limit=` | Answers a `CIRunsPage`, newest first. `limit` is 1 to 200 (default 30). |
+| `GET /v1/ci/runs/{id}?repo=&attempt=&fresh=1` | Answers a `CIRunAnswer` with the jobs. When the daemon has no jobs, it asks the app (`ci.jobs`). |
+| `GET /v1/ci/runs/{id}/failures?repo=&attempt=` | Answers a `CIFailuresAnswer`: job, step, messages and log tail of each failed job. |
+| `GET /v1/ci/jobs/{id}/log?repo=&lines=&fresh=1` | Answers a `CILogView` with the last `lines` lines (1 to 2000, default 200). A complete log stays in the cache. An open log is good for 20 s. Many callers of one log share one fetch. |
+| `GET /v1/ci/workflows?repo=&fresh=1` | Answers the `CIWorkflows` of the repo. |
+
+The daemon asks the source app for a log, for the jobs of a run or for the workflows with the member-call actions `ci.log`, `ci.jobs`, `ci.workflows` and `ci.refresh`. A `fresh=1` call reaches the app at most one time in 20 s for each repo, run, job or list. An earlier call gives 429 with `Retry-After`. The errors are:
+
+- 400: a bad `repo`, `ref`, number or `state`.
+- 404: the repo is not tracked, or the run, PR or job is not known.
+- 422: the CI provider of the repo does not have the capability (for example `logs`), or the app does not allow the action.
+- 429: the `fresh` window is not over, or the app is busy.
+- 502: the app answered with a failure.
+- 503: no app is connected, or the app sends no CI data.
+- 504: the app did not answer in time.
+
+A member daemon sends each `/v1/ci` request to home with the group token and the header `X-OverSire-Forwarded`. Home answers a forwarded request that it cannot serve with 409 `{"error":"<machine> is home","home":"<machine>"}`. A group with a cloud still has a mirror home, so a member forwards also then.
 
 ### Direct orders
 

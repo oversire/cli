@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	"github.com/oversire/cli/appcall"
 	"github.com/oversire/cli/ask"
 	"github.com/oversire/cli/capture"
+	"github.com/oversire/cli/ci"
 	"github.com/oversire/cli/config"
 	"github.com/oversire/cli/eventlog"
 	"github.com/oversire/cli/events"
@@ -156,13 +158,22 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	}
 	mirrors.Log = c.log
 	syncer.WithHomeTaker(mirrors)
+	ciBook, err := ci.Open(filepath.Join(data, "ci.db"), time.Now)
+	if err != nil {
+		return nil, err
+	}
+	ciIndex := ci.NewIndex(mirrors, ciBook, func() bool {
+		src, ok := mirrors.Source()
+		return ok && srv.HasCaller(src.Match)
+	}, time.Now)
+	ciIndex.Log = c.log
 	outbox := events.NewOutbox(rows, store, nil, c.log)
 
 	info := func() wire.DaemonInfo {
 		d := wire.DaemonInfo{Machine: cfg.Machine(), Version: version, Contract: wire.DaemonContract, Roles: cfg.Roles, Runtimes: reg.IDs(), Harnesses: installer.Status()}
 		d.Group, d.Home = store.Info()
 		d.Update = updates.Status()
-		d.Features = []string{wire.FeatureLaunchEnv, wire.FeatureAgentSecrets, wire.FeatureAppCalls, wire.FeatureMirror, wire.FeatureMemberCalls}
+		d.Features = []string{wire.FeatureLaunchEnv, wire.FeatureAgentSecrets, wire.FeatureAppCalls, wire.FeatureMirror, wire.FeatureMemberCalls, wire.FeatureMirrorCI, wire.FeatureCI}
 		return d
 	}
 	srv = server.NewServer(serveCfg, info, store, hints, book, ingest)
@@ -187,7 +198,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	srv.Handle(lease.NewRoutes(leases, store).Routes()...)
 	srv.Handle(mirror.NewRoutes(mirrors, store, leases, store.Self, func(src mirror.Source) bool {
 		return srv.HasCaller(src.Match)
-	}, func(m any) { srv.Notify(false, m) }).Routes()...)
+	}, func(m any) { srv.Notify(false, m); ciIndex.Wake() }).Routes()...)
 	srv.Handle(asks.Routes()...)
 	appCalls := appcall.New(srv.Deliver, func() bool { return srv.HasClient(true) }, appcall.Wait)
 	appCalls.Log = c.log
@@ -195,6 +206,9 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	members := membercall.New(srv.DeliverTo, mirrors, store, store.Self, appcall.Wait)
 	members.Log = c.log
 	srv.Handle(members.Routes()...)
+	ciLimit := ci.NewLimiter(20*time.Second, time.Now)
+	srv.Handle(ci.NewRoutes(ciIndex, ci.NewLogs(ciBook, ciIndex, members, ciLimit, store.Self), members, ciLimit,
+		ci.NewForward(store, &http.Client{Timeout: 330 * time.Second}), store.Self).Routes()...)
 	asker := ask.NewAsker(book, screen, reg, time.Now)
 	srv.Handle(asker.Routes()...)
 	srv.Handle(installer.Routes()...)
@@ -260,7 +274,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 			}
 		}
 	}
-	return []func(context.Context) error{srv.Run, book.Run, watcher.Run, syncer.Run, asks.Run, drain, c.pruneStore(oplog), c.pruneMirror(mirrors), runbooks.Run, reviews.Run, workers.Run,
+	return []func(context.Context) error{srv.Run, book.Run, watcher.Run, syncer.Run, asks.Run, drain, c.pruneStore(oplog), c.pruneMirror(mirrors), ciIndex.Run, c.pruneCI(ciBook), runbooks.Run, reviews.Run, workers.Run,
 		outbox.Run, hints.Run, capt.Run, gitRows.Run, func(ctx context.Context) error { return rows.RunRetention(ctx, c.log) }}, nil
 }
 
@@ -300,6 +314,24 @@ func (c *cli) pruneMirror(s *mirror.Store) func(context.Context) error {
 		for {
 			if err := s.Prune(time.Now()); err != nil {
 				c.log.Warn("mirror prune", "err", err)
+			}
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-t.C:
+			}
+		}
+	}
+}
+
+// pruneCI drops old CI runs and logs at the start and then each hour.
+func (c *cli) pruneCI(b *ci.Book) func(context.Context) error {
+	return func(ctx context.Context) error {
+		t := time.NewTicker(time.Hour)
+		defer t.Stop()
+		for {
+			if err := b.Prune(time.Now()); err != nil {
+				c.log.Warn("ci prune", "err", err)
 			}
 			select {
 			case <-ctx.Done():

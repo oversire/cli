@@ -1,12 +1,17 @@
 package ci
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"runtime"
 	"testing"
 	"time"
 
+	"github.com/oversire/cli/mirror"
+	"github.com/oversire/cli/server"
 	"github.com/oversire/cli/wire"
 )
 
@@ -152,5 +157,59 @@ func TestWaitClientGone(t *testing.T) {
 	}
 	if n := runtime.NumGoroutine(); n > before {
 		t.Fatalf("goroutines: %d before, %d after", before, n)
+	}
+}
+
+type putGroup struct{}
+
+func (putGroup) Snapshot() (wire.Group, bool) { return wire.Group{ID: "g", Home: "mbp"}, true }
+func (putGroup) Self() wire.GroupMember       { return wire.GroupMember{Machine: "mbp"} }
+
+type putHolder struct{}
+
+func (putHolder) Get(string) (wire.Lease, bool) {
+	return wire.Lease{Name: "automations", Holder: "app-1", HolderName: "mbp", Epoch: 1, Until: time.Now().Add(time.Hour)}, true
+}
+
+// A mirror put wakes the index at once, with no wait for the tick.
+func TestRoutesWakeOnPut(t *testing.T) {
+	a := seeded(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { a.x.Run(ctx); close(done) }()
+	t.Cleanup(func() { cancel(); <-done })
+
+	mr := mirror.NewRoutes(a.feed, putGroup{}, putHolder{}, putGroup{}.Self, nil, func(any) { a.x.Wake() })
+	mux := http.NewServeMux()
+	for _, r := range mr.Routes() {
+		mux.HandleFunc(r.Pattern, r.Handle)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		mux.ServeHTTP(w, req.WithContext(server.WithCaller(req.Context(), server.Caller{Loopback: true})))
+	}))
+	t.Cleanup(srv.Close)
+
+	var before wire.CIRollup
+	a.getJSON("/v1/ci/status?repo=o/r&ref=main", 200, &before)
+	body, _ := json.Marshal(wire.MirrorPut{Epoch: a.feed.Head().Epoch, Source: "app-1", SourceName: "mbp",
+		Docs: []wire.MirrorDoc{runsDoc("o/r", run("9001", "test", "completed", "success", sha1, "main"))}})
+	req, _ := http.NewRequest(http.MethodPut, srv.URL+"/v1/mirror/docs", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil || resp.StatusCode != 200 {
+		t.Fatalf("put: %v %v", resp, err)
+	}
+	resp.Body.Close()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		var after wire.CIRollup
+		a.getJSON("/v1/ci/status?repo=o/r&ref=main", 200, &after)
+		if after.Rev != before.Rev {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the status did not change after the put")
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }

@@ -40,6 +40,7 @@ Then run `oversire ticket skill <command>` and do its steps.
 - When a command answers "<Tracker> has no X", the tracker does not have that feature. Skip the step and tell the user.
 - `plane-cli` is only for three jobs on Plane: the intake, the list and delete of attachments, and the created-date scope. The `oversire` commands do all other item work. If you do not know a `plane-cli` command, load its skill.
 - For the epics and the north star of a project, use `oversire epic` and `oversire project north-star`. The OverSire app on this Mac runs them. Run `oversire epic` with no arguments to see the commands.
+- For CI, use `oversire ci status`, `oversire ci wait` and `oversire ci why`. Do not poll with `gh run watch`, `gh run view` or `gh pr checks`: these calls use the shared GitHub quota. Exit 3 means that no OverSire app answers.
 - Get the tracker workspace and project for this folder from the instructions of the user (CLAUDE.md). If they do not tell, ask the user one time.
 - Use the writing rules of the user and of the repository for all ticket text.
 - Do not change the OverSire block of a description: the lines from "OverSire block ▾" to "OverSire block ▴". When you write a new description, keep the block at the end with no change.
