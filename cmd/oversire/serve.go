@@ -260,7 +260,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 		}
 	}
 	return []func(context.Context) error{srv.Run, book.Run, watcher.Run, syncer.Run, asks.Run, drain, c.pruneStore(oplog), c.pruneMirror(mirrors), runbooks.Run, reviews.Run, workers.Run,
-		outbox.Run, capt.Run, gitRows.Run, func(ctx context.Context) error { return rows.RunRetention(ctx, c.log) }}, nil
+		outbox.Run, hints.Run, capt.Run, gitRows.Run, func(ctx context.Context) error { return rows.RunRetention(ctx, c.log) }}, nil
 }
 
 // hookHealth is "live" when a harness has our hooks, else "off".

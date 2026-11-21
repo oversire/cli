@@ -13,6 +13,9 @@ import (
 
 const DefaultCapacity = 2000
 
+// keepQueue is the capacity of the queue of hints that wait for the keeper.
+const keepQueue = 4096
+
 type entry struct {
 	seq int64
 	e   wire.ProviderEvent
@@ -41,13 +44,14 @@ type Log struct {
 	nextSub int
 	cap     int
 	keeper  Keeper
+	keep    chan Hint // hints that wait for the keeper
 }
 
 func New(capacity int) *Log {
 	if capacity <= 0 {
 		capacity = DefaultCapacity
 	}
-	return &Log{cap: capacity, epoch: wire.RandomHex(8), subs: map[int]chan struct{}{}}
+	return &Log{cap: capacity, epoch: wire.RandomHex(8), subs: map[int]chan struct{}{}, keep: make(chan Hint, keepQueue)}
 }
 
 // Keep reads the last hints of k into the log and writes each new event to k.
@@ -75,13 +79,16 @@ func (l *Log) Head() int64 {
 }
 
 // Append adds the event and pokes each subscriber. A slow subscriber misses pokes, not events.
+// With a keeper, it queues the hint for Run. A full queue drops the hint.
 func (l *Log) Append(e wire.ProviderEvent) {
 	l.mu.Lock()
 	en := entry{seq: l.head + 1, e: e}
 	l.addLocked(en)
 	if l.keeper != nil {
-		if err := l.keeper.SaveHint(context.Background(), en.seq, e); err != nil {
-			slog.Warn("eventlog: keep the hint", "err", err)
+		select {
+		case l.keep <- Hint{Seq: en.seq, Event: e}:
+		default:
+			slog.Warn("eventlog: the hint queue is full; a hint is dropped", "seq", en.seq)
 		}
 	}
 	for _, c := range l.subs {
@@ -91,6 +98,41 @@ func (l *Log) Append(e wire.ProviderEvent) {
 		}
 	}
 	l.mu.Unlock()
+}
+
+// Run writes the queued hints to the keeper until ctx ends. Then it writes the rest of the queue and returns nil.
+func (l *Log) Run(ctx context.Context) error {
+	for {
+		select {
+		case <-ctx.Done():
+			l.Flush(context.Background())
+			return nil
+		case h := <-l.keep:
+			l.save(context.Background(), h) // a hint in flight survives the stop
+		}
+	}
+}
+
+// Flush writes the hints that are in the queue now.
+func (l *Log) Flush(ctx context.Context) {
+	for {
+		select {
+		case h := <-l.keep:
+			l.save(ctx, h)
+		default:
+			return
+		}
+	}
+}
+
+// save writes one hint with no lock held.
+func (l *Log) save(ctx context.Context, h Hint) {
+	l.mu.Lock()
+	k := l.keeper
+	l.mu.Unlock()
+	if err := k.SaveHint(ctx, h.Seq, h.Event); err != nil {
+		slog.Warn("eventlog: keep the hint", "err", err)
+	}
 }
 
 // Page gives at most limit events after the seq `after`, the same shape as the cloud.
