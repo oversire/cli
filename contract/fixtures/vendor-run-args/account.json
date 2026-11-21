@@ -1,0 +1,4 @@
+{
+  "account": "github:oversire",
+  "args": ["pr", "list", "--repo", "oversire/cli"]
+}

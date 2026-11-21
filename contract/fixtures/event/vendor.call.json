@@ -1,0 +1,14 @@
+{
+  "seq": 270,
+  "id": "app:mba:-:vendor:c-7f3a94:1795200000000",
+  "at": "2026-11-20T14:00:00Z",
+  "seenAt": "2026-11-20T14:00:01Z",
+  "kind": "vendor.call",
+  "project": "oversire",
+  "machine": "mba",
+  "actorType": "agent",
+  "actor": "claude s1",
+  "via": "app@mba",
+  "summary": "plane-cli wi attachment list, exit 0",
+  "payload": { "vendor": "plane-cli", "account": "plane:ocral", "command": "wi attachment list", "exit": 0, "ms": 840 }
+}

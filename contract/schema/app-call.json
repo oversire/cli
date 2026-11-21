@@ -93,6 +93,49 @@
       },
       "required": ["type", "call"],
       "additionalProperties": false
+    },
+    "VendorRunArgs": {
+      "description": "The args of the app call vendor.run. The app runs the vendor CLI of an account with the token of its Keychain (OVERSIRE-567). Give exactly one of project and account. project is a project key and the app takes its tracker account. account is <provider>:<id> or <id>. args is the command of the vendor CLI with its flags, command first. cwd is the working folder. The app serves vendor.list and vendor.run only from the local CLI, never from a member call.",
+      "type": "object",
+      "properties": {
+        "project": { "type": "string", "minLength": 1 },
+        "account": { "type": "string", "minLength": 1 },
+        "args": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "cwd": { "type": "string", "minLength": 1 }
+      },
+      "required": ["args"],
+      "oneOf": [{ "required": ["project"] }, { "required": ["account"] }],
+      "additionalProperties": false
+    },
+    "VendorRunOutput": {
+      "description": "The data of a vendor.run result. A vendor exit that is not 0 still gives status ok. truncated: the app cut stdout or stderr. timedOut: the app stopped the process (status failed, with this data).",
+      "type": "object",
+      "properties": {
+        "vendor": { "description": "The vendor CLI, for example plane-cli.", "type": "string", "minLength": 1 },
+        "account": { "description": "<provider>:<id>.", "type": "string", "minLength": 1 },
+        "exit": { "type": "integer" },
+        "stdout": { "type": "string" },
+        "stderr": { "type": "string" },
+        "truncated": { "type": "boolean" },
+        "timedOut": { "type": "boolean" },
+        "ms": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["vendor", "account", "exit", "stdout", "stderr", "ms"],
+      "additionalProperties": false
+    },
+    "VendorCLIRow": {
+      "description": "One row of the data of vendor.list (an array). path is absent when the vendor CLI is not installed.",
+      "type": "object",
+      "properties": {
+        "provider": { "type": "string", "minLength": 1 },
+        "vendor": { "description": "The display name of the provider.", "type": "string", "minLength": 1 },
+        "binary": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 },
+        "accounts": { "type": "array", "items": { "type": "string" } },
+        "projects": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["provider", "vendor", "binary", "accounts", "projects"],
+      "additionalProperties": false
     }
   }
 }

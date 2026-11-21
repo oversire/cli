@@ -2049,6 +2049,50 @@
       }
     },
     {
+      "kind": "vendor.call",
+      "domain": "tracker",
+      "actorTypes": [
+        "agent",
+        "human"
+      ],
+      "private": false,
+      "summary": "the vendor CLI and its subcommand words, and the exit code. Never the args.",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "vendor": {
+            "type": "string"
+          },
+          "account": {
+            "type": "string"
+          },
+          "command": {
+            "type": "string"
+          },
+          "exit": {
+            "type": "integer"
+          },
+          "ms": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "timedOut": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "vendor",
+          "account",
+          "command",
+          "exit"
+        ]
+      }
+    },
+    {
       "kind": "epic.closed",
       "domain": "tracker",
       "actorTypes": [

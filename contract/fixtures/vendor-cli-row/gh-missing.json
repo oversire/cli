@@ -1,0 +1,7 @@
+{
+  "provider": "github",
+  "vendor": "GitHub",
+  "binary": "gh",
+  "accounts": ["github:oversire"],
+  "projects": []
+}

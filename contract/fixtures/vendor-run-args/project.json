@@ -1,0 +1,5 @@
+{
+  "project": "OVERSIRE",
+  "args": ["wi", "attachment", "list", "OVERSIRE-12", "--json"],
+  "cwd": "/Users/fritz/Projects/oversire-workspace"
+}

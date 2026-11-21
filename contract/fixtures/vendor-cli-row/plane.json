@@ -1,0 +1,8 @@
+{
+  "provider": "plane",
+  "vendor": "Plane",
+  "binary": "plane-cli",
+  "path": "/usr/local/bin/plane-cli",
+  "accounts": ["plane:ocral"],
+  "projects": ["OVERSIRE", "SLING"]
+}

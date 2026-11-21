@@ -1,0 +1,10 @@
+{
+  "id": "c-7f3a94",
+  "action": "vendor.run",
+  "args": {
+    "project": "OVERSIRE",
+    "args": ["wi", "attachment", "list", "OVERSIRE-12"],
+    "cwd": "/Users/fritz/Projects/oversire-workspace"
+  },
+  "agent": "claude s1"
+}
