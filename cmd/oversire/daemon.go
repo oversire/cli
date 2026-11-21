@@ -31,6 +31,7 @@ type daemonClient struct {
 type daemonError struct {
 	Status int
 	Msg    string
+	Plain  bool // the body had no JSON error, for example the 404 of a route that an old daemon does not have
 }
 
 func (e *daemonError) Error() string { return e.Msg }
@@ -79,7 +80,7 @@ func (d daemonClient) call(ctx context.Context, method, path string, body, out a
 		if json.Unmarshal(data, &e) == nil && e.Error != "" {
 			return &daemonError{Status: resp.StatusCode, Msg: e.Error}
 		}
-		return &daemonError{Status: resp.StatusCode, Msg: fmt.Sprintf("The daemon answered %s: %s", resp.Status, strings.TrimSpace(string(data)))}
+		return &daemonError{Status: resp.StatusCode, Msg: fmt.Sprintf("The daemon answered %s: %s", resp.Status, strings.TrimSpace(string(data))), Plain: true}
 	}
 	if out != nil {
 		if err := json.Unmarshal(data, out); err != nil {

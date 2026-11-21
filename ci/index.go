@@ -20,6 +20,8 @@ const (
 	// StaleAfter is the age of the last poll or hint of a repo after which the data counts as stale.
 	StaleAfter = 5 * time.Minute
 	tick       = 30 * time.Second
+	// expectHold is how long a rerun shows as queued while the mirror has no new attempt.
+	expectHold = 2 * time.Minute
 	docV       = 1
 )
 
@@ -59,6 +61,12 @@ type JobInfo struct {
 	Completed bool
 }
 
+// expected is a run attempt that a rerun asked for and that the mirror does not have yet.
+type expected struct {
+	attempt int
+	until   time.Time
+}
+
 // Index is the CI view of the mirror feed in memory. It also writes the runs to the Book.
 type Index struct {
 	Log *slog.Logger
@@ -76,6 +84,7 @@ type Index struct {
 	jobs    map[string]wire.CIJobsDoc   // by doc id
 	checks  map[string]wire.CIChecksDoc // by doc id
 	state   *wire.CIStateDoc
+	expect  map[string]expected // by repo/run
 	changed chan struct{}
 }
 
@@ -87,7 +96,8 @@ func NewIndex(feed Feed, book *Book, online func() bool, now func() time.Time) *
 	if now == nil {
 		now = time.Now
 	}
-	x := &Index{Log: slog.Default(), feed: feed, book: book, online: online, now: now, wake: make(chan struct{}, 1), changed: make(chan struct{})}
+	x := &Index{Log: slog.Default(), feed: feed, book: book, online: online, now: now, wake: make(chan struct{}, 1), changed: make(chan struct{}),
+		expect: map[string]expected{}}
 	x.clear()
 	return x
 }
@@ -445,6 +455,33 @@ func (x *Index) withJobs(repo string, v wire.CIRunView) wire.CIRunView {
 	return v
 }
 
+// ExpectAttempt tells that a rerun of the run starts this attempt. Until the mirror has it, or for 2 min, Rollup gives the
+// run as queued, so a wait does not end on the old attempt.
+func (x *Index) ExpectAttempt(repo, run string, attempt int) {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	now := x.now()
+	for k, e := range x.expect {
+		if !now.Before(e.until) {
+			delete(x.expect, k)
+		}
+	}
+	x.expect[repo+"/"+run] = expected{attempt: attempt, until: now.Add(expectHold)}
+	x.signal()
+}
+
+// held gives v as a queued run of the expected attempt while the hold is on.
+func (x *Index) held(repo string, v wire.CIRunView) wire.CIRunView {
+	x.mu.RLock()
+	e, ok := x.expect[repo+"/"+v.ID]
+	x.mu.RUnlock()
+	if !ok || v.Attempt >= e.attempt || !x.now().Before(e.until) {
+		return v
+	}
+	return wire.CIRunView{ID: v.ID, Attempt: e.attempt, Name: v.Name, Workflow: v.Workflow, Status: "queued", Branch: v.Branch, SHA: v.SHA,
+		Event: v.Event, URL: v.URL}
+}
+
 // Rollup gives the state of the runs and checks of the commit of t. workflows limits the runs to the named workflows.
 func (x *Index) Rollup(repo string, t Target, workflows []string) (wire.CIRollup, error) {
 	st, err := x.Repo(repo)
@@ -463,6 +500,9 @@ func (x *Index) Rollup(repo string, t Target, workflows []string) (wire.CIRollup
 		}
 	}
 	set = set.latest().keepWorkflows(workflows)
+	for i, v := range set {
+		set[i] = x.held(repo, v)
+	}
 	sort.Slice(set, func(i, j int) bool {
 		if set[i].Workflow != set[j].Workflow {
 			return set[i].Workflow < set[j].Workflow

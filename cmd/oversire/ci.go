@@ -32,8 +32,14 @@ const ciUsage = `usage:
   oversire ci wait [REF] [--repo R] [--timeout 30m] [--fail-fast] [--settle 60s] [--workflow W]... [--log-lines 40] [--json|--events]
   oversire ci wait [REF] [--repo R] --notify [--timeout 30m] [--harness H] [--session S] [--json]
   oversire ci watches [--json]
+  oversire ci rerun RUN|JOB-URL [--repo R] [--failed | --job JOB] [--wait] [--timeout 30m] [--json]
+  oversire ci cancel RUN [--repo R] [--json]
+  oversire ci dispatch WORKFLOW [--repo R] [--ref REF] [-f key=value]... [--wait] [--timeout 30m] [--json]
+  oversire ci approve RUN [--repo R] [--env NAME]... [--comment TEXT] [--json]
 REF is a SHA, a branch, #PR, a PR URL or a run URL. The default is HEAD. R is owner/name; the default is the origin of the git folder.
+RUN is a run id or a run URL. The writes take --harness H and --session ID. The default ref of dispatch is the branch with an upstream, else the default branch.
 Exit codes of wait: 0 success, 1 failed or cancelled, 2 usage, 3 no daemon or no app, 4 timeout, 5 no runs.
+Exit codes of the writes: 0 ok (also when nothing changed), 1 refused or failed, 2 usage, 3 no daemon, no app or home offline; with --wait the codes of wait.
 With --notify, wait ends at once with exit 0 and OverSire types the result into the agent session when the runs end.
 If the runs have ended already, --notify works as a normal wait. It gives exit 2 for a session that cannot take text.`
 
@@ -60,7 +66,7 @@ var ciStalePoll = 30 * time.Second
 
 func ciUsageErr() error { return &exitError{exitCIUsage, errors.New(ciUsage)} }
 
-// ci reads the CI state from the daemon.
+// ci reads the CI state from the daemon and sends the CI writes to the app.
 func (c *cli) ci(ctx context.Context, args []string) error {
 	if len(args) == 0 {
 		return ciUsageErr()
@@ -85,6 +91,14 @@ func (c *cli) ci(ctx context.Context, args []string) error {
 		return c.ciWait(ctx, rest)
 	case "watches":
 		return c.ciWatches(ctx, rest)
+	case "rerun":
+		return c.ciRerun(ctx, rest)
+	case "cancel":
+		return c.ciCancel(ctx, rest)
+	case "dispatch":
+		return c.ciDispatch(ctx, rest)
+	case "approve":
+		return c.ciApprove(ctx, rest)
 	}
 	return ciUsageErr()
 }

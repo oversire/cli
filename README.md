@@ -165,6 +165,10 @@ The budget of the order has caps: 50 earlier turns, 10 last turns and 20000 char
 | `oversire ci wait [REF] [--timeout 30m] [--fail-fast] [--settle 60s] [--workflow W]... [--log-lines 40] [--json\|--events]` | Block until the CI ends. Exit 0: success. 1: failed or cancelled. 2: usage. 3: no daemon, or no app answers. 4: timeout. 5: no run started. |
 | `oversire ci wait [REF] --notify [--timeout 30m] [--harness H] [--session S] [--json]` | End at once. OverSire types the result into this agent session when the runs end. Needs `OVERSIRE_SESSION` or `ORCA_PANE_KEY`. Exit 0: queued. If the runs have ended already, it works as `wait` (exit 0, 1 or 5). 2: usage, or the session cannot take text (a `cli` session). 3: no daemon, or no app answers. `--timeout` is the time to live of the job (1 m to 2 h). |
 | `oversire ci watches [--json]` | List the watches of the group and the notify jobs of this machine. |
+| `oversire ci rerun RUN [--failed \| --job JOB] [--wait] [--timeout 30m] [--json]` | Run a CI run again: all jobs, only the failed jobs, or one job. A job URL as RUN reruns that job. The app does it. See "CI writes". |
+| `oversire ci cancel RUN [--json]` | Cancel a CI run. |
+| `oversire ci dispatch WORKFLOW [--ref REF] [-f key=value]... [--wait] [--timeout 30m] [--json]` | Start a workflow on a ref. WORKFLOW is its id, name or file name. The default ref is the branch of the git folder when it has an upstream, else the default branch. The output shows the ref. |
+| `oversire ci approve RUN [--env NAME]... [--comment TEXT] [--json]` | Approve the deployments that wait for a review on a run. The default is all environments that wait. |
 | `oversire orca pair` | Read an Orca runtime pairing link on stdin and pair the live Orca view. The link is never an argument. |
 | `oversire orca unpair` | Forget the Orca pairing. Remove the device in Orca › Settings too. |
 | `oversire orca status [--json]` | Show the state of the live Orca view. |
@@ -366,7 +370,7 @@ The `oversire epic`, `oversire project`, `oversire item` and `oversire app` comm
 | `POST /v1/app-calls` | loopback | Body `{action, args, agent?}`. The daemon gives the call an id and sends the frame `{"type":"appCall","call":{id, action, args, agent?}}` to the loopback clients of `GET /v1/connect`. It holds the request until the app posts the result, at most 60 s. Answers 200 with the `AppCallResult` `{id, status, summary, data?}`. 400: a bad body, or `args` is not an object. 413: the body has more than 16 MiB ("The call is too large."). 503: no app is connected ("Open the OverSire app."), or the app did not take the frame. 504: the app did not answer in time. For a read action the text is "Try again.". For a change action (and an unknown action) the text says that the change can be made already, and gives a command to check it before a retry. |
 | `POST /v1/app-calls/{id}/result` | loopback | Body `AppCallResult`. The app posts it. Answers 204. 400: the id of the body is not the id of the path. 404: no call waits with this id (also after the 60 s). 409: the call has a result already. |
 
-The app runs only the actions of its allowed list: `item.get`, `item.list`, `item.markdown`, `item.setEpic`, `item.setStatus`, `item.setPriority`, `item.update`, `item.edit`, `item.comment`, `item.assignMe`, `item.assign`, `item.start`, `item.reopen`, `item.create`, `item.relate`, `item.link`, `item.attach`, `epic.list`, `epic.show`, `epic.plan`, `epic.create`, `epic.update`, `epic.close`, `epic.addItems`, `epic.removeItems`, `project.northStar`, `project.setNorthStar`, `project.statuses`, `project.labels`, `project.people` and `search.all`. The list holds no action that leaves the Mac (for example `item.closeSubItems` and `intake.delete`). Another action gives `notAllowed`. A change needs no confirm. The app names the agent as the actor of the rows of its writes (state, comment, create, field changes, link, attach, epics, north star).
+The app runs only the actions of its allowed list: `item.get`, `item.list`, `item.markdown`, `item.setEpic`, `item.setStatus`, `item.setPriority`, `item.update`, `item.edit`, `item.comment`, `item.assignMe`, `item.assign`, `item.start`, `item.reopen`, `item.create`, `item.relate`, `item.link`, `item.attach`, `epic.list`, `epic.show`, `epic.plan`, `epic.create`, `epic.update`, `epic.close`, `epic.addItems`, `epic.removeItems`, `project.northStar`, `project.setNorthStar`, `project.statuses`, `project.labels`, `project.people`, `search.all` and the CI writes `ci.rerun`, `ci.rerunJob`, `ci.cancel`, `ci.dispatch` and `ci.approve`. The CI writes change the CI provider. The app checks the agent rights first (Settings › Agents › CI). The list holds no other action that leaves the Mac (for example `item.closeSubItems` and `intake.delete`). Another action gives `notAllowed`. A change needs no confirm. The app names the agent as the actor of the rows of its writes (state, comment, create, field changes, link, attach, epics, north star).
 
 The body limit of `POST /v1/app-calls` is 16 MiB. An attachment goes in `args` as base64 text, so the limit of a file is 10 MB. A tracker that lacks a feature answers `notAllowed` with "<Tracker> has no X." (for example Big Timer has no links, attachments, labels, relations, priority or epics).
 
@@ -444,10 +448,12 @@ An app in Client mode sends each click to the source app of the mirror through t
 
 | Route | What it does |
 | --- | --- |
-| `POST /v1/member-calls` | Body `{action, args}`. The daemon makes the id and fills `from` (`machine`, `name`, `device`) from the credential, so a `from` in the body does nothing. On loopback, `from.machine` is this machine. It sends the frame `{"type":"memberCall","call":{id, action, args, from}}` to the source app and waits for the result, at most 60 s. Answers 200 with the `AppCallResult`. A body of more than 16 MiB gives 413. 400: a bad body. |
+| `POST /v1/member-calls` | Body `{action, args}`. The daemon makes the id and fills `from` (`machine`, `name`, `device`) from the credential, so a `from` in the body does nothing. On loopback, `from.machine` is this machine. It sends the frame `{"type":"memberCall","call":{id, action, args, from, cli?}}` to the source app and waits for the result, at most 60 s. Answers 200 with the `AppCallResult`. A body of more than 16 MiB gives 413. 400: a bad body. |
 | `POST /v1/member-calls/{id}/result` | Body `AppCallResult`. Only the source app can post it. Answers 204. 400: the id of the body is not the id of the path. 403: the caller is not the source (`{"error":"Only the source app answers."}`). 404: no call waits with this id. 409: the call has a result already. |
 
-The routes need member access, and only the home member serves them: another member answers 409 `{"error":"<machine> is home","home":"<machine>"}`. A daemon credential gets 403. `POST /v1/member-calls` answers also:
+The optional field `cli` `{agent?}` of a call tells that an `oversire` command sent it: the daemon itself sends the CI member calls (see CI) with it. The app then names the agent as the actor, and the event row says `via cli@<machine>` when the command ran on another machine. An empty `agent` is a human.
+
+The routes need member access, and only the home member serves them: another member answers 409 `{"error":"<machine> is home","home":"<machine>"}`. A daemon credential gets 403. Only the five `POST /v1/ci/*` write routes take a daemon credential, because a member daemon forwards the CI writes of its CLI to home. `POST /v1/member-calls` answers also:
 
 - 503 `{"error":"The OverSire app on <source> is not open."}`: the mirror has no source, or the source app has no WebSocket.
 - 429 `{"error":"<source> is busy. Try again."}`: 8 calls wait already.
@@ -484,7 +490,33 @@ The daemon asks the source app for a log, for the jobs of a run or for the workf
 
 Which sessions get the message: an `oversire` session takes it as a steer turn. An Orca session gets it as typed text, after the session is not `working` (at most 10 min). A plain `cli` session cannot take input. The jobs live in `<data>/ci/notify.json` and start again after a restart of the daemon. A job that ends in the time to live without an end of the runs sends a timeout message. The home daemon sends the watch list as the frame `{"type":"ci","event":"watches","watches":[...]}` on `GET /v1/connect` to the source app.
 
-A member daemon sends each `/v1/ci` request to home with the group token and the header `X-OverSire-Forwarded`. Home answers a forwarded request that it cannot serve with 409 `{"error":"<machine> is home","home":"<machine>"}`. A group with a cloud still has a mirror home, so a member forwards also then.
+A member daemon sends each `/v1/ci` request to home with the group token and the header `X-OverSire-Forwarded`. A POST keeps its body and its `Content-Type`. Home answers a forwarded request that it cannot serve with 409 `{"error":"<machine> is home","home":"<machine>"}`. A group with a cloud still has a mirror home, so a member forwards also then.
+
+#### CI writes
+
+The feature is `ci-actions` in `GET /v1/whoami`. The daemon makes no call to the CI provider. Home sends each write as a member call to the source app, with `cli.agent` from the body. The app checks the agent rights, skips a repeat (`noop`), calls the provider and writes the event row. The daemon writes no row. The body is a `CIActionRequest` (`repo`, `run`, `job`, `failedOnly`, `workflow`, `ref`, `inputs`, `environments`, `comment`, `agent`). The `{id}` of the path wins over `run` or `job` in the body. The answer is the `CIActionResult` `{ok, noop, summary, run?, url?}`.
+
+| Route | App action | Body |
+| --- | --- | --- |
+| `POST /v1/ci/runs/{id}/rerun` | `ci.rerun` | `repo`, `failedOnly` |
+| `POST /v1/ci/jobs/{id}/rerun` | `ci.rerunJob` | `repo`, `run` (required) |
+| `POST /v1/ci/runs/{id}/cancel` | `ci.cancel` | `repo` |
+| `POST /v1/ci/dispatch` | `ci.dispatch` | `repo`, `workflow`, `ref` (both required), `inputs` |
+| `POST /v1/ci/runs/{id}/approve` | `ci.approve` | `repo`, `environments`, `comment` |
+
+`from` is this machine on loopback, else the device of the credential. These routes take a daemon credential, so `from.machine` of a forwarded write is the machine of the CLI. After a rerun that is not a `noop`, the run shows as `queued` in `status` and `wait` until the mirror has the next attempt, at most 2 min. Thus a wait does not end on the old attempt. The answers are 200 (also for a `noop`), 400 (a bad body, no `repo`, no `run` for a job, no `workflow` or `ref` for a dispatch), 404 (the repo is not tracked), 422 (the app does not allow it, for example "Agents may not cancel runs."), 429 (the app is busy), 502 (the provider failed), 503 (the app is not open, or home is offline) and 504 (the app did not answer in 60 s).
+
+The agent rights are in the app, in Settings › Agents › CI. By default an agent can rerun, cancel and dispatch. It cannot approve a deployment. A human can do all of them.
+
+`oversire ci rerun|cancel|dispatch|approve` call these routes. They take `--json`, `--harness H` and `--session ID` as `oversire item` does. The agent goes in `agent`. RUN is a run id, a run URL or a job URL. The repo comes from the URL, then `--repo`, then the origin of the git folder. The text output is the summary of the app, for example "Run 123 attempt 2 is already running. No new rerun.". `--json` prints the `CIActionResult`. `rerun --wait` and `dispatch --wait` then wait on the run of the result, as `oversire ci wait` does, and use its exit codes. With `--json` they print the result, then the last rollup. The exit codes are:
+
+| Code | When |
+| --- | --- |
+| 0 | ok, also a `noop` |
+| 1 | refused or failed: 404 for a repo that is not tracked, 409, 422, 429, 502, 504 |
+| 2 | usage |
+| 3 | no daemon; 503 (no app, or home offline); a 404 with no JSON error (an old daemon: "Update it: oversire update") |
+| 4, 5 | only with `--wait`: timeout, or no run started |
 
 ### Direct orders
 

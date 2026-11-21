@@ -331,3 +331,32 @@ func TestRollupFromIndex(t *testing.T) {
 		t.Fatalf("%+v", none)
 	}
 }
+
+func TestExpectAttemptExpires(t *testing.T) {
+	e := newEnv(t)
+	r := run("9", "test", "completed", "failure", sha1, "main")
+	r.Attempt = 2
+	e.put(state("o/r"), runsDoc("o/r", r))
+	roll := func() wire.CIRollup {
+		t.Helper()
+		out, err := e.x.Rollup("o/r", Target{SHA: sha1}, nil)
+		if err != nil || len(out.Runs) != 1 {
+			t.Fatalf("%+v %v", out, err)
+		}
+		return out
+	}
+	e.x.ExpectAttempt("o/r", "9", 3)
+	if got := roll(); got.Runs[0].Status != "queued" || got.Done || got.State != wire.CIPending {
+		t.Fatalf("%+v", got)
+	}
+	e.clk.add(2*time.Minute + time.Second)
+	if got := roll(); got.Runs[0].Attempt != 2 || got.State != wire.CIFailure || !got.Done {
+		t.Fatalf("after the hold: %+v", got)
+	}
+	e.x.ExpectAttempt("o/r", "9", 3)
+	r.Attempt, r.Status, r.Conclusion = 3, "in_progress", ""
+	e.put(runsDoc("o/r", r))
+	if got := roll(); got.Runs[0].Attempt != 3 || got.Runs[0].Status != "in_progress" {
+		t.Fatalf("attempt 3 is in the mirror: %+v", got)
+	}
+}

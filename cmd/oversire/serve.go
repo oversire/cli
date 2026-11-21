@@ -183,7 +183,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 		d := wire.DaemonInfo{Machine: cfg.Machine(), Version: version, Contract: wire.DaemonContract, Roles: cfg.Roles, Runtimes: reg.IDs(), Harnesses: installer.Status()}
 		d.Group, d.Home = store.Info()
 		d.Update = updates.Status()
-		d.Features = []string{wire.FeatureLaunchEnv, wire.FeatureAgentSecrets, wire.FeatureAppCalls, wire.FeatureMirror, wire.FeatureMemberCalls, wire.FeatureMirrorCI, wire.FeatureCI, wire.FeatureCIRedirect}
+		d.Features = []string{wire.FeatureLaunchEnv, wire.FeatureAgentSecrets, wire.FeatureAppCalls, wire.FeatureMirror, wire.FeatureMemberCalls, wire.FeatureMirrorCI, wire.FeatureCI, wire.FeatureCIRedirect, wire.FeatureCIActions}
 		return d
 	}
 	srv = server.NewServer(serveCfg, info, store, hints, book, ingest)

@@ -223,6 +223,7 @@ const (
 	FeatureMirrorCI     = "mirror-ci"     // the mirror kinds ciJobs, ciChecks and ciState, and the query with=ci
 	FeatureCI           = "ci"            // the /v1/ci routes: CI reads and wait
 	FeatureCIRedirect   = "ci-redirect"   // the /v1/hooks/settings routes: the switch for the CI poll refusal
+	FeatureCIActions    = "ci-actions"    // the POST /v1/ci write routes: rerun, cancel, dispatch and approve
 )
 
 // UpdateStatus is the last self-update check of a daemon.

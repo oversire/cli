@@ -341,7 +341,7 @@ func TestCIUsage(t *testing.T) {
 }
 
 func TestUsageHasCI(t *testing.T) {
-	for _, sub := range []string{"status", "ls", "show", "why", "logs", "workflows", "wait", "explain"} {
+	for _, sub := range []string{"status", "ls", "show", "why", "logs", "workflows", "wait", "explain", "rerun", "cancel", "dispatch", "approve"} {
 		if !usageHas("ci", sub) {
 			t.Errorf("usage has no ci %s", sub)
 		}

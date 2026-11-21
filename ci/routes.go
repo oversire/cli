@@ -76,21 +76,26 @@ func (a app) callAs(ctx context.Context, action string, args any, agent string) 
 	if err != nil {
 		return nil, err
 	}
-	res, err := a.calls.Do(ctx, wire.MemberCall{Action: action, Args: b, From: wire.MemberCaller{Machine: a.self().Machine}, CLI: &wire.MemberCLI{Agent: agent}})
+	return a.send(ctx, wire.MemberCall{Action: action, Args: b, From: wire.MemberCaller{Machine: a.self().Machine}, CLI: &wire.MemberCLI{Agent: agent}})
+}
+
+// send sends a member call and gives the data of an ok result. A result that is not ok is an *appError.
+func (a app) send(ctx context.Context, call wire.MemberCall) (json.RawMessage, error) {
+	res, err := a.calls.Do(ctx, call)
 	if err != nil {
 		return nil, err
 	}
 	if res.Status != wire.AppCallOK {
 		text := res.Summary
 		if text == "" {
-			text = "The OverSire app could not do " + action + "."
+			text = "The OverSire app could not do " + call.Action + "."
 		}
 		return nil, &appError{status: res.Status, summary: text}
 	}
 	return res.Data, nil
 }
 
-// Routes serves GET /v1/ci.
+// Routes serves /v1/ci: the reads, the wait and the writes.
 type Routes struct {
 	app
 	x    *Index
@@ -116,6 +121,7 @@ func (r *Routes) Routes() []server.Route {
 		{Pattern: "GET /v1/ci/jobs/{id}/log", Access: server.Member, Handle: r.log},
 		{Pattern: "GET /v1/ci/workflows", Access: server.Member, Handle: r.workflows},
 	}
+	routes = append(routes, r.writes()...)
 	for i := range routes {
 		routes[i].Handle = r.fwd.Wrap(routes[i].Handle)
 	}

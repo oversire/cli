@@ -125,6 +125,11 @@ Usage:
   oversire ci workflows [--fresh] [--json]             list the workflows of the repo
   oversire ci wait [REF] [--timeout 30m] [--fail-fast] [--settle 60s] [--workflow W]... [--log-lines 40] [--json|--events]
                                                        block until the CI ends (exit 0 pass, 1 fail, 3 no app, 4 timeout, 5 no runs)
+  oversire ci rerun RUN [--failed | --job JOB] [--wait]  run a CI run, its failed jobs or one job again (the app does it)
+  oversire ci cancel RUN                               cancel a CI run (the app does it)
+  oversire ci dispatch WORKFLOW [--ref REF] [-f key=value]... [--wait]
+                                                       start a workflow on a ref (default: the branch with an upstream)
+  oversire ci approve RUN [--env NAME]... [--comment TEXT]  approve the deployments that wait on a run
                   all ci commands take --repo owner/name; the default is the origin of the git folder
   oversire update                                      install the latest release now
   oversire version                                     show the version
