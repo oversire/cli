@@ -124,13 +124,17 @@
       "additionalProperties": false
     },
     "VendorCLIRow": {
-      "description": "One row of the data of vendor.list (an array). path is absent when the vendor CLI is not installed.",
+      "description": "One row of the data of vendor.list (an array). path is the binary that vendor.run runs. path is absent when the vendor CLI is not installed. No state: an app before this change.",
       "type": "object",
       "properties": {
         "provider": { "type": "string", "minLength": 1 },
         "vendor": { "description": "The display name of the provider.", "type": "string", "minLength": 1 },
         "binary": { "type": "string", "minLength": 1 },
         "path": { "type": "string", "minLength": 1 },
+        "version": { "description": "The version that the binary gives for --version.", "type": "string", "minLength": 1 },
+        "minVersion": { "description": "The lowest version that vendor.run runs.", "type": "string", "minLength": 1 },
+        "source": { "type": "string", "enum": ["oversire", "path"] },
+        "state": { "type": "string", "enum": ["ok", "old", "missing"] },
         "accounts": { "type": "array", "items": { "type": "string" } },
         "projects": { "type": "array", "items": { "type": "string" } }
       },

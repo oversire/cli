@@ -169,8 +169,9 @@ func TestVendorRunTimeoutPartial(t *testing.T) {
 func TestVendorListTable(t *testing.T) {
 	c, out, _, app := vendorCLI(t)
 	rows := []wire.VendorCLIRow{
-		{Provider: "plane", Vendor: "Plane", Binary: "plane-cli", Path: "/usr/local/bin/plane-cli", Accounts: []string{"plane:ocral"}, Projects: []string{"OVERSIRE", "SLING"}},
-		{Provider: "github", Vendor: "GitHub", Binary: "gh", Accounts: []string{}, Projects: []string{}},
+		{Provider: "plane", Vendor: "Plane", Binary: "plane-cli", Path: "/usr/local/bin/plane-cli", Version: "0.2.2", MinVersion: "0.2.2",
+			Source: "path", State: "ok", Accounts: []string{"plane:ocral"}, Projects: []string{"OVERSIRE", "SLING"}},
+		{Provider: "github", Vendor: "GitHub", Binary: "gh", State: "missing", Accounts: []string{}, Projects: []string{}},
 	}
 	b, _ := json.Marshal(rows)
 	answerWith(app, wire.AppCallOK, "2 vendor CLIs.", string(b))
@@ -178,15 +179,58 @@ func TestVendorListTable(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := `2 vendor CLIs.
-PROVIDER  VENDOR  BINARY     PATH                      ACCOUNTS     PROJECTS
-plane     Plane   plane-cli  /usr/local/bin/plane-cli  plane:ocral  OVERSIRE,SLING
-github    GitHub  gh         not installed             -            -
+PROVIDER  BINARY     VERSION  SOURCE  STATE    PATH                      ACCOUNTS     PROJECTS
+plane     plane-cli  0.2.2    path    ok       /usr/local/bin/plane-cli  plane:ocral  OVERSIRE,SLING
+github    gh         -        -       missing  -                         -            -
+github: gh is not installed. Run ` + "`oversire vendor install github`." + `
 `
 	if out.String() != want {
 		t.Fatalf("got\n%s", out)
 	}
 	if app.last(t).Action != "vendor.list" {
 		t.Fatal(app.last(t))
+	}
+}
+
+func TestVendorListOldHint(t *testing.T) {
+	c, out, _, app := vendorCLI(t)
+	rows := []wire.VendorCLIRow{
+		{Provider: "bigtimer", Vendor: "Big Timer", Binary: "big-timer-cli", Path: "/opt/homebrew/bin/big-timer-cli", Version: "1.0.11",
+			MinVersion: "1.0.12", Source: "path", State: "old", Accounts: []string{"bigtimer:bt"}, Projects: []string{}},
+		{Provider: "plane", Vendor: "Plane", Binary: "plane-cli", Path: "/usr/local/bin/plane-cli", MinVersion: "0.2.2",
+			Source: "path", State: "old", Accounts: []string{"plane:ocral"}, Projects: []string{}},
+	}
+	b, _ := json.Marshal(rows)
+	answerWith(app, wire.AppCallOK, "2 vendor CLIs.", string(b))
+	if err := c.dispatch(context.Background(), []string{"vendor", "ls"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range []string{
+		"bigtimer: big-timer-cli 1.0.11 is older than 1.0.12. Run `oversire vendor install bigtimer`.\n",
+		"plane: plane-cli at /usr/local/bin/plane-cli gives no version. OverSire needs 0.2.2 or newer. Run `oversire vendor install plane`.\n",
+	} {
+		if !strings.Contains(out.String(), line) {
+			t.Fatalf("no line %q in\n%s", line, out)
+		}
+	}
+}
+
+func TestVendorListOldApp(t *testing.T) {
+	c, out, _, app := vendorCLI(t)
+	rows := []wire.VendorCLIRow{
+		{Provider: "plane", Vendor: "Plane", Binary: "plane-cli", Path: "/usr/local/bin/plane-cli", Accounts: []string{"plane:ocral"}, Projects: []string{}},
+	}
+	b, _ := json.Marshal(rows)
+	answerWith(app, wire.AppCallOK, "1 vendor CLI.", string(b))
+	if err := c.dispatch(context.Background(), []string{"vendor", "ls"}); err != nil {
+		t.Fatal(err)
+	}
+	want := `1 vendor CLI.
+PROVIDER  BINARY     VERSION  SOURCE  STATE  PATH                      ACCOUNTS     PROJECTS
+plane     plane-cli  -        -       -      /usr/local/bin/plane-cli  plane:ocral  -
+`
+	if out.String() != want {
+		t.Fatalf("got\n%s", out)
 	}
 }
 

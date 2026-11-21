@@ -3,6 +3,10 @@
   "vendor": "Plane",
   "binary": "plane-cli",
   "path": "/usr/local/bin/plane-cli",
+  "version": "0.2.2",
+  "minVersion": "0.2.2",
+  "source": "path",
+  "state": "ok",
   "accounts": ["plane:ocral"],
   "projects": ["OVERSIRE", "SLING"]
 }

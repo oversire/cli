@@ -2,6 +2,7 @@
   "provider": "github",
   "vendor": "GitHub",
   "binary": "gh",
+  "state": "missing",
   "accounts": ["github:oversire"],
   "projects": []
 }

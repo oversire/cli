@@ -17,6 +17,8 @@ const vendorUsage = `usage:
   oversire vendor run [--project P | --account A] [--json] -- <command of the vendor CLI> [its flags]
 The app on this Mac runs the vendor CLI of the account (plane-cli, big-timer-cli or gh) with the token of its Keychain.
 --project picks the tracker account of the project. --account is <provider>:<id> or <id>, for example github:oversire.
+vendor ls shows the version, the source (oversire or path) and the state (ok, old, missing) of each vendor CLI.
+vendor run refuses a missing vendor CLI, or one that is older than the version that OverSire needs.
 Put the vendor command first, then its flags. The app refuses the host and token flags, the login and config
 commands, and the stream commands. The output has at most 1 MB. The vendor CLI has 45 s.
 Exit codes: 0 ok, 1 failed, refused, or a vendor exit that is not 0, 2 usage, 3 no daemon or no app.`
@@ -138,14 +140,18 @@ func (c *cli) printVendors(data json.RawMessage) error {
 		return nil
 	}
 	tw := tabwriter.NewWriter(c.out, 0, 2, 2, ' ', 0)
-	fmt.Fprintln(tw, "PROVIDER\tVENDOR\tBINARY\tPATH\tACCOUNTS\tPROJECTS")
+	fmt.Fprintln(tw, "PROVIDER\tBINARY\tVERSION\tSOURCE\tSTATE\tPATH\tACCOUNTS\tPROJECTS")
 	for _, r := range rows {
-		path := r.Path
-		if path == "" {
-			path = "not installed"
-		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", r.Provider, r.Vendor, r.Binary, path,
-			dash(strings.Join(r.Accounts, ",")), dash(strings.Join(r.Projects, ",")))
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", r.Provider, r.Binary, dash(r.Version), dash(r.Source),
+			dash(r.State), dash(r.Path), dash(strings.Join(r.Accounts, ",")), dash(strings.Join(r.Projects, ",")))
 	}
-	return tw.Flush()
+	if err := tw.Flush(); err != nil {
+		return err
+	}
+	for _, r := range rows {
+		if p := r.Problem(); p != "" {
+			fmt.Fprintf(c.out, "%s: %s\n", r.Provider, p)
+		}
+	}
+	return nil
 }

@@ -103,7 +103,7 @@ Usage:
                                                        list the tracker activity, newest first
   oversire app run <action> ['<json args>']            run an action of the allowed list of the app on this Mac
                                                        epic, project, item, intake, people, activity, app and vendor take --json, --harness H and --session ID
-  oversire vendor ls [--json]                          list the vendor CLIs that the app can run, with the accounts
+  oversire vendor ls [--json]                          list the vendor CLIs that the app can run, with the version and the state
   oversire vendor run [--project P | --account A] -- <command> [flags]
                                                        run the vendor CLI of the account with the token of the app
   oversire review ready [--key K] [--kind code|plan] [--note <text>] [--plan <file.md>]
