@@ -15,7 +15,7 @@ type Action struct {
 // readActions are the actions that change nothing. Any other action counts as a change.
 // Keep it the same as the actions of kind read in the app catalog that the CLI or a client app sends.
 var readActions = map[string]bool{
-	"item.get": true, "item.list": true, "item.markdown": true,
+	"item.get": true, "item.list": true, "item.history": true, "item.markdown": true,
 	"epic.list": true, "epic.show": true, "epic.plan": true,
 	"project.northStar": true, "project.statuses": true, "project.labels": true, "project.people": true,
 	"search.all":  true,

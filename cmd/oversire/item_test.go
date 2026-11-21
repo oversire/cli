@@ -479,3 +479,103 @@ func TestItemDoneSubItems(t *testing.T) {
 	call, got, _ = runItem(t, c, app, "item", "status", "acme-1", "In Review", "--sub-items")
 	wantArgs(t, "item.setStatus", map[string]any{"key": "ACME-1", "status": "In Review", "force": false, "subItems": true}, call, got)
 }
+
+func TestItemCreateDatesAndEstimate(t *testing.T) {
+	c, _, _ := testCLI(t, "")
+	app := appDaemon(t, c)
+	call, got, err := runItem(t, c, app, "item", "create", "--project", "acme", "--title", "T", "--start", "2026-12-01", "--due", "2026-12-15", "--estimate", "M")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantArgs(t, "item.create", map[string]any{"project": "ACME", "title": "T", "startDate": "2026-12-01", "dueDate": "2026-12-15", "estimate": "M"}, call, got)
+}
+
+func TestItemEditDueOnly(t *testing.T) {
+	c, _, _ := testCLI(t, "")
+	app := appDaemon(t, c)
+	call, got, err := runItem(t, c, app, "item", "edit", "acme-1", "--due", "none")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantArgs(t, "item.edit", map[string]any{"key": "ACME-1", "dueDate": "none"}, call, got)
+}
+
+func TestItemEditBodyAndDueOneCall(t *testing.T) {
+	c, _, _ := testCLI(t, "")
+	app := appDaemon(t, c)
+	file := filepath.Join(t.TempDir(), "b.md")
+	os.WriteFile(file, []byte("New body"), 0o600)
+	call, got, err := runItem(t, c, app, "item", "edit", "acme-1", "--body-file", file, "--due", "2026-12-15", "--estimate", "L")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantArgs(t, "item.edit", map[string]any{"key": "ACME-1", "body": "New body", "dueDate": "2026-12-15", "estimate": "L"}, call, got)
+}
+
+func TestItemEditBadDateExit2(t *testing.T) {
+	c, _, _ := testCLI(t, "")
+	appDaemon(t, c)
+	for _, args := range [][]string{
+		{"item", "edit", "acme-1", "--due", "tomorrow"},
+		{"item", "edit", "acme-1", "--start", "2026-13-01"},
+		{"item", "create", "--project", "acme", "--title", "T", "--due", "none"},
+		{"item", "list", "--created-since", "2026/01/01"},
+	} {
+		if err := c.dispatch(context.Background(), args); exitCode(err) != 2 {
+			t.Errorf("%v: %v", args, err)
+		}
+	}
+}
+
+func TestItemListCreatedSince(t *testing.T) {
+	c, out, _ := testCLI(t, "")
+	app := appDaemon(t, c)
+	answerWith(app, wire.AppCallOK, "1 item.", `{"total":1,"items":[{"key":"ACME-1","title":"Fix","status":"Todo","dueDate":"2026-12-15","estimate":"M"}]}`)
+	call, got, err := runItem(t, c, app, "item", "list", "--created-since", "2026-11-01")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantArgs(t, "item.list", map[string]any{"createdSince": "2026-11-01"}, call, got)
+	for _, want := range []string{"DUE", "EST", "2026-12-15", "M"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("no %q in %q", want, out)
+		}
+	}
+}
+
+func TestItemHistoryText(t *testing.T) {
+	c, out, _ := testCLI(t, "")
+	app := appDaemon(t, c)
+	answerWith(app, wire.AppCallOK, "2 entries.", `{"entries":[
+		{"at":"2026-11-20T14:05:00Z","actor":"alice","kind":"status","text":"Status: Open → In progress","itemKey":"ACME-1"},
+		{"at":"2026-11-20T15:00:00Z","actor":"","kind":"field","text":"Due: none → 2026-12-15","itemKey":"ACME-1"}]}`)
+	call, got, err := runItem(t, c, app, "item", "history", "acme-1", "--limit", "5")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantArgs(t, "item.history", map[string]any{"key": "ACME-1", "limit": 5}, call, got)
+	for _, want := range []string{"alice", "Status: Open → In progress", "Due: none → 2026-12-15"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("no %q in %q", want, out)
+		}
+	}
+}
+
+func TestItemHistoryNoDaemonExit3(t *testing.T) {
+	c, _, _ := testCLI(t, "")
+	ln, _ := net.Listen("tcp4", "127.0.0.1:0")
+	port := ln.Addr().(*net.TCPAddr).Port
+	ln.Close()
+	c.paths.SaveConfig(config.Config{Roles: []string{config.RoleServe}, Serve: &config.ServeConfig{Port: port}})
+	if err := c.dispatch(context.Background(), []string{"item", "history", "acme-1"}); exitCode(err) != 3 {
+		t.Fatal(err)
+	}
+}
+
+func TestItemHistoryUsage(t *testing.T) {
+	c, _, _ := testCLI(t, "")
+	appDaemon(t, c)
+	if err := c.dispatch(context.Background(), []string{"item", "history"}); exitCode(err) != 2 {
+		t.Fatal(err)
+	}
+}

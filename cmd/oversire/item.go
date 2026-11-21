@@ -16,17 +16,20 @@ import (
 	"regexp"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/oversire/cli/ticket"
 	"github.com/oversire/cli/wire"
 )
 
 const itemUsage = `usage:
-  oversire item list [--project P] [--group G[,G]] [--mine] [--label L] [--text T] [--limit N]
+  oversire item list [--project P] [--group G[,G]] [--mine] [--label L] [--text T] [--created-since DATE] [--limit N]
   oversire item search <text> [--project P] [--limit N]
   oversire item show <KEY> [--project P]
+  oversire item history <KEY> [--limit N]
   oversire item create --project P --title T [--body-file F|-] [--status S] [--priority X] [--parent KEY] [--label L]... [--epic E]
-  oversire item edit <KEY> [--title T] [--body-file F|-]
+                       [--start DATE] [--due DATE] [--estimate E]
+  oversire item edit <KEY> [--title T] [--body-file F|-] [--start DATE] [--due DATE] [--estimate E]
   oversire item status <KEY> <status> [--force] [--sub-items]
   oversire item start <KEY>
   oversire item done <KEY> [--force] [--sub-items]
@@ -44,6 +47,8 @@ Each command takes --json, --harness H and --session ID, and --project P for a b
 The status is an id, a name, or one of todo, progress, review, blocked, done. A group is one of the same words.
 --sub-items sets the open sub-items to the same status. --force closes a parent and keeps its sub-items open.
 An area has at most 32 lower-case letters, digits or hyphens. An item has at most 6 areas.
+A DATE is YYYY-MM-DD. For --start, --due and --estimate, none removes the value. The estimate uses the units of the tracker, for example S, M, L or XL.
+--created-since lists only the loaded items. It leaves out an item with no creation time.
 --body-file - reads the text from stdin. The text has at most 1 MB. A file has at most 10 MB.
 The app on this Mac runs the command. Exit codes: 0 ok, 1 failed or not allowed, 2 usage, 3 no daemon or no app.`
 
@@ -70,6 +75,7 @@ func (s *stringsFlag) Set(v string) error {
 type itemFlags struct {
 	title, bodyFile, status, priority, parent, epic string
 	group, label, text, name                        string
+	start, due, estimate, createdSince              string
 	labels                                          stringsFlag
 	limit                                           int
 	mine, force, me, none, remove                   bool
@@ -85,9 +91,12 @@ func (it *itemFlags) register(fs *flag.FlagSet, sub string) {
 		fs.BoolVar(&it.mine, "mine", false, "only the items that are assigned to you")
 		fs.StringVar(&it.label, "label", "", "a label name")
 		fs.StringVar(&it.text, "text", "", "words in the key, title or body")
+		fs.StringVar(&it.createdSince, "created-since", "", "only loaded items made on this day or later, as YYYY-MM-DD")
 		fs.IntVar(&it.limit, "limit", 0, "at most this many items")
 	case "search":
 		fs.IntVar(&it.limit, "limit", 0, "at most this many results")
+	case "history":
+		fs.IntVar(&it.limit, "limit", 0, "at most this many entries, the newest")
 	case "create":
 		fs.StringVar(&it.title, "title", "", "the title")
 		fs.StringVar(&it.bodyFile, "body-file", "", "the Markdown description: a file, or - for stdin")
@@ -96,9 +105,11 @@ func (it *itemFlags) register(fs *flag.FlagSet, sub string) {
 		fs.StringVar(&it.parent, "parent", "", "the key of the parent item")
 		fs.Var(&it.labels, "label", "a label name; repeat for more")
 		fs.StringVar(&it.epic, "epic", "", "the epic id or title")
+		it.registerSchedule(fs)
 	case "edit":
 		fs.StringVar(&it.title, "title", "", "the new title")
 		fs.StringVar(&it.bodyFile, "body-file", "", "the new Markdown description: a file, or - for stdin")
+		it.registerSchedule(fs)
 	case "comment":
 		fs.StringVar(&it.bodyFile, "body-file", "", "the Markdown comment: a file, or - for stdin")
 	case "status", "done":
@@ -127,6 +138,40 @@ func (it *itemFlags) register(fs *flag.FlagSet, sub string) {
 	}
 }
 
+func (it *itemFlags) registerSchedule(fs *flag.FlagSet) {
+	fs.StringVar(&it.start, "start", "", "the start day as YYYY-MM-DD, or none")
+	fs.StringVar(&it.due, "due", "", "the due day as YYYY-MM-DD, or none")
+	fs.StringVar(&it.estimate, "estimate", "", "the estimate in the units of the tracker, or none")
+}
+
+// day checks a DATE flag: YYYY-MM-DD, or none when the flag allows it.
+func day(flagName, v string, allowNone bool) error {
+	if allowNone && strings.EqualFold(v, "none") {
+		return nil
+	}
+	if _, err := time.Parse("2006-01-02", v); err != nil {
+		return fmt.Errorf("--%s must be a date as YYYY-MM-DD", flagName)
+	}
+	return nil
+}
+
+// schedule puts the set date and estimate flags into the args of the app call.
+func (it *itemFlags) schedule(a map[string]any, allowNone bool) error {
+	for _, d := range []struct{ flag, arg, v string }{{"start", "startDate", it.start}, {"due", "dueDate", it.due}} {
+		if d.v == "" {
+			continue
+		}
+		if err := day(d.flag, d.v, allowNone); err != nil {
+			return err
+		}
+		a[d.arg] = strings.ToLower(d.v)
+	}
+	if it.estimate != "" {
+		a["estimate"] = it.estimate
+	}
+	return nil
+}
+
 // item runs `oversire item <sub>`.
 func (c *cli) item(ctx context.Context, args []string) error {
 	if len(args) == 0 {
@@ -135,7 +180,7 @@ func (c *cli) item(ctx context.Context, args []string) error {
 	switch args[0] {
 	case "show":
 		return c.itemShow(ctx, args[1:])
-	case "list", "search", "create", "edit", "status", "start", "done", "reopen", "assign", "priority", "label", "areas", "comment", "relate", "parent", "link", "attach":
+	case "list", "search", "history", "create", "edit", "status", "start", "done", "reopen", "assign", "priority", "label", "areas", "comment", "relate", "parent", "link", "attach":
 		return c.itemSub(ctx, args[0], args[1:])
 	}
 	return &exitError{2, fmt.Errorf("unknown item command %q\n%s", args[0], itemUsage)}
@@ -220,6 +265,23 @@ func (c *cli) itemSub(ctx context.Context, sub string, args []string) error {
 		if it.text != "" {
 			a["text"] = it.text
 		}
+		if it.createdSince != "" {
+			if err := day("created-since", it.createdSince, false); err != nil {
+				return bad(err)
+			}
+			a["createdSince"] = it.createdSince
+		}
+		if it.limit > 0 {
+			a["limit"] = it.limit
+		}
+	case "history":
+		if err := want(1, 1); err != nil {
+			return err
+		}
+		if err := first(); err != nil {
+			return bad(err)
+		}
+		action, show = "item.history", c.printHistory
 		if it.limit > 0 {
 			a["limit"] = it.limit
 		}
@@ -262,6 +324,9 @@ func (c *cli) itemSub(ctx context.Context, sub string, args []string) error {
 		if len(it.labels) > 0 {
 			a["labels"] = []string(it.labels)
 		}
+		if err := it.schedule(a, false); err != nil {
+			return bad(err)
+		}
 	case "edit":
 		if err := want(1, 1); err != nil {
 			return err
@@ -269,20 +334,26 @@ func (c *cli) itemSub(ctx context.Context, sub string, args []string) error {
 		if err := first(); err != nil {
 			return bad(err)
 		}
+		if err := it.schedule(a, true); err != nil {
+			return bad(err)
+		}
 		switch {
-		case it.bodyFile != "":
+		case it.bodyFile == "" && len(a) == 1 && it.title == "":
+			return bad(errors.New("give --title, --body-file, --start, --due or --estimate"))
+		case it.bodyFile == "" && len(a) == 1:
+			// A title alone keeps the older call, which an app with no item.edit change still takes.
+			action = "item.update"
+			a["title"] = it.title
+		default:
 			action = "item.edit"
-			if a["body"], err = c.readBody(it.bodyFile); err != nil {
-				return err
+			if it.bodyFile != "" {
+				if a["body"], err = c.readBody(it.bodyFile); err != nil {
+					return err
+				}
 			}
 			if it.title != "" {
 				a["title"] = it.title
 			}
-		case it.title != "":
-			action = "item.update"
-			a["title"] = it.title
-		default:
-			return bad(errors.New("give --title or --body-file"))
 		}
 	case "status":
 		if err := want(2, 2); err != nil {
@@ -596,6 +667,7 @@ func (c *cli) printItems(data json.RawMessage) error {
 		Items []struct {
 			Key, Title, Status string
 			Assignees          []string
+			DueDate, Estimate  string
 		}
 		Total int
 	}
@@ -605,10 +677,29 @@ func (c *cli) printItems(data json.RawMessage) error {
 	if len(d.Items) == 0 {
 		return nil
 	}
-	tw := tabwriter.NewWriter(c.out, 0, 2, 2, ' ', 0)
-	fmt.Fprintln(tw, "KEY\tSTATUS\tASSIGNEES\tTITLE")
+	hasDue, hasEstimate := false, false
 	for _, i := range d.Items {
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", i.Key, dash(i.Status), dash(strings.Join(i.Assignees, ",")), i.Title)
+		hasDue = hasDue || i.DueDate != ""
+		hasEstimate = hasEstimate || i.Estimate != ""
+	}
+	tw := tabwriter.NewWriter(c.out, 0, 2, 2, ' ', 0)
+	head, cols := "KEY\tSTATUS\tASSIGNEES", "%s\t%s\t%s"
+	if hasDue {
+		head, cols = head+"\tDUE", cols+"\t%s"
+	}
+	if hasEstimate {
+		head, cols = head+"\tEST", cols+"\t%s"
+	}
+	fmt.Fprintln(tw, head+"\tTITLE")
+	for _, i := range d.Items {
+		row := []any{i.Key, dash(i.Status), dash(strings.Join(i.Assignees, ","))}
+		if hasDue {
+			row = append(row, dash(i.DueDate))
+		}
+		if hasEstimate {
+			row = append(row, dash(i.Estimate))
+		}
+		fmt.Fprintf(tw, cols+"\t%s\n", append(row, i.Title)...)
 	}
 	if err := tw.Flush(); err != nil {
 		return err
@@ -617,6 +708,25 @@ func (c *cli) printItems(data json.RawMessage) error {
 		fmt.Fprintf(c.out, "Showing %d of %d.\n", len(d.Items), d.Total)
 	}
 	return nil
+}
+
+// printHistory prints one line for each entry of item.history: day, time, actor, text.
+func (c *cli) printHistory(data json.RawMessage) error {
+	var d struct {
+		Entries []struct {
+			At    time.Time
+			Actor string
+			Text  string
+		}
+	}
+	if err := json.Unmarshal(data, &d); err != nil {
+		return fmt.Errorf("The app answer is not valid: %w", err)
+	}
+	tw := tabwriter.NewWriter(c.out, 0, 2, 2, ' ', 0)
+	for _, e := range d.Entries {
+		fmt.Fprintf(tw, "%s\t%s\t%s\n", e.At.Local().Format("2006-01-02 15:04"), dash(e.Actor), e.Text)
+	}
+	return tw.Flush()
 }
 
 // printSearch prints only the items. Results from the tracker search have no status.

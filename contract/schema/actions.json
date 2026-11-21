@@ -19,7 +19,10 @@
         "assignees": { "description": "Person ids.", "type": "array", "items": { "type": "string" } },
         "labels": { "description": "Label ids.", "type": "array", "items": { "type": "string" } },
         "parent": { "description": "Item id. An empty string removes the parent.", "type": "string" },
-        "bodyMarkdown": { "type": "string" }
+        "bodyMarkdown": { "type": "string" },
+        "startDate": { "description": "A day as YYYY-MM-DD. An empty string removes the date.", "type": "string", "pattern": "^(\\d{4}-\\d{2}-\\d{2})?$" },
+        "dueDate": { "description": "A day as YYYY-MM-DD. An empty string removes the date.", "type": "string", "pattern": "^(\\d{4}-\\d{2}-\\d{2})?$" },
+        "estimate": { "description": "The label of the tracker, for example M. An empty string removes it.", "type": "string" }
       },
       "additionalProperties": false
     },
