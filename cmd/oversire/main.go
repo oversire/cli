@@ -113,6 +113,17 @@ Usage:
                                                        the facts of the started tickets: sessions, review, worktree group, base commits
   oversire ticket stop <SESSION> [--session ID]        end a daemon session of a finished ticket
   oversire ticket done [KEY] [--session ID] [--out DIR]  pack the session transcript for the ticket
+  oversire ci status [REF] [--repo R] [--fresh] [--json]
+                                                       show the CI state of a commit, branch or PR (default: HEAD)
+  oversire ci ls [--branch B] [--sha S] [--pr N] [--workflow W] [--state S] [--limit N] [--json]
+                                                       list the CI runs of the repo
+  oversire ci show RUN [--jobs] [--attempt N] [--fresh] [--json]  show a run, with its jobs and failures
+  oversire ci why RUN [--json]                         show why a run failed: job, step, messages and log tail
+  oversire ci logs RUN|JOB [--failed] [--lines N] [--fresh] [--json]  print the tail of a job log
+  oversire ci workflows [--fresh] [--json]             list the workflows of the repo
+  oversire ci wait [REF] [--timeout 30m] [--fail-fast] [--settle 60s] [--workflow W]... [--log-lines 40] [--json|--events]
+                                                       block until the CI ends (exit 0 pass, 1 fail, 3 no app, 4 timeout, 5 no runs)
+                  all ci commands take --repo owner/name; the default is the origin of the git folder
   oversire update                                      install the latest release now
   oversire version                                     show the version
 `
@@ -149,7 +160,8 @@ type cli struct {
 	migrate func(context.Context) (migrate.Report, error)
 	exe     string
 	home    string
-	wd      string // the working folder of the review command; empty is the folder of the process
+	wd      string                                                                // the working folder of the review command; empty is the folder of the process
+	git     func(ctx context.Context, dir string, args ...string) (string, error) // runs git; nil is the real git
 }
 
 func main() {
@@ -225,6 +237,8 @@ func (c *cli) dispatch(ctx context.Context, args []string) error {
 		return c.review(ctx, rest)
 	case cmd == "worker":
 		return c.worker(ctx, rest)
+	case cmd == "ci":
+		return c.ci(ctx, rest)
 	case cmd == "update":
 		return c.update(ctx)
 	case cmd == "version" || cmd == "--version" || cmd == "-v":
