@@ -26,6 +26,7 @@ import (
 	"github.com/oversire/cli/group"
 	"github.com/oversire/cli/hooks"
 	"github.com/oversire/cli/lease"
+	"github.com/oversire/cli/link"
 	"github.com/oversire/cli/membercall"
 	"github.com/oversire/cli/mirror"
 	"github.com/oversire/cli/orcawatch"
@@ -192,7 +193,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 		d := wire.DaemonInfo{Machine: cfg.Machine(), Version: version, Contract: wire.DaemonContract, Roles: cfg.Roles, Runtimes: reg.IDs(), Harnesses: installer.Status()}
 		d.Group, d.Home = store.Info()
 		d.Update = updates.Status()
-		d.Features = []string{wire.FeatureLaunchEnv, wire.FeatureAgentSecrets, wire.FeatureAppCalls, wire.FeatureMirror, wire.FeatureMemberCalls, wire.FeatureMirrorCI, wire.FeatureCI, wire.FeatureCIRedirect, wire.FeatureCIActions}
+		d.Features = []string{wire.FeatureLaunchEnv, wire.FeatureAgentSecrets, wire.FeatureAppCalls, wire.FeatureMirror, wire.FeatureMemberCalls, wire.FeatureMirrorCI, wire.FeatureCI, wire.FeatureCIRedirect, wire.FeatureCIActions, wire.FeatureLinks}
 		return d
 	}
 	srv = server.NewServer(serveCfg, info, store, hints, book, ingest)
@@ -226,6 +227,11 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	members := membercall.New(srv.DeliverTo, mirrors, store, store.Self, appcall.Wait)
 	members.Log = c.log
 	srv.Handle(members.Routes()...)
+	opener := link.NewOpener(srv, link.NewBook(time.Now), tailnet, store, capt, time.Now)
+	opener.Log = c.log
+	srv.Handle(opener.Routes()...)
+	web := link.NewWebBase(tailnet, serveCfg.ListenPort(), serveCfg.UseTailscale(), os.Hostname)
+	srv.Web = web.Get
 	ciLimit := ci.NewLimiter(20*time.Second, time.Now)
 	ciClient := &http.Client{Timeout: 330 * time.Second}
 	ciFwd := ci.NewForward(store, ciClient)
@@ -306,7 +312,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 		}
 	}
 	return []func(context.Context) error{srv.Run, book.Run, watcher.Run, syncer.Run, asks.Run, drain, c.pruneStore(oplog), c.pruneMirror(mirrors), ciIndex.Run, ciWatches.Run, ciNotify.Resume, c.pruneCI(ciBook), runbooks.Run, reviews.Run, workers.Run,
-		outbox.Run, hints.Run, capt.Run, gitRows.Run, func(ctx context.Context) error { return rows.RunRetention(ctx, c.log) }}, nil
+		outbox.Run, hints.Run, capt.Run, gitRows.Run, web.Run, func(ctx context.Context) error { return rows.RunRetention(ctx, c.log) }}, nil
 }
 
 // hookHealth is "live" when a harness has our hooks, else "off".

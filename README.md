@@ -227,6 +227,7 @@ The budget of the order has caps: 50 earlier turns, 10 last turns and 20000 char
 | `oversire review ready [--key K] [--kind code\|plan] [--note <text>] [--plan <file.md>]` | Hand off a worktree group or a plan for review. The agent runs it. See "Reviews". |
 | `oversire review reply [--key K] <comment id> "<text>"` | Answer a review comment. The agent runs it. |
 | `oversire review ls [--kind code\|plan] [--json]` | Show the reviews of this machine. |
+| `oversire open <KEY\|route> [--on <machine>] [--json] [--harness H --session ID]` | Open a page in the OverSire app where the user is: the Mac with the latest input, or the app of `--on`. The argument is a key, a route (`item/KEY/changes#SUB-KEY`), an `oversire://` link or a `/go/` link. See "Links". |
 | `oversire worker start <KEY> --harness H [--model M] [--dir D] [--plan FILE] [--session ID] [--budget-time 3h]` | Start the worker session of an item on the `oversire` runtime, in place in the folder `--dir` (default `<workspace root>/.wt/<key>`), with the start key `work:<KEY>`. The prompt is the plan file and the worker contract. `--session` is the session id of the overseer (default `$CLAUDE_CODE_SESSION_ID`). A second start for a live worker only sets the new overseer. See "Workers". |
 | `oversire worker send <id or KEY> "<text>"` | Give a text to the worker. The turn has the origin `overseer`. |
 | `oversire worker answer <id or KEY> --permission P --allow\|--deny` or `--question Q "<text>"` | Answer the open permission or question of the worker. The text goes in the first item of the question as free text. |
@@ -654,6 +655,18 @@ The agent commands call the loopback API:
 - `oversire review ready [--key K] [--kind code|plan] [--note <text>] [--plan <file.md>]`. In a group folder, the group gives the key and the root. `--key` wins over the folder. For a plan, `--plan` reads the Markdown file (a path from the working folder), and the root of the plan is the working folder, or the workspace root when the folder is in a group. The `#` heading is the title, the text before the first `##` heading is the block "Summary", and each list line of a block "Sub-items" is a sub-item (`- KEY-1: Title` or `- Title`). The note is cut to 300 characters. The command prints the comments that have no answer.
 - `oversire review reply [--key K] <comment id> "<text>"`. Without a key, the group of the working folder gives it, else the daemon finds the review that has the comment.
 - `oversire review ls [--kind code|plan] [--json]` shows the reviews of this machine.
+
+### Links
+
+A link opens a page of the app on the Mac of the click (OVERSIRE-593). Terminals such as Orca make links only of `http` and `https` text, so the daemon serves a web link for each app route. The bodies are in `contract/schema/link.json`. The feature is `links` in `GET /v1/whoami`, and `listen.web` is the base of the web links: the tailnet DNS name of the daemon, else its host name, else `127.0.0.1`.
+
+| Route | Access | What it does |
+| --- | --- | --- |
+| `GET /go/{route}[?focus=KEY]` | public | Finds the app and sends it the frame `openRoute` on its WebSocket. Gives a small HTML page. The route must start with a route head of the contract. A tailnet click goes to the app of the Mac of the click (by address, else by tailnet peer name). A click on loopback, from this machine or from an unknown address goes to the app with the latest input. A reload in 3 s gives the same page with no second push. The daemon sends at most 30 pushes each minute. `HEAD` and a prefetch give the page with no push. |
+| `POST /v1/presence` | app | Body `AppPresence` `{idle}`: the seconds since the last user input on the Mac of the app. The daemon keeps it in memory. A daemon credential gets 403. |
+| `POST /v1/open` | loopback | Body `OpenRequest` `{path, focus?, on?, agent?}`. Answers `OpenResult` `{id, machine, how, idle?, group?}`. An unknown `on` gives 404, an app that sends no presence 409, no app 503. |
+
+Each open writes the row `link.opened`. `oversire open`, `oversire review ready` and `oversire item create` print the links: in a terminal, an OSC 8 link "Open in OverSire", else `App link: oversire://…`. Then `Web link: <listen.web>/go/<route>` when the daemon has the feature.
 
 ### Session stream
 

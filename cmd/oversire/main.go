@@ -113,6 +113,7 @@ Usage:
                                                        hand off a group or a plan for review (the agent runs it)
   oversire review reply [--key K] <comment id> "<text>"  answer a review comment (the agent runs it)
   oversire review ls [--kind code|plan] [--json]       show the reviews of this machine
+  oversire open <KEY|route> [--on <machine>] [--json]  open a page in the OverSire app where the user is, or on a machine
   oversire worker start <KEY> --harness H [--model M] [--dir D] [--plan FILE] [--session ID] [--budget-time 3h]
                                                        start the worker session of an item and oversee it (the overseer runs it)
   oversire worker send <id|KEY> "<text>"              give a text to the worker
@@ -197,6 +198,7 @@ type cli struct {
 	home    string
 	wd      string                                                                // the working folder of the review command; empty is the folder of the process
 	git     func(ctx context.Context, dir string, args ...string) (string, error) // runs git; nil is the real git
+	tty     func(io.Writer) bool                                                  // tells if out is a terminal; nil checks the file
 }
 
 func (c *cli) stderr() io.Writer {
@@ -285,6 +287,8 @@ func (c *cli) dispatch(ctx context.Context, args []string) error {
 		return c.vendor(ctx, rest)
 	case cmd == "review":
 		return c.review(ctx, rest)
+	case cmd == "open":
+		return c.open(ctx, rest)
 	case cmd == "worker":
 		return c.worker(ctx, rest)
 	case cmd == "ci":

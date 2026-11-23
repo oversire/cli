@@ -64,6 +64,7 @@ type addrSource interface {
 type Server struct {
 	Log    *slog.Logger
 	Health func() HealthSources // nil: each source is "off"
+	Web    func() string        // the base of the web links; nil gives none
 
 	cfg      config.ServeConfig
 	info     func() wire.DaemonInfo
@@ -395,6 +396,9 @@ func (s *Server) onTailnet(r Route) http.Handler {
 			return
 		}
 		if ok {
+			if ap, err := netip.ParseAddrPort(req.RemoteAddr); err == nil {
+				c.Addr = ap.Addr().Unmap()
+			}
 			setCaller(req.Context(), c.Name)
 			req = req.WithContext(WithCaller(req.Context(), c))
 		}
@@ -412,9 +416,24 @@ func (s *Server) verify(r *http.Request) (Caller, bool) {
 	return c, ok
 }
 
+// IsOwnAddr is true for a loopback address and for a tailnet address of this machine.
+func (s *Server) IsOwnAddr(a netip.Addr) bool {
+	a = a.Unmap()
+	if a.IsLoopback() {
+		return true
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, ok := s.nets[a]
+	return ok
+}
+
 func (s *Server) whoami(w http.ResponseWriter, r *http.Request) {
 	d := s.info()
 	d.Listen = s.Listen()
+	if s.Web != nil {
+		d.Listen.Web = s.Web()
+	}
 	d.Device = ""
 	if c, ok := CallerFrom(r.Context()); ok {
 		d.Device = c.DeviceID

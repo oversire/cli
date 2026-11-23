@@ -18,6 +18,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/oversire/cli/link"
 	"github.com/oversire/cli/ticket"
 	"github.com/oversire/cli/wire"
 )
@@ -340,7 +341,7 @@ func (c *cli) itemSub(ctx context.Context, sub string, args []string) error {
 		if project == "" || it.title == "" {
 			return bad(errors.New("give --project and --title"))
 		}
-		action, show = "item.create", c.printMade
+		action, show = "item.create", func(d json.RawMessage) error { return c.printMade(ctx, d) }
 		a["project"], a["title"] = project, it.title
 		if err := it.worktreeArgs(c, a); err != nil {
 			return err
@@ -383,7 +384,7 @@ func (c *cli) itemSub(ctx context.Context, sub string, args []string) error {
 		if err := first(); err != nil {
 			return bad(err)
 		}
-		action, show = "item.bindWorktree", c.printMade
+		action, show = "item.bindWorktree", func(d json.RawMessage) error { return c.printMade(ctx, d) }
 		if err := it.worktreeArgs(c, a); err != nil {
 			return err
 		}
@@ -713,32 +714,10 @@ func (c *cli) printMarkdown(data json.RawMessage) error {
 	return nil
 }
 
-// printKey prints the key of a new item.
 // made is the answer data of item.create and item.bindWorktree.
 type made struct {
 	Key      string
 	Worktree *struct{ Group, Machine, Branch, Parent, Dir string }
-}
-
-// printMade prints the key, then the worktree lines.
-func (c *cli) printMade(data json.RawMessage) error {
-	var d made
-	if json.Unmarshal(data, &d) != nil {
-		return nil
-	}
-	if d.Key != "" {
-		fmt.Fprintln(c.out, "Key: "+d.Key)
-	}
-	if w := d.Worktree; w != nil {
-		fmt.Fprintf(c.out, "Worktree: %s on %s\n", w.Group, w.Machine)
-		if w.Branch != "" {
-			fmt.Fprintln(c.out, "Branch: "+w.Branch)
-		}
-		if w.Parent != "" {
-			fmt.Fprintln(c.out, "Review in: "+w.Parent)
-		}
-	}
-	return nil
 }
 
 // makeGroup makes the bound folder of the answer when it is on this Mac and is not a git checkout.
@@ -759,6 +738,28 @@ func (c *cli) printKey(data json.RawMessage) error {
 	var d struct{ Key string }
 	if json.Unmarshal(data, &d) == nil && d.Key != "" {
 		fmt.Fprintln(c.out, "Key: "+d.Key)
+	}
+	return nil
+}
+
+// printMade prints the key, then the worktree lines, then the links.
+func (c *cli) printMade(ctx context.Context, data json.RawMessage) error {
+	var d made
+	if json.Unmarshal(data, &d) != nil || d.Key == "" {
+		return nil
+	}
+	fmt.Fprintln(c.out, "Key: "+d.Key)
+	if w := d.Worktree; w != nil {
+		fmt.Fprintf(c.out, "Worktree: %s on %s\n", w.Group, w.Machine)
+		if w.Branch != "" {
+			fmt.Fprintln(c.out, "Branch: "+w.Branch)
+		}
+		if w.Parent != "" {
+			fmt.Fprintln(c.out, "Review in: "+w.Parent)
+		}
+	}
+	if dc, err := c.daemonClient(); err == nil {
+		c.printLinks(ctx, dc, link.Path{Route: "item/" + d.Key})
 	}
 	return nil
 }

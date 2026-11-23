@@ -37,6 +37,7 @@ type Verifier interface {
 type Caller struct {
 	DeviceID, Name, Kind, Machine string
 	Loopback                      bool
+	Addr                          netip.Addr // the remote address of a tailnet request; zero on loopback
 }
 
 // Trusted is true for loopback and for an app of the group. These callers skip the allow list.

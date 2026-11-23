@@ -224,6 +224,7 @@ const (
 	FeatureCI           = "ci"            // the /v1/ci routes: CI reads and wait
 	FeatureCIRedirect   = "ci-redirect"   // the /v1/hooks/settings routes: the switch for the CI poll refusal
 	FeatureCIActions    = "ci-actions"    // the POST /v1/ci write routes: rerun, cancel, dispatch and approve
+	FeatureLinks        = "links"         // the routes /go/, /v1/presence and /v1/open, and the frame openRoute
 )
 
 // UpdateStatus is the last self-update check of a daemon.
@@ -238,6 +239,7 @@ type UpdateStatus struct {
 type DaemonListen struct {
 	Loopback  string `json:"loopback"`
 	Tailscale string `json:"tailscale,omitempty"`
+	Web       string `json:"web,omitempty"` // the base of the /go/ links
 }
 
 // DeviceKind: DeviceDaemon is a machine of the group, DeviceApp an app on a machine without a daemon.

@@ -47,7 +47,7 @@ func TestEventCatalogMatchesTheFixtures(t *testing.T) {
 		KindQuestionAnswered, KindReviewSubmitted, KindReviewApproved, KindWorktreeAdded, KindWorktreeRemoved, KindGitCommit,
 		KindGitRebase, KindGitReset, KindGitMerge, KindGitPush, KindQueuePicked, KindQueueHeld, KindRunbookStepStarted,
 		KindRunbookStepEnded, KindAutomationRan, KindWorkerStarted, KindWorkerAnswered, KindWorkerNudged, KindWorkerEscalated,
-		KindWorkerDone} {
+		KindWorkerDone, KindLinkOpened} {
 		if _, ok := cat[k]; !ok {
 			t.Errorf("constant %s is not in the catalog", k)
 		}

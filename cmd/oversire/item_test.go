@@ -202,7 +202,8 @@ func TestItemCreateBodyFromStdin(t *testing.T) {
 	}
 	wantArgs(t, "item.create", map[string]any{"project": "ACME", "title": "New", "body": "# Spec\n", "status": "todo", "priority": "high",
 		"parent": "ACME-3", "labels": []string{"a", "b"}, "epic": "Plan"}, call, got)
-	if !strings.Contains(out.String(), "Key: ACME-9") {
+	// The test daemon has no links feature: only the app link.
+	if !strings.HasSuffix(out.String(), "\nKey: ACME-9\nApp link: oversire://item/ACME-9\n") {
 		t.Fatal(out)
 	}
 }

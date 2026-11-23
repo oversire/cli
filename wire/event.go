@@ -169,4 +169,5 @@ const (
 	KindWorkerNudged       = "worker.nudged"
 	KindWorkerEscalated    = "worker.escalated"
 	KindWorkerDone         = "worker.done"
+	KindLinkOpened         = "link.opened"
 )

@@ -66,10 +66,18 @@ func TestServeFeatures(t *testing.T) {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	for _, f := range []string{wire.FeatureMirrorCI, wire.FeatureCI} {
+	for _, f := range []string{wire.FeatureMirrorCI, wire.FeatureCI, wire.FeatureLinks} {
 		if !slices.Contains(info.Features, f) {
 			t.Errorf("features %v have no %q", info.Features, f)
 		}
+	}
+	if info.Listen.Web != base {
+		t.Errorf("listen.web %q", info.Listen.Web)
+	}
+	if resp, err := http.Get(base + "/go/item/OVERSIRE-1"); err != nil || resp.StatusCode != http.StatusServiceUnavailable {
+		t.Errorf("go: %v %v", resp, err)
+	} else {
+		resp.Body.Close()
 	}
 	resp, err := http.Get(base + "/v1/ci/status?repo=o/r&ref=main")
 	if err != nil {

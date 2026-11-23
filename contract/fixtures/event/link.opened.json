@@ -1,0 +1,14 @@
+{
+  "seq": 512,
+  "id": "link:o-7c2d91",
+  "at": "2026-11-23T10:15:00Z",
+  "seenAt": "2026-11-23T10:15:00Z",
+  "kind": "link.opened",
+  "item": "OVERSIRE-400",
+  "machine": "mba",
+  "actorType": "human",
+  "actor": "fritz@example.com",
+  "via": "web",
+  "summary": "Opened item/OVERSIRE-400/changes on mba",
+  "payload": { "route": "item/OVERSIRE-400/changes", "opened": "mba", "source": "web", "how": "click" }
+}

@@ -1881,6 +1881,45 @@
       }
     },
     {
+      "kind": "link.opened",
+      "domain": "human",
+      "actorTypes": [
+        "human",
+        "agent"
+      ],
+      "private": false,
+      "summary": "the route and the Mac that opened it",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "route": {
+            "type": "string"
+          },
+          "opened": {
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "web",
+              "cli"
+            ]
+          },
+          "how": {
+            "enum": [
+              "click",
+              "input",
+              "on"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "route",
+          "opened"
+        ]
+      }
+    },
+    {
       "kind": "item.areas_set",
       "domain": "human",
       "actorTypes": [

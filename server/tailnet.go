@@ -90,50 +90,80 @@ func inTailnet(a netip.Addr) bool {
 	return slices.ContainsFunc(tailnetRanges, func(p netip.Prefix) bool { return p.Contains(a) })
 }
 
-// Peers gives the other nodes of `tailscale status --json`, sorted by name.
-// The app CLI can print text and exit 0 while the app starts. Then Peers tries again one time, and gives ErrTailscaleDown.
-func (t *Tailnet) Peers(ctx context.Context) ([]Peer, error) {
+type statusNode struct {
+	HostName     string
+	DNSName      string
+	TailscaleIPs []string
+	Online       bool
+	OS           string
+}
+
+func (n statusNode) peer() Peer {
+	p := Peer{Name: n.HostName, DNS: strings.TrimSuffix(n.DNSName, "."), Online: n.Online, OS: n.OS}
+	for _, s := range n.TailscaleIPs {
+		if a, err := netip.ParseAddr(s); err == nil {
+			p.Addrs = append(p.Addrs, a)
+		}
+	}
+	return p
+}
+
+type status struct {
+	Self *statusNode
+	Peer map[string]statusNode
+}
+
+// status runs `tailscale status --json`.
+// The app CLI can print text and exit 0 while the app starts. Then it tries again one time, and gives ErrTailscaleDown.
+func (t *Tailnet) status(ctx context.Context) (status, error) {
+	var st status
 	if t.exe == "" {
-		return nil, errors.New("the tailscale CLI is not on this machine")
+		return st, errors.New("the tailscale CLI is not on this machine")
 	}
 	out, _, err := t.run.Run(ctx, t.exe, []string{"status", "--json"}, nil)
 	if err == nil && !jsonObject(out) {
 		select {
 		case <-time.After(t.retry):
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return st, ctx.Err()
 		}
 		out, _, err = t.run.Run(ctx, t.exe, []string{"status", "--json"}, nil)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("tailscale status: %w", err)
+		return st, fmt.Errorf("tailscale status: %w", err)
 	}
 	if !jsonObject(out) {
 		line, _, _ := strings.Cut(strings.TrimSpace(string(out)), "\n")
-		return nil, fmt.Errorf("%w: %s", ErrTailscaleDown, cmp.Or(line, "no output"))
-	}
-	var st struct {
-		Peer map[string]struct {
-			HostName     string
-			DNSName      string
-			TailscaleIPs []string
-			Online       bool
-			OS           string
-		}
+		return st, fmt.Errorf("%w: %s", ErrTailscaleDown, cmp.Or(line, "no output"))
 	}
 	if err := json.Unmarshal(out, &st); err != nil {
-		return nil, fmt.Errorf("tailscale status: %w", err)
+		return st, fmt.Errorf("tailscale status: %w", err)
+	}
+	return st, nil
+}
+
+// Peers gives the other nodes of `tailscale status --json`, sorted by name.
+func (t *Tailnet) Peers(ctx context.Context) ([]Peer, error) {
+	st, err := t.status(ctx)
+	if err != nil {
+		return nil, err
 	}
 	peers := make([]Peer, 0, len(st.Peer))
 	for _, p := range st.Peer {
-		peer := Peer{Name: p.HostName, DNS: strings.TrimSuffix(p.DNSName, "."), Online: p.Online, OS: p.OS}
-		for _, s := range p.TailscaleIPs {
-			if a, err := netip.ParseAddr(s); err == nil {
-				peer.Addrs = append(peer.Addrs, a)
-			}
-		}
-		peers = append(peers, peer)
+		peers = append(peers, p.peer())
 	}
 	slices.SortFunc(peers, func(a, b Peer) int { return strings.Compare(a.Name, b.Name) })
 	return peers, nil
+}
+
+// Self gives this node of `tailscale status --json`.
+func (t *Tailnet) Self(ctx context.Context) (Peer, error) {
+	st, err := t.status(ctx)
+	if err != nil {
+		return Peer{}, err
+	}
+	if st.Self == nil {
+		return Peer{}, errors.New("tailscale status: no Self")
+	}
+	return st.Self.peer(), nil
 }

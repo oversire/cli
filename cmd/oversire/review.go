@@ -13,6 +13,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"github.com/oversire/cli/link"
 	"github.com/oversire/cli/review"
 	"github.com/oversire/cli/ticket"
 	"github.com/oversire/cli/wire"
@@ -128,6 +129,11 @@ func (c *cli) reviewReady(ctx context.Context, args []string) error {
 		what = "the plan of " + K
 	}
 	fmt.Fprintf(c.out, "Review of %s is ready. The user reviews it in OverSire. Do not merge.\n", what)
+	tab := "changes"
+	if k == wire.ReviewPlan {
+		tab = "plan"
+	}
+	c.printLinks(ctx, d, link.Path{Route: "item/" + K + "/" + tab})
 	if s.Unanswered == 0 {
 		return nil
 	}

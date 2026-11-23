@@ -53,10 +53,11 @@ func reviewDaemonWith(t *testing.T, c *cli, x *binding.Index) (*sessions.Book, <
 	events := eventlog.New(10)
 	book := sessions.NewBook("mbp", "", events, nil)
 	info := func() wire.DaemonInfo {
-		return wire.DaemonInfo{Machine: "mbp", Version: "test", Contract: wire.DaemonContract}
+		return wire.DaemonInfo{Machine: "mbp", Version: "test", Contract: wire.DaemonContract, Features: []string{wire.FeatureLinks}}
 	}
 	srv := server.NewServer(cfg, info, nil, events, book, nil)
 	srv.Log = c.log
+	srv.Web = func() string { return "http://mbp:7690" }
 	deps := review.Deps{Store: review.NewStore(filepath.Join(t.TempDir(), "reviews")), Git: review.NewGit(proc.Local{}),
 		Repos: noRepos{}, Sessions: book, Launcher: &bookLauncher{book: book}, Picker: onePicker{}, Machine: "mbp",
 		Notify: func(ev wire.ReviewEvent) { srv.Notify(false, ev) }}
@@ -166,7 +167,8 @@ func TestReviewReadyAndReply(t *testing.T) {
 
 	// In the worktree, the group gives the key and the root.
 	c.wd = wt
-	if s := run("ready", "--note", "Adds N."); s != "Review of APP-1 is ready. The user reviews it in OverSire. Do not merge." {
+	if s := run("ready", "--note", "Adds N."); s != "Review of APP-1 is ready. The user reviews it in OverSire. Do not merge.\n"+
+		"App link: oversire://item/APP-1/changes\nWeb link: http://mbp:7690/go/item/APP-1/changes (⌘-click)" {
 		t.Fatal(s)
 	}
 	ev := awaitReview(t, frames, wire.EventReviewReady)

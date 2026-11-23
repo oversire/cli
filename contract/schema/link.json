@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oversire.dev/contract/link.json",
+  "title": "OverSire links",
+  "description": "Links that open a page of the app on the Mac of the click (OVERSIRE-593). GET /go/<RoutePath>?focus=<Focus> on a daemon (Public) finds the Mac of the click from the remote address, sends OpenRouteFrame on the WebSocket /v1/connect of the app of that Mac, and answers with a small HTML page. When the Mac of the click is not known, the daemon picks the app with the latest user input. Each app posts AppPresence to POST /v1/presence (Member). POST /v1/open (loopback) does the same push for the command oversire open. The daemon advertises the feature links in DaemonInfo.features, and the base of the web links in DaemonInfo.listen.web.",
+  "x-oversire-schema": 1,
+  "$defs": {
+    "RouteHead": {
+      "description": "The first segment of a route path. These are the heads that the app router accepts.",
+      "enum": ["home", "inbox", "intake", "activity", "work", "mine", "sessions", "agents", "queue", "plan", "runs", "run", "prs", "insights", "settings", "project", "item", "epic"]
+    },
+    "RoutePath": {
+      "description": "A route of the app without the scheme, for example item/OVERSIRE-400/changes or run/oversire/oversire/123. The first segment is a RouteHead, in any case.",
+      "type": "string",
+      "maxLength": 256,
+      "pattern": "^[A-Za-z]+(/[A-Za-z0-9][A-Za-z0-9._-]{0,99}){0,4}$"
+    },
+    "Focus": {
+      "description": "The row to show on the page, for example a sub-item key.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$"
+    },
+    "OpenRoute": {
+      "description": "One open. daemon is the machine of the daemon that sends the frame (the machine of the terminal). agent is the agent that asked for the open.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "path": { "$ref": "#/$defs/RoutePath" },
+        "focus": { "$ref": "#/$defs/Focus" },
+        "source": { "enum": ["web", "cli"] },
+        "daemon": { "$ref": "daemon.json#/$defs/MachineName" },
+        "agent": { "type": "string" }
+      },
+      "required": ["id", "path", "source", "daemon"],
+      "additionalProperties": false
+    },
+    "OpenRouteFrame": {
+      "description": "The frame of the daemon on the WebSocket of the app. The app brings its window to the front and shows the route.",
+      "type": "object",
+      "properties": {
+        "type": { "const": "openRoute" },
+        "open": { "$ref": "#/$defs/OpenRoute" }
+      },
+      "required": ["type", "open"],
+      "additionalProperties": false
+    },
+    "AppPresence": {
+      "description": "The body of POST /v1/presence. idle is the number of seconds since the last user input on the Mac. The daemon keeps the receive time minus idle, so the clocks of the Macs do not need to agree. An app that posts presence accepts OpenRouteFrame.",
+      "type": "object",
+      "properties": {
+        "idle": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["idle"],
+      "additionalProperties": false
+    },
+    "OpenRequest": {
+      "description": "The body of POST /v1/open. on names the machine of the app. Without on, the daemon picks the app with the latest input.",
+      "type": "object",
+      "properties": {
+        "path": { "$ref": "#/$defs/RoutePath" },
+        "focus": { "$ref": "#/$defs/Focus" },
+        "on": { "$ref": "daemon.json#/$defs/MachineName" },
+        "agent": { "type": "string" }
+      },
+      "required": ["path"],
+      "additionalProperties": false
+    },
+    "OpenResult": {
+      "description": "The answer of POST /v1/open. machine is the machine of the app that got the route. how is click (the Mac of the click), input (the app with the latest input) or on (the machine of the request). idle is the age of the last input of that Mac, in seconds. group is the name of the group.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "machine": { "$ref": "daemon.json#/$defs/MachineName" },
+        "how": { "enum": ["click", "input", "on"] },
+        "idle": { "type": "integer", "minimum": 0 },
+        "group": { "type": "string" }
+      },
+      "required": ["id", "machine", "how"],
+      "additionalProperties": false
+    }
+  }
+}
