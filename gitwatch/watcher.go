@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -74,6 +75,33 @@ type Watcher struct {
 	mu    sync.Mutex
 	state state
 	paths []string // the checkouts of the last read of the roots
+	last  []string // the common git folders of the last scan
+}
+
+// Worktree is one linked worktree of a repository. Repo is the main checkout and Base its branch.
+type Worktree struct {
+	Path, Branch, Repo, Base string
+}
+
+// Worktrees gives the linked worktrees of the last scan, with no main checkout.
+func (w *Watcher) Worktrees() []Worktree {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	var out []Worktree
+	for _, gitdir := range w.last {
+		main, base := filepath.Dir(gitdir), ""
+		for _, wt := range w.state.Repos[gitdir] {
+			if filepath.Base(gitdir) == ".git" && wt.Path == main {
+				base = wt.Branch
+			}
+		}
+		for _, wt := range w.state.Repos[gitdir] {
+			if wt.Path != main {
+				out = append(out, Worktree{Path: wt.Path, Branch: wt.Branch, Repo: main, Base: base})
+			}
+		}
+	}
+	return out
 }
 
 // NewWatcher reads the cursors in path. roots gives the checkouts and the folders that hold checkouts.
@@ -169,6 +197,11 @@ func (w *Watcher) Scan(ctx context.Context) int {
 			changed = changed || moved
 		}
 	}
+	w.last = w.last[:0]
+	for gitdir := range seen {
+		w.last = append(w.last, gitdir)
+	}
+	slices.Sort(w.last)
 	for file := range w.state.Offsets {
 		if _, err := os.Stat(file); err != nil {
 			delete(w.state.Offsets, file)

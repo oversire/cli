@@ -342,6 +342,8 @@ The home member of a group without cloud keeps the synced store of the apps in `
 
 The daemon keeps the `worktree-bindings` records of the store in memory (package `binding`). Each one binds an item key to a folder on one machine. `GET /v1/worktree-bindings` gives them all, or `?key=K`, `?parent=P` (the sub-items) or `?dir=/abs/path` (the binding of this machine whose folder holds the path). The review engine finds the group of a key through its binding first, then through `<root>/.wt/<key>`. A bound folder that is one git worktree is a group with one repo. A sub-item in `parent` mode uses the group of its parent. `oversire review ready` in a bound folder finds the key through the binding. The runbook placeholder `{group}` gives the bound group.
 
+`GET /v1/worktrees` gives the linked git worktrees that the git watcher found (`?changed=1`: only the worktrees with files not committed or commits not on the base branch; `?dir=/abs/path`: only the worktrees in that folder). Each row has the counts, the session in the folder, and a guess of the item: the session key or a prompt that names one key (`prompt`), then the path (`cwd`), then the branch (`branch`). The answer has no prompt text. The daemon keeps a read for 30 s. The app shows the rows with no binding in "Not linked to an item".
+
 A member that is not home answers 409 `{"error":"<machine> is home","home":"<machine>"}`. When the group has cloud, each member answers 409 `{"error":"the cloud is home","cloud":{...}}`. `POST /v1/group/home` with this machine copies all records of the old home before it sets home. When the old home does not answer, the move goes on and the answer has `"offline":true`.
 
 ### Agent env and secrets

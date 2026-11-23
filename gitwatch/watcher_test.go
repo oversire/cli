@@ -226,3 +226,16 @@ func TestCommitBeforeTheTurnEnded(t *testing.T) {
 		t.Errorf("%v", got)
 	}
 }
+
+func TestWatcherWorktrees(t *testing.T) {
+	t.Parallel()
+	root, _, mk := setup(t, nil)
+	ctx := context.Background()
+	git(t, filepath.Join(root, "app"), "worktree", "add", "-q", "-b", "quick", filepath.Join(root, "quick"))
+	w := mk()
+	w.Scan(ctx)
+	got := w.Worktrees()
+	if len(got) != 1 || got[0] != (Worktree{Path: filepath.Join(root, "quick"), Branch: "quick", Repo: filepath.Join(root, "app"), Base: "main"}) {
+		t.Fatalf("%+v", got)
+	}
+}

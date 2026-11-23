@@ -89,4 +89,14 @@ func TestServeFeatures(t *testing.T) {
 	if resp.StatusCode != http.StatusOK || page.Bindings == nil {
 		t.Fatalf("worktree bindings gave %d %+v", resp.StatusCode, page)
 	}
+	resp, err = http.Get(base + "/v1/worktrees?changed=1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var trees wire.WorktreesPage
+	json.NewDecoder(resp.Body).Decode(&trees)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || trees.Worktrees == nil {
+		t.Fatalf("worktrees gave %d %+v", resp.StatusCode, trees)
+	}
 }

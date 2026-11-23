@@ -286,6 +286,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 		}
 		return roots
 	}, filepath.Join(data, "gitwatch.json"), c.log)
+	srv.Handle(binding.NewScanner(gitRows, review.NewGit(c.cmds), book, time.Now).Routes()...)
 
 	drain := func(ctx context.Context) error {
 		t := time.NewTicker(spoolInterval)
