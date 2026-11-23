@@ -133,7 +133,14 @@ func (c *cli) reviewReady(ctx context.Context, args []string) error {
 	if k == wire.ReviewPlan {
 		tab = "plan"
 	}
-	c.printLinks(ctx, d, link.Path{Route: "item/" + K + "/" + tab})
+	lp := link.Path{Route: "item/" + K + "/" + tab}
+	if k == wire.ReviewCode {
+		if pb, ok := c.binding(ctx, d, K); ok && pb.Parent != "" {
+			// The code of a sub-item folds into the review of its parent.
+			lp = link.Path{Route: "item/" + strings.ToUpper(pb.Parent) + "/changes", Focus: K}
+		}
+	}
+	c.printLinks(ctx, d, lp)
 	if s.Unanswered == 0 {
 		return nil
 	}
@@ -267,6 +274,20 @@ func (c *cli) boundKey(ctx context.Context, dir string) (wire.WorktreeBinding, b
 		return wire.WorktreeBinding{}, false
 	}
 	return page.Bindings[0], true
+}
+
+// binding gives the binding of key from the daemon d.
+func (c *cli) binding(ctx context.Context, d daemonClient, key string) (wire.WorktreeBinding, bool) {
+	var page wire.WorktreeBindingsPage
+	if err := d.call(ctx, "GET", "/v1/worktree-bindings?key="+url.QueryEscape(key), nil, &page); err != nil {
+		return wire.WorktreeBinding{}, false
+	}
+	for _, b := range page.Bindings {
+		if strings.EqualFold(b.Key, key) {
+			return b, true
+		}
+	}
+	return wire.WorktreeBinding{}, false
 }
 
 // workdir is the working folder of the command.

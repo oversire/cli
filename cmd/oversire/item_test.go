@@ -236,7 +236,7 @@ func TestItemCreatePrintsWorktree(t *testing.T) {
 	if _, _, err := runItem(t, c, app, "item", "create", "--project", "acme", "--title", "New", "--make-group"); err != nil {
 		t.Fatal(err)
 	}
-	want := "ACME-9 is made.\nKey: ACME-9\nWorktree: .wt/acme-9 on " + c.machine() + "\nBranch: acme-9\nReview in: ACME-3\n"
+	want := "ACME-9 is made.\nKey: ACME-9\nWorktree: .wt/acme-9 on " + c.machine() + "\nBranch: acme-9\nReview in: ACME-3\nApp link: oversire://item/ACME-9\n"
 	if out.String() != want {
 		t.Fatalf("got %q", out)
 	}

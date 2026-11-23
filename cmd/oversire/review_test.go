@@ -223,7 +223,7 @@ func TestReviewReadyKeyFromBinding(t *testing.T) {
 	}
 	os.WriteFile(filepath.Join(dir, "q.go"), []byte("package app\n"), 0o644)
 	x := binding.NewIndex("mbp", nil)
-	rec, _ := json.Marshal(wire.WorktreeBinding{Key: "APP-7", Machine: "mbp", Root: root, Group: "quick-fix", Mode: wire.WorktreeOwn, Source: "link"})
+	rec, _ := json.Marshal(wire.WorktreeBinding{Key: "APP-7", Machine: "mbp", Root: root, Group: "quick-fix", Parent: "APP-1", Mode: wire.WorktreeOwn, Source: "link"})
 	x.Apply([]wire.StoreOp{{Collection: wire.CollectionWorktreeBindings, ID: "APP-7", Op: wire.StorePut, Record: rec}})
 	_, frames := reviewDaemonWith(t, c, x)
 
@@ -231,7 +231,9 @@ func TestReviewReadyKeyFromBinding(t *testing.T) {
 	if err := c.dispatch(context.Background(), []string{"review", "ready", "--note", "Quick fix."}); err != nil {
 		t.Fatal(err)
 	}
-	if s := strings.TrimSpace(out.String()); s != "Review of APP-7 is ready. The user reviews it in OverSire. Do not merge." {
+	// The code of a sub-item folds into the review of its parent.
+	if s := strings.TrimSpace(out.String()); s != "Review of APP-7 is ready. The user reviews it in OverSire. Do not merge.\n"+
+		"App link: oversire://item/APP-1/changes#APP-7\nWeb link: http://mbp:7690/go/item/APP-1/changes?focus=APP-7 (⌘-click)" {
 		t.Fatal(s)
 	}
 	if ev := awaitReview(t, frames, wire.EventReviewReady); ev.Key != "APP-7" {

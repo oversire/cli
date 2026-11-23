@@ -745,10 +745,12 @@ func (c *cli) printKey(data json.RawMessage) error {
 // printMade prints the key, then the worktree lines, then the links.
 func (c *cli) printMade(ctx context.Context, data json.RawMessage) error {
 	var d made
-	if json.Unmarshal(data, &d) != nil || d.Key == "" {
+	if json.Unmarshal(data, &d) != nil {
 		return nil
 	}
-	fmt.Fprintln(c.out, "Key: "+d.Key)
+	if d.Key != "" {
+		fmt.Fprintln(c.out, "Key: "+d.Key)
+	}
 	if w := d.Worktree; w != nil {
 		fmt.Fprintf(c.out, "Worktree: %s on %s\n", w.Group, w.Machine)
 		if w.Branch != "" {
@@ -758,7 +760,7 @@ func (c *cli) printMade(ctx context.Context, data json.RawMessage) error {
 			fmt.Fprintln(c.out, "Review in: "+w.Parent)
 		}
 	}
-	if dc, err := c.daemonClient(); err == nil {
+	if dc, err := c.daemonClient(); err == nil && d.Key != "" {
 		c.printLinks(ctx, dc, link.Path{Route: "item/" + d.Key})
 	}
 	return nil
