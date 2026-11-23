@@ -1,0 +1,24 @@
+{
+  "seq": 262,
+  "id": "app:mbp:OVERSIRE-402:worktree:1795425000000",
+  "at": "2026-11-23T09:30:00Z",
+  "seenAt": "2026-11-23T09:30:01Z",
+  "kind": "item.worktree.bound",
+  "item": "OVERSIRE-402",
+  "parentItem": "OVERSIRE-400",
+  "project": "oversire",
+  "machine": "mbp",
+  "actorType": "human",
+  "actor": "fritz",
+  "via": "app@mbp",
+  "summary": ".wt/oversire-402 on mbp",
+  "payload": {
+    "group": ".wt/oversire-402",
+    "root": "/Users/fritz/Projects/oversire-workspace",
+    "machine": "mbp",
+    "branch": "oversire-402",
+    "mode": "own",
+    "source": "create",
+    "parent": "OVERSIRE-400"
+  }
+}

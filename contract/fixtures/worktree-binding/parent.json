@@ -1,0 +1,11 @@
+{
+  "key": "OVERSIRE-403",
+  "machine": "mbp",
+  "root": "/Users/fritz/Projects/oversire-workspace",
+  "group": ".wt/oversire-400",
+  "branch": "",
+  "parent": "OVERSIRE-400",
+  "mode": "parent",
+  "source": "intake",
+  "updatedAt": "2026-11-23T09:31:00Z"
+}

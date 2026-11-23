@@ -1,0 +1,23 @@
+{
+  "worktrees": [
+    {
+      "path": "/Users/fritz/Projects/oversire-workspace/.claude/worktrees/quick-fix-3f2a/oversire",
+      "repo": "/Users/fritz/Projects/oversire-workspace/oversire",
+      "branch": "quick-fix-3f2a",
+      "base": "main",
+      "uncommitted": 3,
+      "ahead": 1,
+      "session": "claude:7f3c",
+      "guess": { "key": "OVERSIRE-402", "from": "prompt" }
+    },
+    {
+      "path": "/Users/fritz/orca/workspaces/oversire/fix-menu",
+      "repo": "/Users/fritz/Projects/oversire-workspace/oversire",
+      "branch": "",
+      "base": "main",
+      "uncommitted": 0,
+      "ahead": 2
+    }
+  ],
+  "at": "2026-11-23T09:33:00Z"
+}

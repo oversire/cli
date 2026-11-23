@@ -138,6 +138,13 @@ func TestRejectsBadBatches(t *testing.T) {
 	patch["state"] = "maybe"
 	bad, _ := json.Marshal(patch)
 
+	var bind map[string]any
+	json.Unmarshal(fixture(t, "worktree-binding", "own.json"), &bind)
+	delete(bind, "machine")
+	noMachine, _ := json.Marshal(bind)
+	bind["machine"], bind["group"] = "mbp", "../out"
+	dotDot, _ := json.Marshal(bind)
+
 	body := func(ops ...any) []byte { b, _ := json.Marshal(map[string]any{"ops": ops}); return b }
 	with := func(f func(*wire.StoreOp)) wire.StoreOp { op := put; f(&op); return op }
 	cases := []struct {
@@ -150,6 +157,10 @@ func TestRejectsBadBatches(t *testing.T) {
 		{"hub only", body(with(func(o *wire.StoreOp) { o.Collection = "work-orders" })), "ops[0]: only the hub writes work-orders"},
 		{"bad record", body(wire.StoreOp{Schema: 2, Collection: "suggestions", ID: "s", Op: wire.StorePut, Record: bad, HLC: put.HLC, Device: "mac"}),
 			"ops[0].record.state: not one of open, accepted, dismissed, expired, done, failed"},
+		{"binding without machine", body(wire.StoreOp{Schema: 2, Collection: "worktree-bindings", ID: "OVERSIRE-402", Op: wire.StorePut, Record: noMachine, HLC: put.HLC, Device: "mac"}),
+			"ops[0].record.machine: missing"},
+		{"binding group with ..", body(wire.StoreOp{Schema: 2, Collection: "worktree-bindings", ID: "OVERSIRE-402", Op: wire.StorePut, Record: dotDot, HLC: put.HLC, Device: "mac"}),
+			"ops[0].record.group: has a .. part"},
 		{"delete with record", body(with(func(o *wire.StoreOp) { o.Op = wire.StoreDelete })), "ops[0]: a delete has no record"},
 		{"put without record", body(with(func(o *wire.StoreOp) { o.Record = nil })), "ops[0]: a put needs a record"},
 		{"bad hlc", body(with(func(o *wire.StoreOp) { o.HLC = "now" })), "ops[0].hlc: not a hybrid clock"},
@@ -269,6 +280,7 @@ func TestRecordFixturesPass(t *testing.T) {
 		"area-catalog": "area-catalog", "area-candidates": "area-candidates", "changed-paths": "changed-paths", "pin": "pins", "note": "notes",
 		"snooze": "snoozes", "queue-lane": "queue-lanes", "agent-link": "agent-links", "ignored-failure": "ignored-failures",
 		"queue-trigger": "queue-triggers", "ai-output": "ai-outputs", "agent-def": "agents",
+		"worktree-binding": "worktree-bindings",
 	}
 	for kind, collection := range kinds {
 		paths, _ := filepath.Glob(filepath.Join("..", "contract", "fixtures", kind, "*.json"))

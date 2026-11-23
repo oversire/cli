@@ -612,6 +612,49 @@
       },
       "required": ["env"],
       "additionalProperties": false
+    },
+    "WorktreeBindingsPage": {
+      "description": "The answer of GET /v1/worktree-bindings?key=&parent=&dir= on the home daemon.",
+      "type": "object",
+      "properties": { "bindings": { "type": "array", "items": { "$ref": "store.json#/$defs/WorktreeBinding" } } },
+      "required": ["bindings"],
+      "additionalProperties": false
+    },
+    "WorktreeGuess": {
+      "description": "The item that a worktree with no binding is likely for. The prompt text is not sent, only the guess.",
+      "type": "object",
+      "properties": {
+        "key": { "type": "string", "pattern": "^[A-Z0-9][A-Z0-9_-]*$", "minLength": 1, "maxLength": 60 },
+        "from": { "description": "Where the key was found.", "enum": ["cwd", "branch", "prompt"] }
+      },
+      "required": ["key", "from"],
+      "additionalProperties": false
+    },
+    "WorktreeInfo": {
+      "description": "One git worktree on the machine of the daemon.",
+      "type": "object",
+      "properties": {
+        "path": { "description": "The absolute folder of the worktree.", "type": "string", "minLength": 1 },
+        "repo": { "description": "The absolute folder of the main checkout.", "type": "string", "minLength": 1 },
+        "branch": { "description": "Empty for a detached HEAD.", "type": "string" },
+        "base": { "description": "The base branch that ahead counts from.", "type": "string" },
+        "uncommitted": { "description": "The number of changed files that are not committed.", "type": "integer", "minimum": 0 },
+        "ahead": { "description": "The number of commits that are not on base.", "type": "integer", "minimum": 0 },
+        "session": { "description": "The id of a live session in the folder.", "type": "string", "minLength": 1 },
+        "guess": { "$ref": "#/$defs/WorktreeGuess" }
+      },
+      "required": ["path", "repo", "branch", "base", "uncommitted", "ahead"],
+      "additionalProperties": false
+    },
+    "WorktreesPage": {
+      "description": "The answer of GET /v1/worktrees?changed=1&dir=.",
+      "type": "object",
+      "properties": {
+        "worktrees": { "type": "array", "items": { "$ref": "#/$defs/WorktreeInfo" } },
+        "at": { "$ref": "#/$defs/Date" }
+      },
+      "required": ["worktrees", "at"],
+      "additionalProperties": false
     }
   }
 }

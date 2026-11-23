@@ -1903,6 +1903,31 @@
       }
     },
     {
+      "kind": "item.worktree.bound",
+      "domain": "human",
+      "actorTypes": [
+        "human",
+        "agent",
+        "system"
+      ],
+      "private": false,
+      "summary": "the group folder and the machine",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "group": { "type": "string" },
+          "root": { "type": "string" },
+          "machine": { "type": "string" },
+          "branch": { "type": "string" },
+          "mode": { "enum": ["own", "parent"] },
+          "source": { "enum": ["create", "intake", "session", "auto", "link"] },
+          "parent": { "type": "string" }
+        },
+        "required": ["group", "root", "machine", "branch", "mode", "source"],
+        "additionalProperties": false
+      }
+    },
+    {
       "kind": "intake.created",
       "domain": "tracker",
       "actorTypes": [

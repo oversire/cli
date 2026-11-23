@@ -97,8 +97,20 @@ var (
 	area         = pattern(regexp.MustCompile(`^[a-z0-9-]{1,32}$`), "not an area")
 	aiOutputKind = pattern(regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`), "not an AI output kind")
 	envKey       = pattern(regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,199}$`), "not an env key")
+	itemKey      = pattern(regexp.MustCompile(`^[A-Z0-9][A-Z0-9_-]*$`), "not an item key")
 	hlcPattern   = regexp.MustCompile(`^[0-9]{15}-[0-9]{6}-.+$`)
 )
+
+// groupDir is a group folder of 1 to 1024 characters with no .. part.
+func groupDir(v any, path string) error {
+	if err := text(1, 1024)(v, path); err != nil {
+		return err
+	}
+	if slices.Contains(strings.Split(v.(string), "/"), "..") {
+		return fail(path, "has a .. part")
+	}
+	return nil
+}
 
 func uri(v any, path string) error {
 	s, ok := v.(string)
@@ -327,6 +339,9 @@ var recordShapes = map[string]shape{
 		"effort?": text(1, 40), "runsOn?": maxItems(50, nonEmpty),
 		"env":       maxItems(64, object(fields{"key": envKey, "value?": text(0, 8192), "secret": boolean})),
 		"updatedAt": date, "updatedBy?": text(1, 200)}),
+	"worktree-bindings": object(fields{"key": itemKey, "machine": nonEmpty, "root": text(1, 1024), "group": groupDir,
+		"branch": text(0, 250), "parent?": itemKey, "mode": oneOf("own", "parent"),
+		"source": oneOf("create", "intake", "session", "auto", "link"), "updatedAt": date, "updatedBy?": text(1, 200)}),
 }
 
 func subject(kind string, ref shape) shape {

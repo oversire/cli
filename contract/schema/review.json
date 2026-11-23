@@ -75,7 +75,7 @@
         "pending": { "description": "The pending comments, not submitted yet.", "type": "integer", "minimum": 0 },
         "unanswered": { "description": "Submitted comments with no reply.", "type": "integer", "minimum": 0 },
         "root": { "description": "The absolute path of the workspace root.", "type": "string", "minLength": 1 },
-        "group": { "description": "The group folder relative to root, for example .wt/sling-170. Absent for a plan.", "type": "string" },
+        "group": { "description": "The group folder relative to root, for example .wt/sling-170, or absolute when the folder is outside the root. Absent for a plan.", "type": "string" },
         "repos": { "type": "array", "items": { "$ref": "#/$defs/ReviewRepo" } },
         "subitems": { "description": "The keys of the sub-items, from the Item: lines of the commits.", "type": "array", "items": { "type": "string" } },
         "session": { "$ref": "#/$defs/ReviewSession" },

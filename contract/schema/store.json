@@ -277,6 +277,24 @@
       "required": ["name", "env", "updatedAt"],
       "additionalProperties": false
     },
+    "WorktreeBinding": {
+      "description": "Collection worktree-bindings. The id is the item key. The fixed worktree folder of one item: the app writes it when it makes the item.",
+      "type": "object",
+      "properties": {
+        "key": { "description": "The item key in upper case, the same as the id.", "type": "string", "pattern": "^[A-Z0-9][A-Z0-9_-]*$", "minLength": 1, "maxLength": 60 },
+        "machine": { "description": "The group member that holds the folder.", "$ref": "daemon.json#/$defs/MachineName" },
+        "root": { "description": "The absolute workspace root on that machine.", "type": "string", "minLength": 1, "maxLength": 1024 },
+        "group": { "description": "The group folder, relative to root (.wt/oversire-402) or absolute. It has no .. part.", "type": "string", "minLength": 1, "maxLength": 1024 },
+        "branch": { "description": "The planned branch. Empty: none.", "type": "string", "maxLength": 250 },
+        "parent": { "description": "The key of the parent item.", "type": "string", "pattern": "^[A-Z0-9][A-Z0-9_-]*$", "minLength": 1, "maxLength": 60 },
+        "mode": { "description": "own: the item has its own group. parent: group is the group of the parent.", "enum": ["own", "parent"] },
+        "source": { "description": "The path that wrote the binding.", "enum": ["create", "intake", "session", "auto", "link"] },
+        "updatedAt": { "$ref": "#/$defs/Date" },
+        "updatedBy": { "description": "The name of the actor of the last write.", "type": "string", "minLength": 1, "maxLength": 200 }
+      },
+      "required": ["key", "machine", "root", "group", "branch", "mode", "source", "updatedAt"],
+      "additionalProperties": false
+    },
     "StoreOp": {
       "description": "One write to a synced collection. The hub keeps an op log of them. Last write wins for each collection and id, by hlc.",
       "type": "object",

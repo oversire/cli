@@ -1,0 +1,11 @@
+{
+  "key": "SLING-170",
+  "machine": "mini",
+  "root": "/Users/fritz/Projects/sling-workspace",
+  "group": "/Users/fritz/Projects/sling-workspace/.claude/worktrees/quick-fix-3f2a",
+  "branch": "quick-fix-3f2a",
+  "mode": "own",
+  "source": "link",
+  "updatedAt": "2026-11-23T09:32:00Z",
+  "updatedBy": "claude s1"
+}
