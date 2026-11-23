@@ -30,21 +30,45 @@ var (
 // validKey tells if key is a review key: upper case, at most 60 characters.
 func validKey(key string) bool { return len(key) <= 60 && keyPattern.MatchString(key) }
 
-// group is a worktree group <root>/.wt/<name>. A repo of the group is a git worktree (its .git is a file).
-// A link is a symlink, for example to a shared file of the root. Other entries do not count.
+// group is a worktree group <root>/.wt/<name>, or the bound folder dir of an item. A repo of the group is a git
+// worktree (its .git is a file). A link is a symlink, for example to a shared file of the root. Other entries do not
+// count. A single group is one git worktree: its one repo is the folder itself.
 type group struct {
 	Root, Name string
 	Repos      []string
 	Links      []string
+	dir        string
+	single     bool
 }
 
 func (g group) Key() string { return strings.ToUpper(g.Name) }
-func (g group) Dir() string { return filepath.Join(g.Root, ".wt", g.Name) }
-func (g group) Rel() string { return ".wt/" + g.Name }
+
+func (g group) Dir() string {
+	if g.dir != "" {
+		return g.dir
+	}
+	return filepath.Join(g.Root, ".wt", g.Name)
+}
+
+// Rel is the folder relative to the root, or the absolute folder when it is outside the root.
+func (g group) Rel() string {
+	if g.dir == "" {
+		return ".wt/" + g.Name
+	}
+	if r, err := filepath.Rel(g.Root, g.dir); err == nil && r != ".." && !strings.HasPrefix(r, ".."+string(filepath.Separator)) {
+		return filepath.ToSlash(r)
+	}
+	return g.dir
+}
 
 // worktree is the folder of the repo name in the group. primary is the main checkout of it in the root.
-func (g group) worktree(name string) string { return filepath.Join(g.Dir(), name) }
-func (g group) primary(name string) string  { return filepath.Join(g.Root, name) }
+func (g group) worktree(name string) string {
+	if g.single {
+		return g.Dir()
+	}
+	return filepath.Join(g.Dir(), name)
+}
+func (g group) primary(name string) string { return filepath.Join(g.Root, name) }
 
 // print is the content hash of the file path of the repo name in the group. A missing file gives "gone".
 func (g group) print(name, path string) string {
@@ -66,8 +90,10 @@ func (g group) print(name, path string) string {
 }
 
 // readGroup reads <root>/.wt/<name>. ok is false when it is not a folder.
-func readGroup(root, name string) (group, bool) {
-	g := group{Root: root, Name: name}
+func readGroup(root, name string) (group, bool) { return group{Root: root, Name: name}.read() }
+
+// read fills the repos and the links of g from its folder. ok is false when it is not a folder.
+func (g group) read() (group, bool) {
 	entries, err := os.ReadDir(g.Dir())
 	if err != nil {
 		return g, false
@@ -83,6 +109,43 @@ func readGroup(root, name string) (group, bool) {
 		}
 	}
 	return g, true
+}
+
+// readBound reads the bound folder of b as the group of key. A folder that is one git worktree gives a single
+// group, whose root is the parent of its main checkout. ok is false when the folder is missing.
+func readBound(b wire.WorktreeBinding, key string) (group, bool) {
+	g := group{Root: b.Root, Name: strings.ToLower(key), dir: b.Dir()}
+	if primary, ok := mainCheckout(g.dir); ok {
+		g.Root, g.Repos, g.single = filepath.Dir(primary), []string{filepath.Base(primary)}, true
+		return g, true
+	}
+	return g.read()
+}
+
+// mainCheckout gives the main checkout of the git worktree dir. ok is false when dir is not a linked worktree.
+func mainCheckout(dir string) (string, bool) {
+	raw, err := os.ReadFile(filepath.Join(dir, ".git"))
+	if err != nil {
+		return "", false
+	}
+	gitdir, ok := strings.CutPrefix(strings.TrimSpace(string(raw)), "gitdir: ")
+	if !ok {
+		return "", false
+	}
+	if !filepath.IsAbs(gitdir) {
+		gitdir = filepath.Join(dir, gitdir)
+	}
+	common := filepath.Dir(filepath.Dir(gitdir)) // <main>/.git/worktrees/<name>
+	if c, err := os.ReadFile(filepath.Join(gitdir, "commondir")); err == nil {
+		if common = strings.TrimSpace(string(c)); !filepath.IsAbs(common) {
+			common = filepath.Join(gitdir, common)
+		}
+	}
+	common = filepath.Clean(common)
+	if filepath.Base(common) != ".git" {
+		return "", false
+	}
+	return filepath.Dir(common), true
 }
 
 // scanGroups gives the groups of each root whose name is a valid key in upper case.

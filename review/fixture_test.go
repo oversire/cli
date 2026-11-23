@@ -214,9 +214,26 @@ type rig struct {
 	clock  *clock
 	store  string
 	run    Runner // proc.Local when nil
-	events []wire.ReviewEvent
-	rows   []wire.EventDraft
-	mu     sync.Mutex
+	// bindings are the worktree bindings. Set them before r.engine.
+	bindings fakeBindings
+	events   []wire.ReviewEvent
+	rows     []wire.EventDraft
+	mu       sync.Mutex
+}
+
+// fakeBindings are the worktree bindings by key.
+type fakeBindings map[string]wire.WorktreeBinding
+
+func (f fakeBindings) Get(key string) (wire.WorktreeBinding, bool) { b, ok := f[key]; return b, ok }
+
+func (f fakeBindings) Mine() []wire.WorktreeBinding {
+	var out []wire.WorktreeBinding
+	for _, b := range f {
+		if b.Machine == "mbp" {
+			out = append(out, b)
+		}
+	}
+	return out
 }
 
 // Add takes the event rows of the engine.
@@ -254,7 +271,8 @@ func (r *rig) engine(roots ...string) *Engine {
 	}
 	e := NewEngine(Deps{Store: NewStore(r.store), Git: NewGit(run), Repos: fakeRepos{roots}, Sessions: r.book,
 		Sender: r.sender, Launcher: r.launch, Picker: fakePicker{}, Machine: "mbp", Order: Order{"oversire", "cli"},
-		Notify: func(ev wire.ReviewEvent) { r.mu.Lock(); r.events = append(r.events, ev); r.mu.Unlock() }, Clock: r.clock.now, Events: r})
+		Notify: func(ev wire.ReviewEvent) { r.mu.Lock(); r.events = append(r.events, ev); r.mu.Unlock() }, Clock: r.clock.now, Events: r,
+		Bindings: r.bindings})
 	e.Log = slog.New(slog.NewTextHandler(io.Discard, nil))
 	return e
 }

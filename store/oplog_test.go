@@ -336,6 +336,20 @@ func TestRecordAndOnApply(t *testing.T) {
 	}
 }
 
+func TestRecordsGivesPuts(t *testing.T) {
+	l := openLog(t)
+	put := func(c, id string, ms int64) wire.StoreOp {
+		return wire.StoreOp{Schema: 2, Collection: c, ID: id, Op: wire.StorePut, Record: json.RawMessage(`{"key":"` + id + `"}`),
+			HLC: hlc(ms, 0, "mac"), Device: "mac"}
+	}
+	mustApply(t, l, put("worktree-bindings", "X-1", 1000), put("worktree-bindings", "X-2", 1000), put("agents", "X-3", 1000))
+	mustApply(t, l, wire.StoreOp{Schema: 2, Collection: "worktree-bindings", ID: "X-2", Op: wire.StoreDelete, HLC: hlc(2000, 0, "mac"), Device: "mac"})
+	recs, err := l.Records("worktree-bindings")
+	if err != nil || len(recs) != 1 || string(recs["X-1"]) != `{"key":"X-1"}` {
+		t.Fatalf("records = %v %v", recs, err)
+	}
+}
+
 func TestApplyHeadIsTheLastSeq(t *testing.T) {
 	l := openLog(t)
 	put := func(id string, ms int64) wire.StoreOp {

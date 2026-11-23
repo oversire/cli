@@ -73,6 +73,14 @@ type Deps struct {
 	Clock  func() time.Time
 	// Events takes the rows review.ready, review.submitted, review.approved, git.merge and item.shipped. It can be nil.
 	Events EventAdder
+	// Bindings gives the bound folder of a key. It can be nil: then only <root>/.wt/<key> is a group.
+	Bindings Bindings
+}
+
+// Bindings gives the worktree bindings of the home store (binding.Index).
+type Bindings interface {
+	Get(key string) (wire.WorktreeBinding, bool)
+	Mine() []wire.WorktreeBinding
 }
 
 // EventAdder takes the event rows (capture.Writer).
@@ -128,7 +136,7 @@ func (e *Engine) List(ctx context.Context, kind wire.ReviewKind) (wire.ReviewsPa
 	}
 	roots := e.allRoots(ctx)
 	if kind != wire.ReviewPlan {
-		gs := scanGroups(roots)
+		gs := e.groups(roots)
 		states := e.cache.Groups(ctx, gs)
 		for _, g := range gs {
 			st := states[g.Dir()]
@@ -191,14 +199,14 @@ func (e *Engine) Get(ctx context.Context, key string, kind wire.ReviewKind) (wir
 		}
 		d.Summary, d.Plan = e.planSummary(key), plan
 	} else {
-		g, ok := findGroup(e.allRoots(ctx), key)
+		g, ok := e.groupOf(ctx, key)
 		var repos []wire.ReviewRepo
 		if ok {
 			if d.Summary, repos, err = e.codeSummary(ctx, g); err != nil {
 				return d, err
 			}
 		} else if d.Summary, ok = e.goneSummary(key); !ok {
-			return d, server.Refuse(server.NotFound, "There is no group .wt/%s in the roots of this daemon.", strings.ToLower(key))
+			return d, noGroup(key)
 		}
 		viewed, stale := e.viewed(key)
 		prints := map[string]string{}
@@ -257,9 +265,9 @@ func (e *Engine) Diff(ctx context.Context, key, repo, path string, full bool) (w
 
 // repoOf gives the group of key and the state of its repo.
 func (e *Engine) repoOf(ctx context.Context, key, repo string) (group, wire.ReviewRepo, error) {
-	g, ok := findGroup(e.allRoots(ctx), key)
+	g, ok := e.groupOf(ctx, key)
 	if !ok {
-		return g, wire.ReviewRepo{}, server.Refuse(server.NotFound, "There is no group .wt/%s in the roots of this daemon.", strings.ToLower(key))
+		return g, wire.ReviewRepo{}, noGroup(key)
 	}
 	if !slices.Contains(g.Repos, repo) {
 		return g, wire.ReviewRepo{}, server.Refuse(server.NotFound, "The group %s has no repo %s.", g.Rel(), repo)
@@ -326,7 +334,11 @@ func (e *Engine) goneSummary(key string) (wire.ReviewSummary, bool) {
 	if r == nil || r.MergedAt == nil || r.Root == "" {
 		return wire.ReviewSummary{}, false
 	}
-	s := wire.ReviewSummary{Key: key, Kind: wire.ReviewCode, Machine: e.d.Machine, Root: r.Root, Group: ".wt/" + strings.ToLower(key),
+	rel := ".wt/" + strings.ToLower(key)
+	if b, ok := e.bound(key); ok {
+		rel = group{Root: r.Root, Name: strings.ToLower(key), dir: b.Dir()}.Rel()
+	}
+	s := wire.ReviewSummary{Key: key, Kind: wire.ReviewCode, Machine: e.d.Machine, Root: r.Root, Group: rel,
 		Repos: []wire.ReviewRepo{}, Subitems: []string{}}
 	e.fill(&s, r, wire.DaemonSession{}, wire.ReviewSession{State: wire.ReviewSessionNone}, time.Time{})
 	s.State = wire.ReviewMerged
@@ -483,11 +495,71 @@ func (e *Engine) kindOf(ctx context.Context, key string, kind wire.ReviewKind) (
 	code, plan := e.recs[id(wire.ReviewCode, key)], e.recs[id(wire.ReviewPlan, key)]
 	e.mu.Unlock()
 	if plan != nil && code == nil {
-		if _, ok := findGroup(e.allRoots(ctx), key); !ok {
+		if _, ok := e.groupOf(ctx, key); !ok {
 			return wire.ReviewPlan, nil
 		}
 	}
 	return wire.ReviewCode, nil
+}
+
+// noGroup is the refusal for a key with no worktree group on this daemon.
+func noGroup(key string) error {
+	return server.Refuse(server.NotFound, "There is no worktree group for %s. Bind one with oversire item bind %s --worktree here, or make .wt/%s.",
+		key, key, strings.ToLower(key))
+}
+
+// bound gives the binding of key on this machine.
+func (e *Engine) bound(key string) (wire.WorktreeBinding, bool) {
+	if e.d.Bindings == nil {
+		return wire.WorktreeBinding{}, false
+	}
+	b, ok := e.d.Bindings.Get(key)
+	return b, ok && strings.EqualFold(b.Machine, e.d.Machine)
+}
+
+// groupOf gives the group of key: the bound folder first, then <root>/.wt/<key>. A key in parent mode gives the
+// group of its parent, with the key of the parent.
+func (e *Engine) groupOf(ctx context.Context, key string) (group, bool) {
+	seen := map[string]bool{}
+	for {
+		key = strings.ToUpper(key)
+		b, ok := e.bound(key)
+		if ok && b.Mode == wire.WorktreeParent && b.Parent != "" && !seen[b.Parent] {
+			seen[key] = true
+			key = b.Parent
+			continue
+		}
+		if ok {
+			if g, ok := readBound(b, key); ok {
+				return g, true
+			}
+		}
+		return findGroup(e.allRoots(ctx), key)
+	}
+}
+
+// groups gives the own-mode bound folders of this machine and the .wt groups of the roots. A folder shows once.
+func (e *Engine) groups(roots []string) []group {
+	var out []group
+	seen := map[string]bool{}
+	if e.d.Bindings != nil {
+		for _, b := range e.d.Bindings.Mine() {
+			if b.Mode == wire.WorktreeParent {
+				continue
+			}
+			if g, ok := readBound(b, b.Key); ok && !seen[g.Dir()] {
+				seen[g.Dir()] = true
+				out = append(out, g)
+			}
+		}
+	}
+	for _, g := range scanGroups(roots) {
+		if !seen[g.Dir()] {
+			seen[g.Dir()] = true
+			out = append(out, g)
+		}
+	}
+	return out
 }
 
 // allRoots is the folder repos of the runtimes and the roots of the hand-offs, sorted, with no copy.

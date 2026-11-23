@@ -28,7 +28,8 @@ const itemUsage = `usage:
   oversire item show <KEY> [--project P]
   oversire item history <KEY> [--limit N]
   oversire item create --project P --title T [--body-file F|-] [--status S] [--priority X] [--parent KEY] [--label L]... [--epic E]
-                       [--start DATE] [--due DATE] [--estimate E]
+                       [--start DATE] [--due DATE] [--estimate E] [--worktree DIR|here] [--share-parent-group] [--make-group]
+  oversire item bind <KEY> [--worktree DIR|here] [--share-parent-group]
   oversire item edit <KEY> [--title T] [--body-file F|-] [--start DATE] [--due DATE] [--estimate E]
   oversire item status <KEY> <status> [--force] [--sub-items]
   oversire item start <KEY>
@@ -49,6 +50,8 @@ The status is an id, a name, or one of todo, progress, review, blocked, done. A 
 An area has at most 32 lower-case letters, digits or hyphens. An item has at most 6 areas.
 A DATE is YYYY-MM-DD. For --start, --due and --estimate, none removes the value. The estimate uses the units of the tracker, for example S, M, L or XL.
 --created-since lists only the loaded items. It leaves out an item with no creation time.
+--worktree sets the fixed worktree folder of the item: a path, a template with {key} (default .wt/{key}), or here for the
+working folder. --share-parent-group puts a sub-item in the group of its parent. --make-group makes the folder on this Mac.
 --body-file - reads the text from stdin. The text has at most 1 MB. A file has at most 10 MB.
 The app on this Mac runs the command. Exit codes: 0 ok, 1 failed or not allowed, 2 usage, 3 no daemon or no app.`
 
@@ -80,6 +83,8 @@ type itemFlags struct {
 	limit                                           int
 	mine, force, me, none, remove                   bool
 	add, set, subItems                              bool
+	worktree                                        string
+	shareParentGroup, makeGroup                     bool
 	// The relate flags by relation kind.
 	relate map[string]*string
 }
@@ -106,6 +111,10 @@ func (it *itemFlags) register(fs *flag.FlagSet, sub string) {
 		fs.Var(&it.labels, "label", "a label name; repeat for more")
 		fs.StringVar(&it.epic, "epic", "", "the epic id or title")
 		it.registerSchedule(fs)
+		it.registerWorktree(fs)
+		fs.BoolVar(&it.makeGroup, "make-group", false, "make the worktree folder on this Mac")
+	case "bind":
+		it.registerWorktree(fs)
 	case "edit":
 		fs.StringVar(&it.title, "title", "", "the new title")
 		fs.StringVar(&it.bodyFile, "body-file", "", "the new Markdown description: a file, or - for stdin")
@@ -136,6 +145,33 @@ func (it *itemFlags) register(fs *flag.FlagSet, sub string) {
 	case "attach":
 		fs.StringVar(&it.name, "name", "", "the file name in the tracker")
 	}
+}
+
+func (it *itemFlags) registerWorktree(fs *flag.FlagSet) {
+	fs.StringVar(&it.worktree, "worktree", "", "the worktree folder: a path, a template with {key}, or here")
+	fs.BoolVar(&it.shareParentGroup, "share-parent-group", false, "work in the group of the parent item")
+}
+
+// worktreeArgs adds the worktree args. here and an absolute path are on this Mac, so they also send the machine.
+func (it *itemFlags) worktreeArgs(c *cli, a map[string]any) error {
+	w := it.worktree
+	if strings.EqualFold(w, "here") {
+		wd, err := c.workdir()
+		if err != nil {
+			return err
+		}
+		w = wd
+	}
+	if w != "" {
+		a["worktree"] = w
+		if filepath.IsAbs(w) {
+			a["machine"] = c.machine()
+		}
+	}
+	if it.shareParentGroup {
+		a["shareParentGroup"] = true
+	}
+	return nil
 }
 
 func (it *itemFlags) registerSchedule(fs *flag.FlagSet) {
@@ -180,7 +216,7 @@ func (c *cli) item(ctx context.Context, args []string) error {
 	switch args[0] {
 	case "show":
 		return c.itemShow(ctx, args[1:])
-	case "list", "search", "history", "create", "edit", "status", "start", "done", "reopen", "assign", "priority", "label", "areas", "comment", "relate", "parent", "link", "attach":
+	case "list", "search", "history", "create", "bind", "edit", "status", "start", "done", "reopen", "assign", "priority", "label", "areas", "comment", "relate", "parent", "link", "attach":
 		return c.itemSub(ctx, args[0], args[1:])
 	}
 	return &exitError{2, fmt.Errorf("unknown item command %q\n%s", args[0], itemUsage)}
@@ -304,8 +340,11 @@ func (c *cli) itemSub(ctx context.Context, sub string, args []string) error {
 		if project == "" || it.title == "" {
 			return bad(errors.New("give --project and --title"))
 		}
-		action, show = "item.create", c.printKey
+		action, show = "item.create", c.printMade
 		a["project"], a["title"] = project, it.title
+		if err := it.worktreeArgs(c, a); err != nil {
+			return err
+		}
 		if it.bodyFile != "" {
 			if a["body"], err = c.readBody(it.bodyFile); err != nil {
 				return err
@@ -326,6 +365,27 @@ func (c *cli) itemSub(ctx context.Context, sub string, args []string) error {
 		}
 		if err := it.schedule(a, false); err != nil {
 			return bad(err)
+		}
+		if it.makeGroup {
+			res, err := c.callApp(ctx, f, action, a)
+			if err != nil {
+				return err
+			}
+			if res.Status == wire.AppCallOK {
+				c.makeGroup(res.Data)
+			}
+			return c.showApp(f, res, show)
+		}
+	case "bind":
+		if err := want(1, 1); err != nil {
+			return err
+		}
+		if err := first(); err != nil {
+			return bad(err)
+		}
+		action, show = "item.bindWorktree", c.printMade
+		if err := it.worktreeArgs(c, a); err != nil {
+			return err
 		}
 	case "edit":
 		if err := want(1, 1); err != nil {
@@ -654,6 +714,47 @@ func (c *cli) printMarkdown(data json.RawMessage) error {
 }
 
 // printKey prints the key of a new item.
+// made is the answer data of item.create and item.bindWorktree.
+type made struct {
+	Key      string
+	Worktree *struct{ Group, Machine, Branch, Parent, Dir string }
+}
+
+// printMade prints the key, then the worktree lines.
+func (c *cli) printMade(data json.RawMessage) error {
+	var d made
+	if json.Unmarshal(data, &d) != nil {
+		return nil
+	}
+	if d.Key != "" {
+		fmt.Fprintln(c.out, "Key: "+d.Key)
+	}
+	if w := d.Worktree; w != nil {
+		fmt.Fprintf(c.out, "Worktree: %s on %s\n", w.Group, w.Machine)
+		if w.Branch != "" {
+			fmt.Fprintln(c.out, "Branch: "+w.Branch)
+		}
+		if w.Parent != "" {
+			fmt.Fprintln(c.out, "Review in: "+w.Parent)
+		}
+	}
+	return nil
+}
+
+// makeGroup makes the bound folder of the answer when it is on this Mac and is not a git checkout.
+func (c *cli) makeGroup(data json.RawMessage) {
+	var d made
+	if json.Unmarshal(data, &d) != nil || d.Worktree == nil || d.Worktree.Dir == "" || !strings.EqualFold(d.Worktree.Machine, c.machine()) {
+		return
+	}
+	if _, err := os.Stat(filepath.Join(d.Worktree.Dir, ".git")); err == nil {
+		return
+	}
+	if err := os.MkdirAll(d.Worktree.Dir, 0o755); err != nil {
+		fmt.Fprintf(c.out, "Could not make %s: %v\n", d.Worktree.Dir, err)
+	}
+}
+
 func (c *cli) printKey(data json.RawMessage) error {
 	var d struct{ Key string }
 	if json.Unmarshal(data, &d) == nil && d.Key != "" {

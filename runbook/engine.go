@@ -72,6 +72,8 @@ func (e *Error) Unwrap() error { return &e.Refusal }
 // Engine runs each runbook run as a state machine. It keeps the runs in the store, so a run goes on after a restart.
 type Engine struct {
 	Log *slog.Logger
+	// Groups gives the bound group of an item key, or "". It can be nil.
+	Groups func(key string) string
 
 	store    *Store
 	launch   Launcher
@@ -642,8 +644,12 @@ func (e *Engine) request(r *wire.RunbookRun, step string, round int) wire.Launch
 		title += fmt.Sprintf(" · r%d", round)
 	}
 	item := r.Item
+	group := ""
+	if e.Groups != nil {
+		group = e.Groups(r.Item.Key)
+	}
 	return wire.LaunchRequest{Repo: r.Repo, Item: &item, Agent: a.CLI, Command: a.Command, Model: a.Model, Effort: a.Effort, Profile: a.Profile,
-		Title: title, Key: stepKey(r.ID, step, round), Prompt: render(r, *st, round), Env: a.Env, EnvSecrets: a.EnvSecrets}
+		Title: title, Key: stepKey(r.ID, step, round), Prompt: render(r, *st, round, group), Env: a.Env, EnvSecrets: a.EnvSecrets}
 }
 
 // changed saves the run and tells the change.

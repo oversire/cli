@@ -79,4 +79,14 @@ func TestServeFeatures(t *testing.T) {
 	if resp.StatusCode != http.StatusServiceUnavailable {
 		t.Fatalf("ci status gave %d", resp.StatusCode)
 	}
+	resp, err = http.Get(base + "/v1/worktree-bindings")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var page wire.WorktreeBindingsPage
+	json.NewDecoder(resp.Body).Decode(&page)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || page.Bindings == nil {
+		t.Fatalf("worktree bindings gave %d %+v", resp.StatusCode, page)
+	}
 }

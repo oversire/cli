@@ -207,6 +207,60 @@ func TestItemCreateBodyFromStdin(t *testing.T) {
 	}
 }
 
+func TestItemCreateWorktreeFlags(t *testing.T) {
+	c, _, _ := testCLI(t, "")
+	app := appDaemon(t, c)
+	c.wd = t.TempDir()
+	answerWith(app, wire.AppCallOK, "ACME-9 is made.", `{"key":"ACME-9"}`)
+	call, got, err := runItem(t, c, app, "item", "create", "--project", "acme", "--title", "New", "--parent", "3", "--worktree", "here", "--share-parent-group")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantArgs(t, "item.create", map[string]any{"project": "ACME", "title": "New", "parent": "ACME-3", "worktree": c.wd, "machine": c.machine(),
+		"shareParentGroup": true}, call, got)
+	call, got, err = runItem(t, c, app, "item", "create", "--project", "acme", "--title", "New", "--worktree", "work/{key}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantArgs(t, "item.create", map[string]any{"project": "ACME", "title": "New", "worktree": "work/{key}"}, call, got)
+}
+
+func TestItemCreatePrintsWorktree(t *testing.T) {
+	c, out, _ := testCLI(t, "")
+	app := appDaemon(t, c)
+	dir := filepath.Join(t.TempDir(), ".wt", "acme-9")
+	data, _ := json.Marshal(map[string]any{"key": "ACME-9", "worktree": map[string]any{"group": ".wt/acme-9", "machine": c.machine(), "branch": "acme-9",
+		"parent": "ACME-3", "dir": dir, "root": "/w", "mode": "own"}})
+	answerWith(app, wire.AppCallOK, "ACME-9 is made.", string(data))
+	if _, _, err := runItem(t, c, app, "item", "create", "--project", "acme", "--title", "New", "--make-group"); err != nil {
+		t.Fatal(err)
+	}
+	want := "ACME-9 is made.\nKey: ACME-9\nWorktree: .wt/acme-9 on " + c.machine() + "\nBranch: acme-9\nReview in: ACME-3\n"
+	if out.String() != want {
+		t.Fatalf("got %q", out)
+	}
+	if st, err := os.Stat(dir); err != nil || !st.IsDir() {
+		t.Fatal("--make-group made no folder", err)
+	}
+}
+
+func TestItemBind(t *testing.T) {
+	c, out, _ := testCLI(t, "")
+	app := appDaemon(t, c)
+	answerWith(app, wire.AppCallOK, "ACME-4 works in /x on mbp.", `{"worktree":{"group":"/x","machine":"mbp","branch":""}}`)
+	call, got, err := runItem(t, c, app, "item", "bind", "acme-4", "--worktree", "/x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantArgs(t, "item.bindWorktree", map[string]any{"key": "ACME-4", "worktree": "/x", "machine": c.machine()}, call, got)
+	if out.String() != "ACME-4 works in /x on mbp.\nWorktree: /x on mbp\n" {
+		t.Fatalf("got %q", out)
+	}
+	if err := c.dispatch(context.Background(), []string{"item", "bind"}); exitCode(err) != 2 {
+		t.Fatal(err)
+	}
+}
+
 func TestItemCreateUsage(t *testing.T) {
 	c, _, _ := testCLI(t, "")
 	appDaemon(t, c)

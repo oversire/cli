@@ -196,6 +196,27 @@ func (l *OpLog) Record(collection, id string) (record json.RawMessage, ok bool, 
 	return json.RawMessage(rec.String), true, nil
 }
 
+// Records gives the live records of collection, by id. It skips the tombstones.
+func (l *OpLog) Records(collection string) (map[string]json.RawMessage, error) {
+	rows, err := l.db.Query("SELECT id, record FROM records WHERE collection = ? AND op = 'put'", collection)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]json.RawMessage{}
+	for rows.Next() {
+		var id string
+		var rec sql.NullString
+		if err := rows.Scan(&id, &rec); err != nil {
+			return nil, err
+		}
+		if rec.Valid {
+			out[id] = json.RawMessage(rec.String)
+		}
+	}
+	return out, rows.Err()
+}
+
 func (l *OpLog) apply(ops []wire.StoreOp) (wire.StoreApplyResult, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()

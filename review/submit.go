@@ -90,9 +90,9 @@ func (e *Engine) Fix(ctx context.Context, key string, launch *wire.AgentLaunch) 
 	if !validKey(key) {
 		return wire.ReviewRound{}, server.Refuse(server.Invalid, "The key %q is not valid.", key)
 	}
-	g, ok := findGroup(e.allRoots(ctx), key)
+	g, ok := e.groupOf(ctx, key)
 	if !ok {
-		return wire.ReviewRound{}, server.Refuse(server.NotFound, "There is no group .wt/%s in the roots of this daemon.", strings.ToLower(key))
+		return wire.ReviewRound{}, noGroup(key)
 	}
 	var repos []wire.ReviewRepo
 	for _, name := range e.d.Order.Sort(g.Repos) {
@@ -340,9 +340,9 @@ func (e *Engine) folder(ctx context.Context, kind wire.ReviewKind, key string) (
 		}
 		return "", server.Refuse(server.NotFound, "%s has no plan.", key)
 	}
-	g, ok := findGroup(e.allRoots(ctx), key)
+	g, ok := e.groupOf(ctx, key)
 	if !ok {
-		return "", server.Refuse(server.NotFound, "There is no group .wt/%s in the roots of this daemon.", strings.ToLower(key))
+		return "", noGroup(key)
 	}
 	return g.Dir(), nil
 }

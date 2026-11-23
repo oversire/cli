@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/oversire/cli/binding"
 	"github.com/oversire/cli/config"
 	"github.com/oversire/cli/eventlog"
 	"github.com/oversire/cli/proc"
@@ -31,6 +32,12 @@ func (noRepos) Repos(context.Context) wire.DaemonReposPage { return wire.DaemonR
 // reviewDaemon runs a real server with the review engine on a free loopback port, and points the config of c at it.
 // The daemon knows no roots: the hand-off names them.
 func reviewDaemon(t *testing.T, c *cli) (*sessions.Book, <-chan wire.ReviewEvent) {
+	t.Helper()
+	return reviewDaemonWith(t, c, nil)
+}
+
+// reviewDaemonWith is reviewDaemon with the worktree bindings x. x can be nil.
+func reviewDaemonWith(t *testing.T, c *cli, x *binding.Index) (*sessions.Book, <-chan wire.ReviewEvent) {
 	t.Helper()
 	ln, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {
@@ -50,9 +57,14 @@ func reviewDaemon(t *testing.T, c *cli) (*sessions.Book, <-chan wire.ReviewEvent
 	}
 	srv := server.NewServer(cfg, info, nil, events, book, nil)
 	srv.Log = c.log
-	engine := review.NewEngine(review.Deps{Store: review.NewStore(filepath.Join(t.TempDir(), "reviews")), Git: review.NewGit(proc.Local{}),
+	deps := review.Deps{Store: review.NewStore(filepath.Join(t.TempDir(), "reviews")), Git: review.NewGit(proc.Local{}),
 		Repos: noRepos{}, Sessions: book, Launcher: &bookLauncher{book: book}, Picker: onePicker{}, Machine: "mbp",
-		Notify: func(ev wire.ReviewEvent) { srv.Notify(false, ev) }})
+		Notify: func(ev wire.ReviewEvent) { srv.Notify(false, ev) }}
+	if x != nil {
+		deps.Bindings = x
+		srv.Handle(x.Routes()...)
+	}
+	engine := review.NewEngine(deps)
 	engine.Log = c.log
 	srv.Handle(review.NewRoutes(engine).Routes()...)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -197,6 +209,31 @@ func TestReviewReadyAndReply(t *testing.T) {
 	}
 	if err := c.dispatch(ctx, []string{"review", "reply", "--key", "APP-1", "c_00000000", "x"}); err == nil || !strings.Contains(err.Error(), "no comment c_00000000") {
 		t.Fatal(err)
+	}
+}
+
+func TestReviewReadyKeyFromBinding(t *testing.T) {
+	c, out, _ := testCLI(t, "")
+	root, _ := gitGroup(t)
+	dir := filepath.Join(root, "quick-fix")
+	if b, err := exec.Command("git", "-C", filepath.Join(root, "app"), "worktree", "add", "-q", "-b", "quick-fix", dir, "main").CombinedOutput(); err != nil {
+		t.Fatal(string(b))
+	}
+	os.WriteFile(filepath.Join(dir, "q.go"), []byte("package app\n"), 0o644)
+	x := binding.NewIndex("mbp", nil)
+	rec, _ := json.Marshal(wire.WorktreeBinding{Key: "APP-7", Machine: "mbp", Root: root, Group: "quick-fix", Mode: wire.WorktreeOwn, Source: "link"})
+	x.Apply([]wire.StoreOp{{Collection: wire.CollectionWorktreeBindings, ID: "APP-7", Op: wire.StorePut, Record: rec}})
+	_, frames := reviewDaemonWith(t, c, x)
+
+	c.wd = dir
+	if err := c.dispatch(context.Background(), []string{"review", "ready", "--note", "Quick fix."}); err != nil {
+		t.Fatal(err)
+	}
+	if s := strings.TrimSpace(out.String()); s != "Review of APP-7 is ready. The user reviews it in OverSire. Do not merge." {
+		t.Fatal(s)
+	}
+	if ev := awaitReview(t, frames, wire.EventReviewReady); ev.Key != "APP-7" {
+		t.Fatalf("%+v", ev)
 	}
 }
 

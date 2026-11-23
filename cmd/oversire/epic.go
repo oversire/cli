@@ -380,6 +380,11 @@ func (c *cli) runApp(ctx context.Context, f *appFlags, action string, args map[s
 	if err != nil {
 		return err
 	}
+	return c.showApp(f, res, show)
+}
+
+// showApp prints the answer of an app call: the JSON, or the summary and then show.
+func (c *cli) showApp(f *appFlags, res wire.AppCallResult, show func(json.RawMessage) error) error {
 	if *f.json {
 		enc := json.NewEncoder(c.out)
 		enc.SetIndent("", "  ")

@@ -2,6 +2,7 @@ package review
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -23,9 +24,9 @@ func (e *Engine) Merge(ctx context.Context, key string, m wire.MergeRequest) (wi
 	}
 	e.send.Lock()
 	defer e.send.Unlock()
-	g, ok := findGroup(e.allRoots(ctx), key)
+	g, ok := e.groupOf(ctx, key)
 	if !ok {
-		return res, server.Refuse(server.NotFound, "There is no group .wt/%s in the roots of this daemon.", strings.ToLower(key))
+		return res, noGroup(key)
 	}
 	repos, err := e.checkMerge(ctx, g)
 	if err != nil {
@@ -224,7 +225,8 @@ func (e *Engine) removeGroup(ctx context.Context, g group) error {
 			}
 		}
 	}
-	if err := os.Remove(g.Dir()); err != nil {
+	// git removes the folder of a single group with its worktree.
+	if err := os.Remove(g.Dir()); err != nil && !(g.single && errors.Is(err, os.ErrNotExist)) {
 		errs = append(errs, err.Error())
 	}
 	if len(errs) > 0 {

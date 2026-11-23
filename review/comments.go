@@ -100,7 +100,7 @@ func (e *Engine) excerpt(ctx context.Context, key string, a wire.Anchor) (string
 	}
 	text := excerpt(d, a.Side, from, a.Line)
 	if text == "" && a.Side != "old" {
-		if g, ok := findGroup(e.allRoots(ctx), key); ok {
+		if g, ok := e.groupOf(ctx, key); ok {
 			text = readLines(filepath.Join(g.worktree(a.Repo), a.Path), from, a.Line)
 		}
 	}
@@ -191,7 +191,7 @@ func (e *Engine) MarkViewed(ctx context.Context, key string, m wire.ViewedMark) 
 	}
 	var print string
 	if m.Viewed {
-		if g, ok := findGroup(e.allRoots(ctx), key); ok {
+		if g, ok := e.groupOf(ctx, key); ok {
 			print = g.print(m.Repo, m.Path)
 		}
 	}
@@ -271,8 +271,8 @@ func (e *Engine) Ready(ctx context.Context, key string, rd wire.ReviewReady) (wi
 	var g group
 	if kind == wire.ReviewCode {
 		var ok bool
-		if g, ok = findGroup(e.allRoots(ctx), key); !ok {
-			return wire.ReviewSummary{}, server.Refuse(server.NotFound, "There is no group .wt/%s in the roots of this daemon. Give the root.", strings.ToLower(key))
+		if g, ok = e.groupOf(ctx, key); !ok {
+			return wire.ReviewSummary{}, noGroup(key)
 		}
 	} else {
 		e.mu.Lock()

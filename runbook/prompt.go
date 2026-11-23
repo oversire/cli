@@ -13,8 +13,9 @@ func DoneCommand(run, step string) string {
 	return "oversire step done --run " + run + " --step " + step
 }
 
-// render fills the placeholders of the prompt of step for round. An unknown placeholder stays as typed.
-func render(r *wire.RunbookRun, step wire.RunbookStep, round int) string {
+// render fills the placeholders of the prompt of step for round. group is the bound group of the item, or "".
+// An unknown placeholder stays as typed.
+func render(r *wire.RunbookRun, step wire.RunbookStep, round int, group string) string {
 	return placeholder.ReplaceAllStringFunc(step.Prompt, func(m string) string {
 		switch m[1 : len(m)-1] {
 		case "key":
@@ -37,6 +38,9 @@ func render(r *wire.RunbookRun, step wire.RunbookStep, round int) string {
 		case "notes":
 			return notes(r)
 		case "group", "worktree": // worktree is the old name of group
+			if group != "" {
+				return group
+			}
 			return ".wt/" + strings.ToLower(r.Item.Key)
 		case "done":
 			return DoneCommand(r.ID, step.ID)

@@ -2,6 +2,8 @@ package wire
 
 import (
 	"path/filepath"
+	"slices"
+	"strings"
 	"time"
 )
 
@@ -36,6 +38,11 @@ func (b WorktreeBinding) Dir() string {
 		return filepath.Clean(b.Group)
 	}
 	return filepath.Join(b.Root, b.Group)
+}
+
+// Valid is false for a binding with no key, machine or group, or with a .. part in the group.
+func (b WorktreeBinding) Valid() bool {
+	return b.Key != "" && b.Machine != "" && b.Group != "" && !slices.Contains(strings.Split(filepath.ToSlash(b.Group), "/"), "..")
 }
 
 // WorktreeBindingsPage is the answer of GET /v1/worktree-bindings.

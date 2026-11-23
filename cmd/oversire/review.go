@@ -67,8 +67,15 @@ func (c *cli) reviewReady(ctx context.Context, args []string) error {
 	if *key == "" && inGroup {
 		*key = name
 	}
+	var b wire.WorktreeBinding
+	isBound := false
+	if *key == "" && k == wire.ReviewCode {
+		if b, isBound = c.boundKey(ctx, wd); isBound {
+			*key = b.Key
+		}
+	}
 	if *key == "" {
-		return &exitError{2, errors.New("Give the item key with --key, or run the command in a worktree group .wt/<key>.")}
+		return &exitError{2, errors.New("Give the item key with --key, or run the command in a worktree group .wt/<key> or in the bound worktree of an item.")}
 	}
 	K := strings.ToUpper(*key)
 	if r := []rune(*note); len(r) > review.MaxNote {
@@ -100,6 +107,8 @@ func (c *cli) reviewReady(ctx context.Context, args []string) error {
 		fmt.Fprintf(c.out, "Plan of %s: version %d, %d blocks.\n", K, p.Version, len(p.Blocks))
 	} else {
 		switch {
+		case isBound && b.Key == K:
+			rd.Root = b.Root
 		case inGroup && strings.EqualFold(name, K):
 			rd.Root = root
 		case isDir(filepath.Join(wd, ".wt", strings.ToLower(K))):
@@ -157,6 +166,8 @@ func (c *cli) reviewReply(ctx context.Context, args []string) error {
 		if wd, err := c.workdir(); err == nil {
 			if _, name, ok := ticket.GroupOf(wd); ok {
 				*key = name
+			} else if b, ok := c.boundKey(ctx, wd); ok {
+				*key = b.Key
 			}
 		}
 	}
@@ -237,6 +248,19 @@ func (c *cli) reviewList(ctx context.Context, args []string) error {
 		fmt.Fprintf(c.out, "Not pushed: %s/%s %s has %d commits.\n", np.Root, np.Repo, np.Base, np.Ahead)
 	}
 	return nil
+}
+
+// boundKey gives the binding whose folder holds dir, from the local daemon. ok is false on any failure.
+func (c *cli) boundKey(ctx context.Context, dir string) (wire.WorktreeBinding, bool) {
+	d, err := c.daemonClient()
+	if err != nil {
+		return wire.WorktreeBinding{}, false
+	}
+	var page wire.WorktreeBindingsPage
+	if err := d.call(ctx, "GET", "/v1/worktree-bindings?dir="+url.QueryEscape(dir), nil, &page); err != nil || len(page.Bindings) == 0 {
+		return wire.WorktreeBinding{}, false
+	}
+	return page.Bindings[0], true
 }
 
 // workdir is the working folder of the command.

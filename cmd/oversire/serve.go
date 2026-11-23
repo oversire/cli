@@ -16,6 +16,7 @@ import (
 	"github.com/oversire/cli/agentsecret"
 	"github.com/oversire/cli/appcall"
 	"github.com/oversire/cli/ask"
+	"github.com/oversire/cli/binding"
 	"github.com/oversire/cli/capture"
 	"github.com/oversire/cli/ci"
 	"github.com/oversire/cli/config"
@@ -156,7 +157,15 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	}
 	secretHome := agentsecret.NewHome(secretValues, store, oplog, capt, time.Now)
 	secretHome.Log = c.log
-	oplog.OnApply(secretHome.Forget)
+	bindings := binding.NewIndex(cfg.Machine(), c.log)
+	if err := bindings.Load(oplog); err != nil {
+		c.log.Warn("worktree bindings", "err", err)
+	}
+	// OnApply keeps one callback.
+	oplog.OnApply(func(ops []wire.StoreOp) {
+		secretHome.Forget(ops)
+		bindings.Apply(ops)
+	})
 	runner.WithEnv(agentsecret.NewEnv(store, secretHome, nil))
 	storeRoutes := homestore.NewRoutes(oplog, store, func(m any) { srv.Notify(false, m) }, c.log)
 	syncer.WithHomeTaker(storeRoutes)
@@ -201,6 +210,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	srv.Handle(joins.Routes()...)
 	srv.Handle(syncer.Routes()...)
 	srv.Handle(storeRoutes.Routes()...)
+	srv.Handle(bindings.Routes()...)
 	srv.Handle(secretHome.Routes()...)
 	srv.Handle(eventRoutes.Routes()...)
 	leases := lease.NewBook(filepath.Join(data, "leases.json"), time.Now)
@@ -252,6 +262,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 		srv.Notify(false, map[string]any{"type": "runbookRun", "run": r})
 	}, time.Now)
 	runbooks.Log = c.log
+	runbooks.Groups = bindings.GroupPath
 	srv.Handle(runbook.NewRoutes(runbooks).Routes()...)
 	workers := worker.NewEngine(worker.NewStore(filepath.Join(data, "worker-sessions")), book, reg, review.NewGit(c.cmds), runner, reg, capture.NewWorkerRows(capt).OnChange, time.Now)
 	workers.Log = c.log
@@ -263,7 +274,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	reviewStore := review.NewStore(filepath.Join(data, "reviews"))
 	reviews := review.NewEngine(review.Deps{Store: reviewStore, Git: review.NewGit(c.cmds),
 		Repos: reg, Sessions: book, Sender: asker, Launcher: runner, Picker: reg, Machine: cfg.Machine(), Order: order,
-		Notify: func(ev wire.ReviewEvent) { srv.Notify(false, ev) }, Events: capt})
+		Notify: func(ev wire.ReviewEvent) { srv.Notify(false, ev) }, Events: capt, Bindings: bindings})
 	reviews.Log = c.log
 	srv.Handle(review.NewRoutes(reviews).Routes()...)
 	runtimeAPI.AddCapabilities(runtime.CapRunbooks, runtime.CapReviews)
