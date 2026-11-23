@@ -1,9 +1,12 @@
 package binding
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -121,5 +124,35 @@ func TestBindingsRoute(t *testing.T) {
 	}
 	if code, p := get(""); code != 200 || len(p.Bindings) != 2 {
 		t.Fatalf("all: %d %+v", code, p)
+	}
+}
+
+func TestPushedBindingsAreKeptAndTheHomeWins(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "worktree-bindings.json")
+	x := index(t, bind("A-1", "mbp", ".wt/a-1", "", wire.WorktreeOwn))
+	x.Keep(path)
+	page, _ := json.Marshal(wire.WorktreeBindingsPage{Bindings: []wire.WorktreeBinding{
+		bind("A-1", "mbp", ".wt/other", "", wire.WorktreeOwn),
+		bind("A-2", "mbp", ".wt/a-2", "A-1", wire.WorktreeOwn),
+		bind("A-3", "mbp", "../x", "A-1", wire.WorktreeOwn),
+	}})
+	w := httptest.NewRecorder()
+	x.put(w, httptest.NewRequest(http.MethodPut, "/v1/worktree-bindings", bytes.NewReader(page)))
+	if w.Code != http.StatusNoContent {
+		t.Fatal(w.Code, w.Body)
+	}
+	if b, _ := x.Get("A-1"); b.Group != ".wt/a-1" {
+		t.Fatal("the home binding must win:", b.Group)
+	}
+	if got := keys(x.Children("A-1")); !slices.Equal(got, []string{"A-2"}) {
+		t.Fatal(got)
+	}
+	again := NewIndex("mbp", nil)
+	again.Keep(path)
+	if _, ok := again.Get("A-2"); !ok {
+		t.Fatal("a restart lost the pushed bindings")
+	}
+	if _, ok := again.Get("A-3"); ok {
+		t.Fatal("a bad group must not be kept")
 	}
 }

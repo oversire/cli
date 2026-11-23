@@ -159,6 +159,7 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	secretHome := agentsecret.NewHome(secretValues, store, oplog, capt, time.Now)
 	secretHome.Log = c.log
 	bindings := binding.NewIndex(cfg.Machine(), c.log)
+	bindings.Keep(filepath.Join(data, "worktree-bindings.json"))
 	if err := bindings.Load(oplog); err != nil {
 		c.log.Warn("worktree bindings", "err", err)
 	}
