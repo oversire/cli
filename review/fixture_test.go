@@ -236,6 +236,16 @@ func (f fakeBindings) Mine() []wire.WorktreeBinding {
 	return out
 }
 
+func (f fakeBindings) Children(parent string) []wire.WorktreeBinding {
+	var out []wire.WorktreeBinding
+	for _, b := range f {
+		if b.Parent == parent {
+			out = append(out, b)
+		}
+	}
+	return out
+}
+
 // Add takes the event rows of the engine.
 func (r *rig) Add(_ string, d wire.EventDraft) {
 	r.mu.Lock()

@@ -47,7 +47,8 @@
         "dirty": { "description": "The worktree has uncommitted or untracked files.", "type": "boolean" },
         "merge": { "$ref": "#/$defs/MergeMode" },
         "conflictFiles": { "type": "array", "items": { "type": "string" } },
-        "commits": { "description": "The commits of branch that base does not have, newest first, at most 50.", "type": "array", "items": { "$ref": "#/$defs/ReviewCommit" } }
+        "commits": { "description": "The commits of branch that base does not have, newest first, at most 50.", "type": "array", "items": { "$ref": "#/$defs/ReviewCommit" } },
+        "item": { "description": "The key of the group that owns the repo. Only in a folded summary.", "$ref": "#/$defs/Key" }
       },
       "required": ["name", "branch", "base", "ahead", "behind", "added", "removed", "files", "dirty", "merge"],
       "additionalProperties": false
@@ -81,9 +82,29 @@
         "session": { "$ref": "#/$defs/ReviewSession" },
         "note": { "description": "The note of the last hand-off (oversire review ready --note).", "type": "string" },
         "readyAt": { "$ref": "#/$defs/Date" },
-        "updatedAt": { "$ref": "#/$defs/Date" }
+        "updatedAt": { "$ref": "#/$defs/Date" },
+        "parts": { "description": "The groups of a folded parent row (GET ?fold=1): the sub-items in key order, then the parent when it has a group. Absent when the row is not folded.", "type": "array", "items": { "$ref": "#/$defs/ReviewPart" } }
       },
       "required": ["key", "kind", "machine", "state", "round", "pending", "unanswered", "root", "repos", "subitems", "updatedAt"],
+      "additionalProperties": false
+    },
+    "ReviewPart": {
+      "description": "One group of a folded parent row. A sub-item folds into its parent when its worktree binding names the parent.",
+      "type": "object",
+      "properties": {
+        "key": { "$ref": "#/$defs/Key" },
+        "root": { "type": "string", "minLength": 1 },
+        "group": { "type": "string" },
+        "state": { "$ref": "#/$defs/ReviewState" },
+        "round": { "type": "integer", "minimum": 0 },
+        "pending": { "type": "integer", "minimum": 0 },
+        "unanswered": { "type": "integer", "minimum": 0 },
+        "session": { "$ref": "#/$defs/ReviewSession" },
+        "note": { "type": "string" },
+        "readyAt": { "$ref": "#/$defs/Date" },
+        "mergedAt": { "$ref": "#/$defs/Date" }
+      },
+      "required": ["key", "root", "state", "round", "pending", "unanswered"],
       "additionalProperties": false
     },
     "NotPushed": {
@@ -126,7 +147,8 @@
         "binary": { "type": "boolean" },
         "untracked": { "description": "The file is not committed. The merge does not take it.", "type": "boolean" },
         "viewed": { "type": "boolean" },
-        "viewedStale": { "description": "The file changed after the reviewer marked it viewed. Then viewed is false.", "type": "boolean" }
+        "viewedStale": { "description": "The file changed after the reviewer marked it viewed. Then viewed is false.", "type": "boolean" },
+        "item": { "description": "The key of the group of the file. Only in a folded detail. Diff, comment and viewed calls use this key.", "$ref": "#/$defs/Key" }
       },
       "required": ["repo", "path", "status", "added", "removed", "binary", "viewed"],
       "additionalProperties": false
@@ -233,7 +255,8 @@
         "session": { "description": "The DaemonSession id that got the prompt.", "type": "string" },
         "deliveredAt": { "$ref": "#/$defs/Date" },
         "error": { "description": "Why the prompt did not go.", "type": "string" },
-        "answeredAt": { "description": "The agent handed off again after the round.", "$ref": "#/$defs/Date" }
+        "answeredAt": { "description": "The agent handed off again after the round.", "$ref": "#/$defs/Date" },
+        "item": { "description": "The key of the group of the round. Only in a folded detail.", "$ref": "#/$defs/Key" }
       },
       "required": ["n", "verdict", "count", "submittedAt", "delivery"],
       "additionalProperties": false
@@ -344,10 +367,11 @@
       "additionalProperties": false
     },
     "MergeRequest": {
-      "description": "The body of POST /v1/reviews/{key}/merge. The app sets Done on the item and its sub-items. HTTP 409 when a check fails.",
+      "description": "The body of POST /v1/reviews/{key}/merge. The app sets Done on each merged sub-item. It sets Done on the parent only when all its groups are merged. HTTP 409 when a check fails.",
       "type": "object",
       "properties": {
-        "removeGroup": { "description": "Remove the worktrees, the branches and the links of the group after all repos merge.", "type": "boolean" }
+        "removeGroup": { "description": "Remove the worktrees, the branches and the links of the group after all repos merge.", "type": "boolean" },
+        "items": { "description": "The groups to merge as all or none: the key of the path and its sub-items. The daemon merges the sub-items in key order, then the parent. Absent: the group of the key only. An older daemon refuses the field with HTTP 400.", "type": "array", "items": { "$ref": "#/$defs/Key" }, "minItems": 1 }
       },
       "required": ["removeGroup"],
       "additionalProperties": false
@@ -358,7 +382,8 @@
         "name": { "type": "string", "minLength": 1 },
         "result": { "description": "skipped: the repo has no commits to merge, or another repo failed. A repo that merged before the failure goes back to its old base and is skipped.", "enum": ["merged", "rebased", "conflict", "skipped"] },
         "head": { "description": "The base head after the merge.", "type": "string" },
-        "conflictFiles": { "type": "array", "items": { "type": "string" } }
+        "conflictFiles": { "type": "array", "items": { "type": "string" } },
+        "item": { "description": "The key of the group of the repo, when the request had items.", "$ref": "#/$defs/Key" }
       },
       "required": ["name", "result"],
       "additionalProperties": false

@@ -24,7 +24,7 @@ func TestOneRepo(t *testing.T) {
 	r := newRig(t, w.root)
 	ctx := context.Background()
 
-	page, err := r.List(ctx, "")
+	page, err := r.List(ctx, "", Fold{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func TestOneRepo(t *testing.T) {
 		t.Fatalf("%+v", repo.Commits)
 	}
 
-	d, err := r.Get(ctx, "APP-1", "")
+	d, err := r.Get(ctx, "APP-1", "", Fold{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +64,7 @@ func TestOneRepo(t *testing.T) {
 	if _, err := r.Diff(ctx, "APP-1", "app", "none.go", false); !kindIs(err, server.NotFound) {
 		t.Fatal(err)
 	}
-	if _, err := r.Get(ctx, "APP-9", ""); !kindIs(err, server.NotFound) {
+	if _, err := r.Get(ctx, "APP-9", "", Fold{}); !kindIs(err, server.NotFound) {
 		t.Fatal(err)
 	}
 }
@@ -88,7 +88,7 @@ func TestThreeReposWithLink(t *testing.T) {
 	if !ok || !slices.Equal(gr.Links, []string{"CLAUDE.md"}) || len(gr.Repos) != 3 {
 		t.Fatalf("%+v", gr)
 	}
-	page, err := r.List(context.Background(), wire.ReviewCode)
+	page, err := r.List(context.Background(), wire.ReviewCode, Fold{})
 	if err != nil || len(page.Reviews) != 1 {
 		t.Fatal(err, page)
 	}
@@ -103,7 +103,7 @@ func TestThreeReposWithLink(t *testing.T) {
 	if page.Reviews[0].Title != "App part" {
 		t.Fatal(page.Reviews[0].Title)
 	}
-	d, err := r.Get(context.Background(), "OS-5", wire.ReviewCode)
+	d, err := r.Get(context.Background(), "OS-5", wire.ReviewCode, Fold{})
 	if err != nil || len(d.Files) != 2 {
 		t.Fatal(err, d.Files)
 	}
@@ -122,7 +122,7 @@ func TestBaseMoved(t *testing.T) {
 		t.Fatalf("%+v", s.Repos[0])
 	}
 	// The diff starts at the merge base: the commit of main is not in it.
-	d, _ := r.Get(context.Background(), "APP-1", "")
+	d, _ := r.Get(context.Background(), "APP-1", "", Fold{})
 	if len(d.Files) != 1 || d.Files[0].Path != "new.go" {
 		t.Fatalf("%+v", d.Files)
 	}
@@ -154,7 +154,7 @@ func TestUntrackedAndDirty(t *testing.T) {
 	if s.Repos[0].Ahead != 0 || !s.Repos[0].Dirty {
 		t.Fatalf("%+v", s.Repos[0])
 	}
-	d, err := r.Get(context.Background(), "APP-1", "")
+	d, err := r.Get(context.Background(), "APP-1", "", Fold{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,7 +176,7 @@ func TestRenameAndBinary(t *testing.T) {
 	w.git(wt, "mv", "lib.go", "core.go")
 	w.commit(wt, "Rename and add an image", map[string]string{"i.png": "PNG\x00\x01\x02"})
 	r := newRig(t, w.root)
-	d, err := r.Get(context.Background(), "APP-1", "")
+	d, err := r.Get(context.Background(), "APP-1", "", Fold{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -271,7 +271,7 @@ func TestSessionLookup(t *testing.T) {
 
 func list(t *testing.T, r *rig) []wire.ReviewSummary {
 	t.Helper()
-	page, err := r.List(context.Background(), wire.ReviewCode)
+	page, err := r.List(context.Background(), wire.ReviewCode, Fold{})
 	if err != nil {
 		t.Fatal(err)
 	}

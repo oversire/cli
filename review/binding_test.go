@@ -34,7 +34,7 @@ func TestGroupOfUsesBinding(t *testing.T) {
 	w.commit(filepath.Join(dir, "app"), "Work", map[string]string{"n.go": "package lib\n"})
 	r := boundRig(t, fakeBindings{"X-1": bound("X-1", w.root, "other/grp")}, w.root)
 
-	d, err := r.Get(context.Background(), "X-1", "")
+	d, err := r.Get(context.Background(), "X-1", "", Fold{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +51,7 @@ func TestGroupOfFallsBackToWt(t *testing.T) {
 	w.commit(filepath.Join(g, "app"), "Work", map[string]string{"n.go": "package lib\n"})
 	r := boundRig(t, fakeBindings{"X-1": {Key: "X-1", Machine: "mini", Root: w.root, Group: "elsewhere", Mode: wire.WorktreeOwn}}, w.root)
 
-	d, err := r.Get(context.Background(), "X-1", "")
+	d, err := r.Get(context.Background(), "X-1", "", Fold{})
 	if err != nil || d.Summary.Group != ".wt/x-1" {
 		t.Fatal(err, d.Summary.Group)
 	}

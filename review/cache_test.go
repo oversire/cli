@@ -163,7 +163,7 @@ func TestCacheStoppedRequestKeepsResult(t *testing.T) {
 	r, run := countRig(t, w.root)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	page, err := r.List(ctx, wire.ReviewCode)
+	page, err := r.List(ctx, wire.ReviewCode, Fold{})
 	if err != nil || len(page.Reviews) != 1 {
 		t.Fatal(err, page.Reviews)
 	}
@@ -203,7 +203,7 @@ func TestCacheNotPushed(t *testing.T) {
 	w.git(app, "push", "-q", "-u", "origin", "main")
 	r, run := countRig(t, w.root)
 	notPushed := func() []wire.NotPushed {
-		page, err := r.List(context.Background(), "")
+		page, err := r.List(context.Background(), "", Fold{})
 		if err != nil {
 			t.Fatal(err)
 		}

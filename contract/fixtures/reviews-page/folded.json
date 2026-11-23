@@ -1,0 +1,31 @@
+{
+  "reviews": [
+    {
+      "key": "OVERSIRE-400",
+      "kind": "code",
+      "title": "Review sub-items in the parent",
+      "machine": "mbp",
+      "state": "ready",
+      "round": 1,
+      "pending": 2,
+      "unanswered": 0,
+      "root": "/Users/fritz/Projects/oversire-workspace",
+      "group": ".wt/oversire-400",
+      "repos": [
+        { "name": "cli", "branch": "oversire-401", "base": "main", "ahead": 2, "behind": 0, "added": 40, "removed": 3, "files": 2, "dirty": false, "merge": "fastForward", "item": "OVERSIRE-401" },
+        { "name": "oversire", "branch": "oversire-402", "base": "main", "ahead": 1, "behind": 1, "added": 12, "removed": 0, "files": 1, "dirty": false, "merge": "rebase", "item": "OVERSIRE-402" },
+        { "name": "oversire", "branch": "oversire-400", "base": "main", "ahead": 1, "behind": 0, "added": 5, "removed": 1, "files": 1, "dirty": false, "merge": "fastForward", "item": "OVERSIRE-400" }
+      ],
+      "subitems": ["OVERSIRE-401", "OVERSIRE-402"],
+      "session": { "id": "s-0400aaaa", "state": "idle", "harness": "claude", "canSend": true },
+      "readyAt": "2026-11-20T10:00:00Z",
+      "updatedAt": "2026-11-20T11:00:00Z",
+      "parts": [
+        { "key": "OVERSIRE-401", "root": "/Users/fritz/Projects/oversire-workspace", "group": ".wt/oversire-401", "state": "ready", "round": 1, "pending": 2, "unanswered": 0, "session": { "id": "s-0401bbbb", "state": "idle", "harness": "claude", "canSend": true }, "note": "Fold done", "readyAt": "2026-11-20T09:00:00Z" },
+        { "key": "OVERSIRE-402", "root": "/Users/fritz/Projects/oversire-workspace", "group": ".wt/oversire-402", "state": "waiting", "round": 0, "pending": 0, "unanswered": 0, "session": { "id": "s-0402cccc", "state": "working", "harness": "codex", "canSend": true } },
+        { "key": "OVERSIRE-400", "root": "/Users/fritz/Projects/oversire-workspace", "group": ".wt/oversire-400", "state": "merged", "round": 0, "pending": 0, "unanswered": 0, "mergedAt": "2026-11-20T11:00:00Z" }
+      ]
+    }
+  ],
+  "notPushed": []
+}

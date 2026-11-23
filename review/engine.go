@@ -81,6 +81,8 @@ type Deps struct {
 type Bindings interface {
 	Get(key string) (wire.WorktreeBinding, bool)
 	Mine() []wire.WorktreeBinding
+	// Children gives the bindings whose parent is parent, on all machines.
+	Children(parent string) []wire.WorktreeBinding
 }
 
 // EventAdder takes the event rows (capture.Writer).
@@ -128,8 +130,9 @@ func NewEngine(d Deps) *Engine {
 
 func id(kind wire.ReviewKind, key string) string { return string(kind) + ":" + key }
 
-// List gives the reviews of kind, or of both kinds for "", and the bases that are not pushed.
-func (e *Engine) List(ctx context.Context, kind wire.ReviewKind) (wire.ReviewsPage, error) {
+// List gives the reviews of kind, or of both kinds for "", and the bases that are not pushed. f folds the code
+// rows of the sub-items into the row of their parent.
+func (e *Engine) List(ctx context.Context, kind wire.ReviewKind, f Fold) (wire.ReviewsPage, error) {
 	page := wire.ReviewsPage{Reviews: []wire.ReviewSummary{}, NotPushed: []wire.NotPushed{}}
 	if kind != "" && kind != wire.ReviewCode && kind != wire.ReviewPlan {
 		return page, server.Refuse(server.Invalid, "The kind %q is not code or plan.", kind)
@@ -138,16 +141,16 @@ func (e *Engine) List(ctx context.Context, kind wire.ReviewKind) (wire.ReviewsPa
 	if kind != wire.ReviewPlan {
 		gs := e.groups(roots)
 		states := e.cache.Groups(ctx, gs)
+		var rows []wire.ReviewSummary
 		for _, g := range gs {
 			st := states[g.Dir()]
 			if st.Err != nil {
 				e.Log.Debug("review group", "group", g.Dir(), "err", st.Err)
 				continue
 			}
-			if s := e.summary(g, st); listed(s) {
-				page.Reviews = append(page.Reviews, s)
-			}
+			rows = append(rows, e.summary(g, st))
 		}
+		page.Reviews = append(page.Reviews, e.foldRows(rows, f)...)
 	}
 	if kind != wire.ReviewCode {
 		e.mu.Lock()
@@ -179,60 +182,83 @@ func listed(s wire.ReviewSummary) bool {
 }
 
 // Get gives the review of key and kind. An empty kind is code, or plan for a key that only has a plan.
-func (e *Engine) Get(ctx context.Context, key string, kind wire.ReviewKind) (wire.ReviewDetail, error) {
+// f folds the code groups of the sub-items of key into the detail. A sub-item key gives its own detail.
+func (e *Engine) Get(ctx context.Context, key string, kind wire.ReviewKind, f Fold) (wire.ReviewDetail, error) {
+	if kind != wire.ReviewPlan && validKey(key) {
+		if kids := e.foldedKids(key, f); len(kids) > 0 {
+			if d, ok, err := e.foldedDetail(ctx, key, kids); ok || err != nil {
+				return d, err
+			}
+		}
+	}
 	kind, err := e.kindOf(ctx, key, kind)
 	if err != nil {
 		return wire.ReviewDetail{}, err
 	}
+	if kind != wire.ReviewPlan {
+		return e.codeDetail(ctx, key)
+	}
 	d := wire.ReviewDetail{Files: []wire.ReviewFile{}, Comments: []wire.ReviewComment{}, Rounds: []wire.ReviewRound{}}
-	if kind == wire.ReviewPlan {
-		e.mu.Lock()
-		r := e.recs[id(kind, key)]
-		var plan *wire.PlanDoc
-		if r != nil && r.Plan != nil {
-			p := clone(*r.Plan)
-			plan = &p
+	e.mu.Lock()
+	r := e.recs[id(kind, key)]
+	var plan *wire.PlanDoc
+	if r != nil && r.Plan != nil {
+		p := clone(*r.Plan)
+		plan = &p
+	}
+	e.mu.Unlock()
+	if plan == nil {
+		return d, server.Refuse(server.NotFound, "%s has no plan.", key)
+	}
+	d.Summary, d.Plan = e.planSummary(key), plan
+	e.addThread(&d, kind, key)
+	return d, nil
+}
+
+// codeDetail gives the code review of key: its summary, its files, its comments and its rounds.
+func (e *Engine) codeDetail(ctx context.Context, key string) (wire.ReviewDetail, error) {
+	kind := wire.ReviewCode
+	d := wire.ReviewDetail{Files: []wire.ReviewFile{}, Comments: []wire.ReviewComment{}, Rounds: []wire.ReviewRound{}}
+	g, ok := e.groupOf(ctx, key)
+	var repos []wire.ReviewRepo
+	var err error
+	if ok {
+		if d.Summary, repos, err = e.codeSummary(ctx, g); err != nil {
+			return d, err
 		}
-		e.mu.Unlock()
-		if plan == nil {
-			return d, server.Refuse(server.NotFound, "%s has no plan.", key)
+	} else if d.Summary, ok = e.goneSummary(key); !ok {
+		return d, noGroup(key)
+	}
+	viewed, stale := e.viewed(key)
+	prints := map[string]string{}
+	for _, r := range repos {
+		files, err := e.d.Git.files(ctx, g, r)
+		if err != nil {
+			return d, err
 		}
-		d.Summary, d.Plan = e.planSummary(key), plan
-	} else {
-		g, ok := e.groupOf(ctx, key)
-		var repos []wire.ReviewRepo
-		if ok {
-			if d.Summary, repos, err = e.codeSummary(ctx, g); err != nil {
-				return d, err
+		for _, f := range files {
+			if viewed[f.Repo+"/"+f.Path] {
+				prints[f.Repo+"/"+f.Path] = g.print(f.Repo, f.Path)
 			}
-		} else if d.Summary, ok = e.goneSummary(key); !ok {
-			return d, noGroup(key)
-		}
-		viewed, stale := e.viewed(key)
-		prints := map[string]string{}
-		for _, r := range repos {
-			files, err := e.d.Git.files(ctx, g, r)
-			if err != nil {
-				return d, err
-			}
-			for _, f := range files {
-				if viewed[f.Repo+"/"+f.Path] {
-					prints[f.Repo+"/"+f.Path] = g.print(f.Repo, f.Path)
-				}
-				d.Files = append(d.Files, f)
-			}
-		}
-		if len(prints) > 0 {
-			e.mu.Lock()
-			e.unview(e.rec(kind, key), prints)
-			viewed, stale = maps.Clone(e.recs[id(kind, key)].Viewed), maps.Clone(e.recs[id(kind, key)].Stale)
-			e.mu.Unlock()
-		}
-		for i, f := range d.Files {
-			d.Files[i].Viewed = viewed[f.Repo+"/"+f.Path]
-			d.Files[i].ViewedStale = stale[f.Repo+"/"+f.Path]
+			d.Files = append(d.Files, f)
 		}
 	}
+	if len(prints) > 0 {
+		e.mu.Lock()
+		e.unview(e.rec(kind, key), prints)
+		viewed, stale = maps.Clone(e.recs[id(kind, key)].Viewed), maps.Clone(e.recs[id(kind, key)].Stale)
+		e.mu.Unlock()
+	}
+	for i, f := range d.Files {
+		d.Files[i].Viewed = viewed[f.Repo+"/"+f.Path]
+		d.Files[i].ViewedStale = stale[f.Repo+"/"+f.Path]
+	}
+	e.addThread(&d, kind, key)
+	return d, nil
+}
+
+// addThread adds the comments and the rounds of the record of key to d.
+func (e *Engine) addThread(d *wire.ReviewDetail, kind wire.ReviewKind, key string) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if r := e.recs[id(kind, key)]; r != nil {
@@ -242,7 +268,6 @@ func (e *Engine) Get(ctx context.Context, key string, kind wire.ReviewKind) (wir
 	if d.Rounds == nil {
 		d.Rounds = []wire.ReviewRound{}
 	}
-	return d, nil
 }
 
 // Diff gives the diff of one file of the code review of key. full asks for the whole file.
@@ -650,6 +675,9 @@ func (e *Engine) event(key, id, kind string, actor wire.ActorType, summary strin
 		return
 	}
 	d := wire.EventDraft{ID: id, At: e.d.Clock().UTC(), Kind: kind, Item: key, ActorType: actor, Via: "oversire", Summary: summary}
+	if b, ok := e.bound(key); ok && b.Parent != "" && !strings.EqualFold(b.Parent, key) {
+		d.ParentItem = strings.ToUpper(b.Parent)
+	}
 	if actor == wire.ActorAgent {
 		d.Via = "cli"
 	}

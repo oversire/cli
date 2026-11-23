@@ -161,11 +161,11 @@ func TestPlan(t *testing.T) {
 	if _, err := r.AddComment(ctx, "APP-1", wire.CommentDraft{Anchor: wire.Anchor{Block: "none"}, Text: "x"}); !kindIs(err, server.Invalid) {
 		t.Fatal(err)
 	}
-	d, err := r.Get(ctx, "APP-1", "")
+	d, err := r.Get(ctx, "APP-1", "", Fold{})
 	if err != nil || d.Plan == nil || d.Plan.Version != 2 || len(d.Comments) != 1 || d.Summary.Pending != 1 {
 		t.Fatalf("%v %+v", err, d)
 	}
-	page, _ := r.List(ctx, wire.ReviewPlan)
+	page, _ := r.List(ctx, wire.ReviewPlan, Fold{})
 	if len(page.Reviews) != 1 {
 		t.Fatal(page.Reviews)
 	}
@@ -173,12 +173,12 @@ func TestPlan(t *testing.T) {
 	if _, err := r.Submit(ctx, "APP-1", wire.SubmitReview{Kind: wire.ReviewPlan, Verdict: wire.VerdictApprove}); err != nil {
 		t.Fatal(err)
 	}
-	if page, _ = r.List(ctx, ""); len(page.Reviews) != 0 {
+	if page, _ = r.List(ctx, "", Fold{}); len(page.Reviews) != 0 {
 		t.Fatal(page.Reviews)
 	}
 	r.clock.add(time.Minute)
 	r.PutPlan("APP-1", p)
-	if page, _ = r.List(ctx, ""); len(page.Reviews) != 1 {
+	if page, _ = r.List(ctx, "", Fold{}); len(page.Reviews) != 1 {
 		t.Fatal(page.Reviews)
 	}
 }
@@ -208,7 +208,7 @@ func TestStoreKeepsReviews(t *testing.T) {
 	}
 
 	r2 := r.engine(other)
-	d, err := r2.Get(ctx, "APP-1", "")
+	d, err := r2.Get(ctx, "APP-1", "", Fold{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -231,7 +231,7 @@ func TestAChangeClearsTheViewedMark(t *testing.T) {
 	if err := r.MarkViewed(ctx, "APP-2", wire.ViewedMark{Repo: "app", Path: "n.go", Viewed: true}); err != nil {
 		t.Fatal(err)
 	}
-	if d, err := r.Get(ctx, "APP-2", ""); err != nil || !d.Files[0].Viewed || d.Files[0].ViewedStale {
+	if d, err := r.Get(ctx, "APP-2", "", Fold{}); err != nil || !d.Files[0].Viewed || d.Files[0].ViewedStale {
 		t.Fatalf("%+v %v", d.Files, err)
 	}
 	if _, ok := r.row(wire.KindReviewViewed); !ok {
@@ -239,7 +239,7 @@ func TestAChangeClearsTheViewedMark(t *testing.T) {
 	}
 
 	w.write(filepath.Join(g, "app", "n.go"), "package lib\n\nfunc M() {}\n")
-	d, err := r.Get(ctx, "APP-2", "")
+	d, err := r.Get(ctx, "APP-2", "", Fold{})
 	if err != nil || d.Files[0].Viewed || !d.Files[0].ViewedStale {
 		t.Fatalf("%+v %v", d.Files, err)
 	}
@@ -248,13 +248,13 @@ func TestAChangeClearsTheViewedMark(t *testing.T) {
 	}
 
 	// The tag stays until the user marks the file again.
-	if d, _ = r.Get(ctx, "APP-2", ""); !d.Files[0].ViewedStale {
+	if d, _ = r.Get(ctx, "APP-2", "", Fold{}); !d.Files[0].ViewedStale {
 		t.Fatalf("%+v", d.Files)
 	}
 	if err := r.MarkViewed(ctx, "APP-2", wire.ViewedMark{Repo: "app", Path: "n.go", Viewed: true}); err != nil {
 		t.Fatal(err)
 	}
-	if d, _ = r.Get(ctx, "APP-2", ""); !d.Files[0].Viewed || d.Files[0].ViewedStale {
+	if d, _ = r.Get(ctx, "APP-2", "", Fold{}); !d.Files[0].Viewed || d.Files[0].ViewedStale {
 		t.Fatalf("%+v", d.Files)
 	}
 }

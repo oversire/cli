@@ -63,7 +63,7 @@ func TestSubmitIdle(t *testing.T) {
 		t.Fatalf("%+v", row)
 	}
 
-	d, _ := r.Get(ctx, "APP-1", "")
+	d, _ := r.Get(ctx, "APP-1", "", Fold{})
 	if d.Comments[0].State != wire.CommentSubmitted || d.Comments[0].Round != 1 || len(d.Rounds) != 1 {
 		t.Fatalf("%+v", d)
 	}
@@ -109,7 +109,7 @@ func TestSubmitWorkingQueuesTwoBatches(t *testing.T) {
 	if len(sent) != 1 || !strings.Contains(sent[0], "round 1:") || !strings.Contains(sent[0], "One.") {
 		t.Fatal(sent)
 	}
-	d, _ := r.Get(ctx, "APP-1", "")
+	d, _ := r.Get(ctx, "APP-1", "", Fold{})
 	if d.Rounds[0].Delivery != wire.DeliveryQueued || d.Rounds[0].DeliveredAt == nil || d.Rounds[1].DeliveredAt != nil {
 		t.Fatalf("%+v", d.Rounds)
 	}

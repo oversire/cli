@@ -1,0 +1,40 @@
+{
+  "summary": {
+    "key": "OVERSIRE-400",
+    "kind": "code",
+    "machine": "mbp",
+    "state": "ready",
+    "round": 1,
+    "pending": 1,
+    "unanswered": 0,
+    "root": "/Users/fritz/Projects/oversire-workspace",
+    "repos": [
+      { "name": "cli", "branch": "oversire-401", "base": "main", "ahead": 1, "behind": 0, "added": 4, "removed": 0, "files": 1, "dirty": false, "merge": "fastForward", "item": "OVERSIRE-401" },
+      { "name": "cli", "branch": "oversire-402", "base": "main", "ahead": 1, "behind": 0, "added": 2, "removed": 1, "files": 1, "dirty": false, "merge": "fastForward", "item": "OVERSIRE-402" }
+    ],
+    "subitems": ["OVERSIRE-401", "OVERSIRE-402"],
+    "updatedAt": "2026-11-20T11:00:00Z",
+    "parts": [
+      { "key": "OVERSIRE-401", "root": "/Users/fritz/Projects/oversire-workspace", "group": ".wt/oversire-401", "state": "ready", "round": 1, "pending": 1, "unanswered": 0 },
+      { "key": "OVERSIRE-402", "root": "/Users/fritz/Projects/oversire-workspace", "group": ".wt/oversire-402", "state": "ready", "round": 0, "pending": 0, "unanswered": 0 }
+    ]
+  },
+  "files": [
+    { "repo": "cli", "path": "review/fold.go", "status": "A", "added": 4, "removed": 0, "binary": false, "viewed": false, "item": "OVERSIRE-401" },
+    { "repo": "cli", "path": "review/fold.go", "status": "M", "added": 2, "removed": 1, "binary": false, "viewed": true, "item": "OVERSIRE-402" }
+  ],
+  "comments": [
+    {
+      "id": "c_401a0001",
+      "key": "OVERSIRE-401",
+      "round": 2,
+      "state": "pending",
+      "anchor": { "repo": "cli", "path": "review/fold.go", "line": 3, "side": "new" },
+      "text": "Sort the parts here.",
+      "createdAt": "2026-11-20T10:30:00Z"
+    }
+  ],
+  "rounds": [
+    { "n": 1, "verdict": "requestChanges", "count": 1, "submittedAt": "2026-11-20T08:00:00Z", "delivery": "sent", "session": "s-0401bbbb", "item": "OVERSIRE-401" }
+  ]
+}

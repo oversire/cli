@@ -66,6 +66,8 @@ type ReviewRepo struct {
 	Merge         MergeMode      `json:"merge"`
 	ConflictFiles []string       `json:"conflictFiles,omitempty"`
 	Commits       []ReviewCommit `json:"commits,omitempty"`
+	// Item is the key of the group that owns the repo, in a folded summary.
+	Item string `json:"item,omitempty"`
 }
 
 // ReviewSummary is one row of Work › Review.
@@ -86,6 +88,23 @@ type ReviewSummary struct {
 	Note       string         `json:"note,omitempty"`
 	ReadyAt    *time.Time     `json:"readyAt,omitempty"`
 	UpdatedAt  time.Time      `json:"updatedAt"`
+	// Parts are the groups of a folded parent row: the sub-items in key order, then the parent.
+	Parts []ReviewPart `json:"parts,omitempty"`
+}
+
+// ReviewPart is one group of a folded parent row.
+type ReviewPart struct {
+	Key        string         `json:"key"`
+	Root       string         `json:"root"`
+	Group      string         `json:"group,omitempty"`
+	State      ReviewState    `json:"state"`
+	Round      int            `json:"round"`
+	Pending    int            `json:"pending"`
+	Unanswered int            `json:"unanswered"`
+	Session    *ReviewSession `json:"session,omitempty"`
+	Note       string         `json:"note,omitempty"`
+	ReadyAt    *time.Time     `json:"readyAt,omitempty"`
+	MergedAt   *time.Time     `json:"mergedAt,omitempty"`
 }
 
 // NotPushed is a base branch with local commits that its upstream does not have.
@@ -126,6 +145,8 @@ type ReviewFile struct {
 	Viewed    bool       `json:"viewed"`
 	// ViewedStale is true when the file changed after the mark.
 	ViewedStale bool `json:"viewedStale,omitempty"`
+	// Item is the key of the group of the file, in a folded detail.
+	Item string `json:"item,omitempty"`
 }
 
 type DiffLineKind string
@@ -226,6 +247,8 @@ type ReviewRound struct {
 	DeliveredAt *time.Time    `json:"deliveredAt,omitempty"`
 	Error       string        `json:"error,omitempty"`
 	AnsweredAt  *time.Time    `json:"answeredAt,omitempty"`
+	// Item is the key of the group of the round, in a folded detail.
+	Item string `json:"item,omitempty"`
 }
 
 type PlanBlock struct {
@@ -301,6 +324,8 @@ type ReviewReady struct {
 // MergeRequest is the body of POST /v1/reviews/{key}/merge.
 type MergeRequest struct {
 	RemoveGroup bool `json:"removeGroup"`
+	// Items are the groups to merge as all or none. Empty: the key of the path only.
+	Items []string `json:"items,omitempty"`
 }
 
 type MergeOutcome string
@@ -317,6 +342,7 @@ type RepoMerge struct {
 	Result        MergeOutcome `json:"result"`
 	Head          string       `json:"head,omitempty"`
 	ConflictFiles []string     `json:"conflictFiles,omitempty"`
+	Item          string       `json:"item,omitempty"`
 }
 
 // MergeResult is the answer of POST /v1/reviews/{key}/merge. All or none.

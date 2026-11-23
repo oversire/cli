@@ -44,7 +44,7 @@ func TestMergeFastForward(t *testing.T) {
 	if got := list(t, r); len(got) != 0 {
 		t.Fatalf("%+v", got)
 	}
-	d, err := r.Get(context.Background(), "APP-1", "")
+	d, err := r.Get(context.Background(), "APP-1", "", Fold{})
 	if err != nil || d.Summary.State != wire.ReviewMerged {
 		t.Fatal(err, d.Summary.State)
 	}
@@ -214,7 +214,7 @@ func TestMergeRemovesGroup(t *testing.T) {
 		t.Fatal("the target of the link is gone")
 	}
 	// The review of the removed group is merged.
-	d, err := r.Get(context.Background(), "OS-5", "")
+	d, err := r.Get(context.Background(), "OS-5", "", Fold{})
 	if err != nil || d.Summary.State != wire.ReviewMerged {
 		t.Fatal(err, d.Summary)
 	}

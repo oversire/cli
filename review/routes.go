@@ -48,12 +48,12 @@ func pathKey(r *http.Request) string { return strings.ToUpper(r.PathValue("key")
 func queryKind(r *http.Request) wire.ReviewKind { return wire.ReviewKind(r.URL.Query().Get("kind")) }
 
 func (rt *Routes) list(w http.ResponseWriter, r *http.Request) {
-	page, err := rt.engine.List(r.Context(), queryKind(r))
+	page, err := rt.engine.List(r.Context(), queryKind(r), foldOf(r.URL.Query()))
 	reply(w, http.StatusOK, page, err)
 }
 
 func (rt *Routes) get(w http.ResponseWriter, r *http.Request) {
-	d, err := rt.engine.Get(r.Context(), pathKey(r), queryKind(r))
+	d, err := rt.engine.Get(r.Context(), pathKey(r), queryKind(r), foldOf(r.URL.Query()))
 	reply(w, http.StatusOK, d, err)
 }
 
