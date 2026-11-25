@@ -478,9 +478,14 @@ func (r *Routes) wait(w http.ResponseWriter, req *http.Request) {
 	}
 	deadline := time.NewTimer(p.timeout)
 	defer deadline.Stop()
+	settleAt := p.started.Add(p.settle)
 	for {
 		changed := r.x.Changed()
 		t, err := r.x.Resolve(st.Repo, ref)
+		// The app can poll a new run or PR after the wait starts. Until the settle time ends, it counts as no runs.
+		if server.NotFound.Of(err) && r.x.now().Before(settleAt) {
+			t, err = Target{}, nil
+		}
 		if err != nil {
 			r.fail(w, err)
 			return
@@ -491,7 +496,6 @@ func (r *Routes) wait(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		roll.Ref = p.ref
-		settleAt := p.started.Add(p.settle)
 		if roll.State == wire.CINone && r.x.now().After(settleAt) || p.failFast && roll.State == wire.CIFailure {
 			roll.Done = true
 		}

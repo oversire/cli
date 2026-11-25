@@ -213,3 +213,36 @@ func TestRoutesWakeOnPut(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 }
+
+func TestWaitUnknownRunWaitsForPoll(t *testing.T) {
+	a := seeded(t)
+	var first wire.CIRollup
+	a.getJSON("/v1/ci/wait?repo=o/r&ref=9002&timeout=30", 200, &first)
+	if first.State != wire.CINone || first.Done {
+		t.Fatalf("%+v", first)
+	}
+	done := make(chan wire.CIRollup)
+	go func() {
+		var r wire.CIRollup
+		a.getJSON("/v1/ci/wait?repo=o/r&ref=9002&timeout=30&since="+first.Rev, 200, &r)
+		done <- r
+	}()
+	time.Sleep(100 * time.Millisecond)
+	a.put(runsDoc("o/r", run("9001", "test", "in_progress", "", sha1, "main"), run("9002", "release", "completed", "success", "b2", "v1")))
+	select {
+	case r := <-done:
+		if r.State != wire.CISuccess || !r.Done || r.SHA != "b2" {
+			t.Fatalf("%+v", r)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the wait did not end")
+	}
+}
+
+func TestWaitUnknownRunAfterSettle(t *testing.T) {
+	a := seeded(t)
+	started := a.clk.now().Add(-2 * time.Second).Unix()
+	if e := a.errText("/v1/ci/wait?repo=o/r&ref=9002&timeout=30&settle=1&started="+itoa(started), 404); e != "OverSire has no run 9002 in o/r." {
+		t.Fatal(e)
+	}
+}

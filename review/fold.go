@@ -3,7 +3,6 @@ package review
 import (
 	"cmp"
 	"context"
-	"errors"
 	"net/url"
 	"slices"
 	"strconv"
@@ -226,7 +225,7 @@ func (e *Engine) foldedDetail(ctx context.Context, parent string, kids []string)
 	d := wire.ReviewDetail{Files: []wire.ReviewFile{}, Comments: []wire.ReviewComment{}, Rounds: []wire.ReviewRound{}}
 	for _, k := range append(kids, parent) {
 		one, err := e.codeDetail(ctx, k)
-		if kindIsNotFound(err) {
+		if server.NotFound.Of(err) {
 			continue
 		}
 		if err != nil {
@@ -252,9 +251,4 @@ func (e *Engine) foldedDetail(ctx context.Context, parent string, kids []string)
 	}
 	d.Summary = fd.summary(e.d.Machine)
 	return d, true, nil
-}
-
-func kindIsNotFound(err error) bool {
-	var r *server.Refusal
-	return errors.As(err, &r) && r.Kind == server.NotFound
 }

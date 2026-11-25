@@ -67,6 +67,12 @@ func (k RefusalKind) String() string {
 	return fmt.Sprintf("RefusalKind(%d)", int(k))
 }
 
+// Of tells if err is a Refusal of kind k.
+func (k RefusalKind) Of(err error) bool {
+	var r *Refusal
+	return errors.As(err, &r) && r.Kind == k
+}
+
 // Refusal is an engine error that the caller can fix. Fail maps it to a status.
 type Refusal struct {
 	Kind RefusalKind
