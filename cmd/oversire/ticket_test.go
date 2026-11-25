@@ -679,6 +679,11 @@ func TestTicketBindClaimFailsSoft(t *testing.T) {
 			"A-1: the daemon does not know this session yet, so the app does not link it.\n"},
 		{"old daemon", func(t *testing.T, c *cli) { fakeDaemon(t, c, http.NotFoundHandler()) },
 			"A-1: the daemon is too old to link this session. Run: oversire update\n"},
+		{"old daemon with the sessions route", func(t *testing.T, c *cli) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("GET /v1/sessions/{id}", func(http.ResponseWriter, *http.Request) {})
+			fakeDaemon(t, c, mux)
+		}, "A-1: the daemon is too old to link this session. Run: oversire update\n"},
 		{"conflict", func(t *testing.T, c *cli) {
 			fakeDaemon(t, c, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				server.WriteError(w, http.StatusConflict, "OverSire cannot type into this terminal.")

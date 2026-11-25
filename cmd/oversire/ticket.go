@@ -320,7 +320,8 @@ func (c *cli) claimSession(ctx context.Context, item, startKey, role, session st
 		fmt.Fprintf(c.out, "%s: the app does not link this session: %v\n", item, err)
 	case de.Status == 0:
 		fmt.Fprintf(c.out, "%s: no daemon answers, so the app does not link this session.\n", item)
-	case de.Status == http.StatusNotFound && de.Plain:
+	// An old daemon has GET /v1/sessions/{id} only, so this POST gets 405.
+	case de.Status == http.StatusMethodNotAllowed, de.Status == http.StatusNotFound && de.Plain:
 		fmt.Fprintf(c.out, "%s: the daemon is too old to link this session. Run: oversire update\n", item)
 	case de.Status == http.StatusNotFound:
 		fmt.Fprintf(c.out, "%s: the daemon does not know this session yet, so the app does not link it.\n", item)
