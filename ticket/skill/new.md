@@ -28,7 +28,7 @@ If the session has no investigation (the user only gave an idea), the brief is t
 - Epic: if the work is a part of a larger goal, list the epics (`oversire epic list --project <PROJECT>`). Put the ticket in the epic that the user names, or ask when one epic fits clearly. After you make the ticket, add it with `oversire epic add "<epic>" <KEY>`. Skip this when the project has no epics, or when the command exits with 3 (no OverSire app on this Mac).
 
 {{template "todo" .}}
-Then run `oversire ticket new <KEY>`. It binds this session to the ticket.
+Then run `oversire ticket new <KEY>`. It binds this session to the ticket, and Work in the app then uses this session.
 
 ## 4. Report
 

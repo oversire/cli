@@ -21,6 +21,7 @@ import (
 	"github.com/oversire/cli/config"
 	"github.com/oversire/cli/digest"
 	"github.com/oversire/cli/events"
+	"github.com/oversire/cli/orders"
 	"github.com/oversire/cli/proc"
 	"github.com/oversire/cli/review"
 	"github.com/oversire/cli/ticket"
@@ -33,9 +34,11 @@ const ticketUsage = `Usage:
   oversire ticket skill --install|--refresh [--harness claude,codex]
                                                           install the skill file, or update the installed files
   oversire ticket new|work <KEY> [--session ID] [--harness H]
-                                                          bind this session to a ticket (work prints the earlier sessions)
+                                                          bind this session to a ticket (work prints the earlier sessions);
+                                                          also give this Orca or OverSire session the start key work:<KEY> on the local daemon
   oversire ticket plan <KEY>... [--session ID] [--harness H]
-                                                          bind this session to one ticket or a batch (at most 20)
+                                                          bind this session to one ticket or a batch (at most 20);
+                                                          one ticket also gives the start key work:<KEY> on the local daemon
   oversire ticket groom <PROJECT> [--session ID]
                                                           check the Groom key of the project and list the busy items
   oversire ticket applied groom|sweep --file F [--project P] [--session ID]
@@ -78,7 +81,7 @@ func (c *cli) ticket(args []string) error {
 	sub := args[0]
 	fs := flag.NewFlagSet("ticket "+sub, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	session := fs.String("session", os.Getenv("CLAUDE_CODE_SESSION_ID"), "the harness session id")
+	session := fs.String("session", c.env("CLAUDE_CODE_SESSION_ID"), "the harness session id")
 	harness := fs.String("harness", "", "the harness, or a comma-separated list for --install")
 	install := fs.Bool("install", false, "install the skill file")
 	refresh := fs.Bool("refresh", false, "update the installed skill files")
@@ -118,7 +121,7 @@ func (c *cli) ticket(args []string) error {
 		if sub != "plan" && fs.NArg() != 1 {
 			return &exitError{2, fmt.Errorf("%s takes exactly one ticket key\n\n%s", sub, ticketUsage)}
 		}
-		return c.ticketBind(sub, fs.Args(), h, *session)
+		return c.ticketBind(context.Background(), sub, fs.Args(), h, *session)
 	case "groom":
 		if fs.NArg() != 1 {
 			return &exitError{2, fmt.Errorf("a project identifier is missing\n\n%s", ticketUsage)}
@@ -217,7 +220,7 @@ func (c *cli) printInstalled(done []ticket.Installed) {
 // maxPlanKeys caps a batch plan.
 const maxPlanKeys = 20
 
-func (c *cli) ticketBind(role string, keys []string, harness, session string) error {
+func (c *cli) ticketBind(ctx context.Context, role string, keys []string, harness, session string) error {
 	var norm []string
 	for _, k := range keys {
 		k, err := ticket.NormalKey(k)
@@ -251,6 +254,9 @@ func (c *cli) ticketBind(role string, keys []string, harness, session string) er
 		}
 		fmt.Fprintf(c.out, "%s: this session (%s %s) is bound (%s).\n", key, harness, session, role)
 	}
+	if startKey, ok := ticket.StartKeyFor(role, norm); ok {
+		c.claimSession(ctx, norm[0], startKey, role, session)
+	}
 	if role == "new" {
 		return nil
 	}
@@ -280,6 +286,47 @@ func (c *cli) ticketBind(role string, keys []string, harness, session string) er
 	}
 	c.printDigest(others[len(others)-1])
 	return nil
+}
+
+// claimSession gives the start key to the Orca or OverSire session of this terminal, so that Work in the app reuses it.
+// It never fails the bind: it prints one line.
+func (c *cli) claimSession(ctx context.Context, item, startKey, role, session string) {
+	pane, visor := c.env("ORCA_PANE_KEY"), c.env("OVERSIRE_SESSION")
+	if pane == "" && visor == "" {
+		fmt.Fprintf(c.out, "%s: this terminal is not an Orca or OverSire session, so Work in the app starts a new session.\n", item)
+		return
+	}
+	if env := c.env("CLAUDE_CODE_SESSION_ID"); env != "" && session != "" && env != session {
+		fmt.Fprintf(c.out, "%s: the session id is not the id of this terminal, so the app does not link it.\n", item)
+		return
+	}
+	d, err := c.daemonClient()
+	if err != nil {
+		fmt.Fprintf(c.out, "%s: the app does not link this session: %v\n", item, err)
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	claim, err := d.Claim(ctx, orders.ClaimRequest{Key: startKey, PaneKey: pane, Session: visor, HarnessSession: session, Role: role})
+	var de *daemonError
+	switch {
+	case err == nil:
+		fmt.Fprintf(c.out, "%s: Work in the app uses this session (key %s).", item, startKey)
+		if len(claim.Freed) > 0 {
+			fmt.Fprintf(c.out, " The key moved from %s.", strings.Join(claim.Freed, ", "))
+		}
+		fmt.Fprintln(c.out)
+	case !errors.As(err, &de):
+		fmt.Fprintf(c.out, "%s: the app does not link this session: %v\n", item, err)
+	case de.Status == 0:
+		fmt.Fprintf(c.out, "%s: no daemon answers, so the app does not link this session.\n", item)
+	case de.Status == http.StatusNotFound && de.Plain:
+		fmt.Fprintf(c.out, "%s: the daemon is too old to link this session. Run: oversire update\n", item)
+	case de.Status == http.StatusNotFound:
+		fmt.Fprintf(c.out, "%s: the daemon does not know this session yet, so the app does not link it.\n", item)
+	default:
+		fmt.Fprintf(c.out, "%s: the app does not link this session: %s\n", item, de.Msg)
+	}
 }
 
 func otherSessions(rs []ticket.SessionRecord, session string) []ticket.SessionRecord {

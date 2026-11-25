@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"regexp"
+	"slices"
 	"sync"
 	"time"
 
@@ -38,8 +39,10 @@ type Journal interface {
 // Keys finds the live session of a start key and keeps the key, model, effort and profile of a new session (sessions.Book).
 type Keys interface {
 	ByKey(runtime, key string) (wire.DaemonSession, bool)
+	Get(id string) (wire.DaemonSession, bool)
 	Apply(p sessions.Patch)
 	Unkey(ref string)
+	Claim(id, key string) (sessions.Claim, error)
 }
 
 // Env fills the secret env of a launch from home (agentsecret.Env).
@@ -219,6 +222,51 @@ func (r *Runner) start(ctx context.Context, o wire.WorkOrder) (*wire.WorkOrderRe
 	}
 	r.keys.Apply(patch)
 	return out, nil
+}
+
+// ClaimRequest is the body of POST /v1/sessions/claim. It names the session of the caller by its env.
+type ClaimRequest struct {
+	Key            string `json:"key"`                      // the start key, for example work:OVERSIRE-12
+	PaneKey        string `json:"paneKey,omitempty"`        // ORCA_PANE_KEY
+	Session        string `json:"session,omitempty"`        // OVERSIRE_SESSION
+	HarnessSession string `json:"harnessSession,omitempty"` // the harness session id, a check only
+	Role           string `json:"role,omitempty"`           // new, plan or work: for the event row
+}
+
+// Claim gives the start key to the live session that a hand-started agent runs in, so a keyed start reuses it.
+// The pane comes first: in an Orca pane the book id is the pane key, and OVERSIRE_SESSION can come from a parent session.
+func (r *Runner) Claim(ctx context.Context, c ClaimRequest) (sessions.Claim, error) {
+	if r.keys == nil {
+		return sessions.Claim{}, errors.New("This daemon keeps no start keys.")
+	}
+	if !startKey.MatchString(c.Key) || len(c.Key) > 200 {
+		return sessions.Claim{}, server.Refuse(server.Invalid, "The start key %q is not valid.", c.Key)
+	}
+	if !slices.Contains([]string{"", "new", "plan", "work"}, c.Role) {
+		return sessions.Claim{}, server.Refuse(server.Invalid, "The role %q is not new, plan or work.", c.Role)
+	}
+	if c.PaneKey == "" && c.Session == "" {
+		return sessions.Claim{}, server.Refuse(server.Invalid, "Give the paneKey or the session of the caller.")
+	}
+	defer r.lockKey(c.Key)()
+	s, ok := r.keys.Get(c.PaneKey)
+	if !ok {
+		s, ok = r.keys.Get(c.Session)
+	}
+	if !ok {
+		return sessions.Claim{}, server.Refuse(server.NotFound, "The daemon has no live session for this terminal.")
+	}
+	if s.Runtime == wire.RuntimeCLI {
+		return sessions.Claim{}, server.Refuse(server.Conflict, "OverSire cannot type into this terminal.")
+	}
+	if c.HarnessSession != "" && s.HarnessSession != "" && c.HarnessSession != s.HarnessSession {
+		return sessions.Claim{}, server.Refuse(server.Conflict, "The terminal runs another agent session now.")
+	}
+	claim, err := r.keys.Claim(s.ID, c.Key)
+	if errors.Is(err, sessions.ErrNoSession) {
+		return sessions.Claim{}, server.Refuse(server.NotFound, "%s", err.Error())
+	}
+	return claim, err
 }
 
 // fill checks the env keys and gets the secret values. The values stay in the order in memory.

@@ -1,0 +1,21 @@
+{
+  "seq": 300,
+  "id": "claim:39b71979:1ce97402:work:OVERSIRE-597:1795600000000",
+  "at": "2026-11-25T10:00:00Z",
+  "seenAt": "2026-11-25T10:00:00Z",
+  "kind": "session.claimed",
+  "item": "OVERSIRE-597",
+  "project": "oversire",
+  "machine": "mbp",
+  "session": "work:OVERSIRE-597",
+  "actorType": "agent",
+  "actor": "claude/opus-5-5",
+  "onBehalf": "flarco@gmail.com",
+  "via": "cli",
+  "summary": "Session holds work:OVERSIRE-597 (new)",
+  "payload": {
+    "key": "work:OVERSIRE-597",
+    "role": "new",
+    "runtime": "orca"
+  }
+}

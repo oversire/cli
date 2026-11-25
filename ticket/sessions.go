@@ -30,6 +30,15 @@ func GroupOf(dir string) (root, name string, ok bool) {
 	}
 }
 
+// StartKeyFor gives the start key that a bind of role gives to the session of the caller. One session holds one key,
+// so a batch plan of two or more tickets gives none. The keys are normal (NormalKey).
+func StartKeyFor(role string, keys []string) (string, bool) {
+	if len(keys) == 0 || role == "plan" && len(keys) != 1 {
+		return "", false
+	}
+	return "work:" + keys[0], true
+}
+
 // itemPrefixes are the start keys that name an item.
 var itemPrefixes = []string{"work:", "plan:", "refine:", "enhance:"}
 

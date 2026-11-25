@@ -199,6 +199,14 @@ type cli struct {
 	wd      string                                                                // the working folder of the review command; empty is the folder of the process
 	git     func(ctx context.Context, dir string, args ...string) (string, error) // runs git; nil is the real git
 	tty     func(io.Writer) bool                                                  // tells if out is a terminal; nil checks the file
+	getenv  func(string) string                                                   // reads the env; nil is os.Getenv
+}
+
+func (c *cli) env(key string) string {
+	if c.getenv != nil {
+		return c.getenv(key)
+	}
+	return os.Getenv(key)
 }
 
 func (c *cli) stderr() io.Writer {

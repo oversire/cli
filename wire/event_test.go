@@ -42,7 +42,7 @@ func TestEventCatalogMatchesTheFixtures(t *testing.T) {
 			t.Errorf("kind %s has no fixture", k)
 		}
 	}
-	for _, k := range []string{KindSessionStarted, KindSessionEnded, KindTurnStarted, KindTurnEnded, KindTurnInterrupted,
+	for _, k := range []string{KindSessionStarted, KindSessionEnded, KindSessionClaimed, KindTurnStarted, KindTurnEnded, KindTurnInterrupted,
 		KindWaitStarted, KindWaitEnded, KindContextCompacted, KindSubagentEnded, KindReviewReady, KindPromptSubmitted,
 		KindQuestionAnswered, KindReviewSubmitted, KindReviewApproved, KindWorktreeAdded, KindWorktreeRemoved, KindGitCommit,
 		KindGitRebase, KindGitReset, KindGitMerge, KindGitPush, KindQueuePicked, KindQueueHeld, KindRunbookStepStarted,

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/oversire/cli/events"
+	"github.com/oversire/cli/sessions"
 	"github.com/oversire/cli/wire"
 	"github.com/oversire/cli/worker"
 )
@@ -227,5 +228,35 @@ func TestWorkerRowsWriteEachChangeOnce(t *testing.T) {
 	}
 	if string(rows[4].Payload) == "" || !strings.Contains(string(rows[4].Payload), "Tests pass.") || strings.Contains(rows[4].Summary, "Tests") {
 		t.Errorf("done payload %s summary %q", rows[4].Payload, rows[4].Summary)
+	}
+}
+
+func TestClaimRowFollowsTheCatalog(t *testing.T) {
+	st, w := open(t)
+	s := wire.DaemonSession{ID: "t1:l1", Key: "work:A-1", Harness: "claude", Runtime: "orca"}
+	NewClaimRows(w).OnClaim(sessions.Claim{Session: s, Previous: "plan:A-1", Freed: []string{"t2:l1"}, Changed: true}, "new")
+	w.Flush(context.Background())
+	rows := item(t, st, "A-1")
+	if len(rows) != 1 {
+		t.Fatalf("rows %v", kinds(rows))
+	}
+	e := rows[0]
+	if e.Kind != wire.KindSessionClaimed || e.Item != "A-1" || e.Session != "work:A-1" || e.Actor != "claude" || e.ActorType != wire.ActorAgent {
+		t.Errorf("row %+v", e.EventDraft)
+	}
+	var pl struct {
+		Key, Role, Runtime, Previous string
+		Freed                        []string
+	}
+	if err := json.Unmarshal(e.Payload, &pl); err != nil || pl.Key != "work:A-1" || pl.Role != "new" || pl.Runtime != "orca" ||
+		pl.Previous != "plan:A-1" || len(pl.Freed) != 1 {
+		t.Errorf("payload %s, %v", e.Payload, err)
+	}
+	cat, err := wire.LoadEventCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := cat.Problems(e.EventDraft); len(p) > 0 {
+		t.Errorf("problems %v", p)
 	}
 }

@@ -16,6 +16,7 @@ import (
 
 	"github.com/oversire/cli/events"
 	"github.com/oversire/cli/orders"
+	"github.com/oversire/cli/sessions"
 	"github.com/oversire/cli/ticket"
 	"github.com/oversire/cli/wire"
 	"github.com/oversire/cli/worker"
@@ -102,6 +103,13 @@ func (d daemonClient) Sessions(ctx context.Context) ([]wire.DaemonSession, error
 		return nil, err
 	}
 	return p.Sessions, nil
+}
+
+// Claim posts POST /v1/sessions/claim: the daemon gives the start key to the session of the caller.
+func (d daemonClient) Claim(ctx context.Context, r orders.ClaimRequest) (sessions.Claim, error) {
+	var c sessions.Claim
+	err := d.call(ctx, http.MethodPost, "/v1/sessions/claim", r, &c)
+	return c, err
 }
 
 // Turns reads GET /v1/sessions/{id}/turns: one page of the turns after seq `after`.

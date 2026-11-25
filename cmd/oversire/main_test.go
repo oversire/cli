@@ -37,6 +37,7 @@ func testCLI(t *testing.T, stdin string) (*cli, *bytes.Buffer, *noRun) {
 		secrets: secret.New(run, "windows", secret.Daemon, paths.Token(), nil),
 		service: service.NewManager("linux", dir, 1000, "/bin/oversire", run),
 		exe:     "/bin/oversire",
+		getenv:  func(string) string { return "" },
 	}, out, run
 }
 

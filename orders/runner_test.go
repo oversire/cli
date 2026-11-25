@@ -2,6 +2,7 @@ package orders
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -290,5 +291,72 @@ func TestRunnerSendRunsASessionSendOrder(t *testing.T) {
 	}
 	if err := r.Send(context.Background(), "oversire", runtime.Order{ID: "send-2", ExpiresAt: now.Add(-time.Hour)}, p); err == nil {
 		t.Fatal("an expired order sent")
+	}
+}
+
+// handStarted adds a live session that the daemon did not start.
+func handStarted(book *sessions.Book, id, runtime string) {
+	book.Apply(sessions.Patch{ID: id, Source: sessions.SourceHook, Runtime: ptr(runtime), Harness: ptr("claude")})
+}
+
+func refusal(t *testing.T, err error, kind server.RefusalKind) {
+	t.Helper()
+	var ref *server.Refusal
+	if !errors.As(err, &ref) || ref.Kind != kind {
+		t.Fatalf("error = %v, want %v", err, kind)
+	}
+}
+
+func TestClaimFindsThePaneThenTheSession(t *testing.T) {
+	r, _, book := keyRig()
+	handStarted(book, "t1:l1", wire.RuntimeOrca)
+	handStarted(book, "v-1", "oversire")
+	c, err := r.Claim(trusted(), ClaimRequest{Key: "work:A-1", PaneKey: "t9:l9", Session: "v-1"})
+	if err != nil || c.Session.ID != "v-1" || !c.Changed {
+		t.Fatalf("claim = %+v, %v", c, err)
+	}
+	c, err = r.Claim(trusted(), ClaimRequest{Key: "work:A-2", PaneKey: "t1:l1", Session: "v-1"})
+	if err != nil || c.Session.ID != "t1:l1" {
+		t.Fatalf("claim = %+v, %v", c, err)
+	}
+}
+
+func TestClaimChecks(t *testing.T) {
+	r, _, book := keyRig()
+	handStarted(book, "t1:l1", wire.RuntimeOrca)
+	book.Apply(sessions.Patch{ID: "t1:l1", HarnessSession: ptr("h1")})
+	handStarted(book, "cli:h2", wire.RuntimeCLI)
+
+	_, err := r.Claim(trusted(), ClaimRequest{Key: "bad key", PaneKey: "t1:l1"})
+	refusal(t, err, server.Invalid)
+	_, err = r.Claim(trusted(), ClaimRequest{Key: "work:A-1", PaneKey: "t1:l1", Role: "other"})
+	refusal(t, err, server.Invalid)
+	_, err = r.Claim(trusted(), ClaimRequest{Key: "work:A-1"})
+	refusal(t, err, server.Invalid)
+	_, err = r.Claim(trusted(), ClaimRequest{Key: "work:A-1", PaneKey: "nope"})
+	refusal(t, err, server.NotFound)
+	_, err = r.Claim(trusted(), ClaimRequest{Key: "work:A-1", PaneKey: "t1:l1", HarnessSession: "h9"})
+	refusal(t, err, server.Conflict)
+	_, err = r.Claim(trusted(), ClaimRequest{Key: "work:A-1", Session: "cli:h2"})
+	refusal(t, err, server.Conflict)
+	if _, err = r.Claim(trusted(), ClaimRequest{Key: "work:A-1", PaneKey: "t1:l1", HarnessSession: "h1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	bare := NewRunner(&slowRuntimes{}, fakeAllow{}, &memJournal{}, func() time.Time { return now })
+	if _, err = bare.Claim(trusted(), ClaimRequest{Key: "work:A-1", PaneKey: "t1:l1"}); err == nil {
+		t.Fatal("a runner with no keys claims")
+	}
+}
+
+func TestKeyedStartAfterClaimReuses(t *testing.T) {
+	r, rts, book := keyRig()
+	handStarted(book, "t1:l1", wire.RuntimeOrca)
+	if _, err := r.Claim(trusted(), ClaimRequest{Key: "work:A-1", PaneKey: "t1:l1", Role: "new"}); err != nil {
+		t.Fatal(err)
+	}
+	res, _ := r.Run(trusted(), onOrca(keyed("wo-1", "work:A-1")), Hooks{})
+	if res.State != wire.ResultDone || !res.Result.Reused || res.Result.PaneKey != "t1:l1" || rts.count() != 0 {
+		t.Fatalf("result = %+v, launches = %d", res.Result, rts.count())
 	}
 }

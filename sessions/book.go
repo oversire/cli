@@ -5,6 +5,7 @@ package sessions
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -363,6 +364,44 @@ func (b *Book) Unkey(ref string) {
 			e.s.Key = ""
 		}
 	}
+}
+
+// ErrNoSession is the error of Claim for an unknown or ended session.
+var ErrNoSession = errors.New("The daemon has no live session with this id.")
+
+// Claim is the result of Book.Claim. It is also the answer of POST /v1/sessions/claim.
+type Claim struct {
+	Session  wire.DaemonSession `json:"session"`            // the session after the claim
+	Previous string             `json:"previous,omitempty"` // the key that the session held before
+	Freed    []string           `json:"freed,omitempty"`    // the ids of the sessions that lost the key
+	Changed  bool               `json:"changed"`            // false: the session held the key already
+}
+
+// Claim gives the start key to the live session with the id. Each other live session of the same runtime loses the key.
+// The move is one step under the lock, so a second claim cannot come between the two writes.
+func (b *Book) Claim(id, key string) (Claim, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	e, ok := b.byID[id]
+	if !ok || !e.ended.IsZero() {
+		return Claim{}, ErrNoSession
+	}
+	if e.s.Key == key {
+		return Claim{Session: copySession(e.s)}, nil
+	}
+	now := b.clock()
+	c := Claim{Previous: e.s.Key, Changed: true}
+	for _, o := range b.byID {
+		if o != e && o.s.Key == key && o.s.Runtime == e.s.Runtime && o.ended.IsZero() {
+			o.s.Key, o.s.UpdatedAt = "", now
+			c.Freed = append(c.Freed, o.s.ID)
+		}
+	}
+	slices.Sort(c.Freed)
+	e.s.Key, e.s.UpdatedAt = key, now
+	b.dirty = true
+	c.Session = copySession(e.s)
+	return c, nil
 }
 
 // Tool gives the last tool and its input of a session.

@@ -8,7 +8,7 @@ Choose the mode. With one key, do "One ticket". With no key, or with two or more
 
 ### 1. Read the ticket
 
-- Run `oversire ticket plan <KEY>`. It binds this session and prints the earlier sessions of the ticket.
+- Run `oversire ticket plan <KEY>`. It binds this session, and Work in the app then uses this session. It also prints the earlier sessions of the ticket.
 - Read the ticket with `oversire item show <KEY>`: the description, the comments and the links. For the sub-items, run `oversire item show <KEY> --json` and read `subItems`.
 
 ### 2. Write the brief

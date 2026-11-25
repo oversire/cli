@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -22,7 +23,10 @@ import (
 	"time"
 
 	"github.com/oversire/cli/config"
+	"github.com/oversire/cli/eventlog"
 	"github.com/oversire/cli/events"
+	"github.com/oversire/cli/orders"
+	"github.com/oversire/cli/server"
 	"github.com/oversire/cli/sessions"
 	"github.com/oversire/cli/ticket"
 	"github.com/oversire/cli/wire"
@@ -74,7 +78,7 @@ func usageHas(cmd, sub string) bool {
 func ticketTest(t *testing.T) (*cli, *bytes.Buffer) {
 	t.Helper()
 	out := &bytes.Buffer{}
-	return &cli{out: out, home: t.TempDir(), wd: "/w", paths: config.Paths{Dir: t.TempDir()}}, out
+	return &cli{out: out, home: t.TempDir(), wd: "/w", paths: config.Paths{Dir: t.TempDir()}, getenv: func(string) string { return "" }}, out
 }
 
 // putTranscript puts a Claude transcript of session id under the fake home.
@@ -547,5 +551,178 @@ func TestTicketDoneWithoutADaemonContinues(t *testing.T) {
 	}
 	if items, _ := c.ledger().Items("s1"); len(items) != 0 {
 		t.Fatal("the ticket stays open", items)
+	}
+}
+
+// agentEnv sets the env of c: a terminal that Orca runs, for the harness session s1.
+func agentEnv(c *cli, env map[string]string) {
+	c.getenv = func(k string) string { return env[k] }
+}
+
+// claimDaemon runs a real server with the claim route on a loopback port and points the config of c at it.
+func claimDaemon(t *testing.T, c *cli) *sessions.Book {
+	t.Helper()
+	ln, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := ln.Addr().(*net.TCPAddr).Port
+	ln.Close()
+	off := false
+	cfg := config.ServeConfig{Port: port, Tailscale: &off}
+	if err := c.paths.SaveConfig(config.Config{Roles: []string{config.RoleServe}, Serve: &cfg}); err != nil {
+		t.Fatal(err)
+	}
+	book := sessions.NewBook("mbp", "", nil, nil)
+	info := func() wire.DaemonInfo {
+		return wire.DaemonInfo{Machine: "mbp", Version: "test", Contract: wire.DaemonContract}
+	}
+	srv := server.NewServer(cfg, info, nil, eventlog.New(10), book, nil)
+	srv.Log = slog.New(slog.NewTextHandler(io.Discard, nil))
+	runner := orders.NewRunner(nil, nil, nil, time.Now).WithKeys(book)
+	srv.Handle(orders.NewClaims(runner, nil).Routes()...)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { srv.Run(ctx); close(done) }()
+	t.Cleanup(func() { cancel(); <-done })
+	for i := 0; ; i++ {
+		resp, err := http.Get("http://127.0.0.1:" + strconv.Itoa(port) + "/v1/whoami")
+		if err == nil {
+			resp.Body.Close()
+			break
+		}
+		if i == 50 {
+			t.Fatal(err)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	return book
+}
+
+func orcaPane(book *sessions.Book, id string) {
+	book.Apply(sessions.Patch{ID: id, Source: sessions.SourceHook, Runtime: ptr(wire.RuntimeOrca), Harness: ptr("claude")})
+}
+
+func ptr[T any](v T) *T { return &v }
+
+func TestTicketNewClaimsThePane(t *testing.T) {
+	c, out := ticketTest(t)
+	book := claimDaemon(t, c)
+	orcaPane(book, "t1:l1")
+	agentEnv(c, map[string]string{"ORCA_PANE_KEY": "t1:l1", "CLAUDE_CODE_SESSION_ID": "s1"})
+	if err := c.ticket([]string{"new", "A-1"}); err != nil {
+		t.Fatal(err)
+	}
+	if s, ok := book.ByKey(wire.RuntimeOrca, "work:A-1"); !ok || s.ID != "t1:l1" {
+		t.Fatalf("book key: %+v %v", s, ok)
+	}
+	if !strings.Contains(out.String(), "A-1: Work in the app uses this session (key work:A-1).\n") {
+		t.Fatal(out)
+	}
+}
+
+func TestTicketClaimTellsWhereTheKeyMoved(t *testing.T) {
+	c, out := ticketTest(t)
+	book := claimDaemon(t, c)
+	orcaPane(book, "t0:l0")
+	orcaPane(book, "t1:l1")
+	if _, err := book.Claim("t0:l0", "work:A-1"); err != nil {
+		t.Fatal(err)
+	}
+	agentEnv(c, map[string]string{"ORCA_PANE_KEY": "t1:l1"})
+	if err := c.ticket([]string{"work", "A-1", "--session", "s1"}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "(key work:A-1). The key moved from t0:l0.\n") {
+		t.Fatal(out)
+	}
+}
+
+func TestTicketPlanOneKeyClaimsWork(t *testing.T) {
+	c, _ := ticketTest(t)
+	book := claimDaemon(t, c)
+	orcaPane(book, "t1:l1")
+	agentEnv(c, map[string]string{"ORCA_PANE_KEY": "t1:l1"})
+	if err := c.ticket([]string{"plan", "A-1", "--session", "s1"}); err != nil {
+		t.Fatal(err)
+	}
+	if s, ok := book.ByKey(wire.RuntimeOrca, "work:A-1"); !ok || s.ID != "t1:l1" {
+		t.Fatalf("book key: %+v %v", s, ok)
+	}
+}
+
+func TestTicketPlanManyKeysClaimsNone(t *testing.T) {
+	c, _ := ticketTest(t)
+	calls := 0
+	fakeDaemon(t, c, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls++ }))
+	agentEnv(c, map[string]string{"ORCA_PANE_KEY": "t1:l1"})
+	if err := c.ticket([]string{"plan", "A-1", "B-2", "--session", "s1"}); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 0 {
+		t.Fatalf("%d daemon calls", calls)
+	}
+}
+
+func TestTicketBindClaimFailsSoft(t *testing.T) {
+	jsonNotFound := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(`{"error":"no session"}`))
+	})
+	for _, tc := range []struct {
+		name  string
+		serve func(t *testing.T, c *cli)
+		want  string
+	}{
+		{"no daemon", func(t *testing.T, c *cli) { closedPort(t, c) }, "A-1: no daemon answers, so the app does not link this session.\n"},
+		{"unknown session", func(t *testing.T, c *cli) { fakeDaemon(t, c, jsonNotFound) },
+			"A-1: the daemon does not know this session yet, so the app does not link it.\n"},
+		{"old daemon", func(t *testing.T, c *cli) { fakeDaemon(t, c, http.NotFoundHandler()) },
+			"A-1: the daemon is too old to link this session. Run: oversire update\n"},
+		{"conflict", func(t *testing.T, c *cli) {
+			fakeDaemon(t, c, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				server.WriteError(w, http.StatusConflict, "OverSire cannot type into this terminal.")
+			}))
+		}, "A-1: the app does not link this session: OverSire cannot type into this terminal.\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c, out := ticketTest(t)
+			tc.serve(t, c)
+			agentEnv(c, map[string]string{"ORCA_PANE_KEY": "t1:l1"})
+			if err := c.ticket([]string{"new", "A-1", "--session", "s1"}); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(out.String(), tc.want) {
+				t.Fatalf("no %q in\n%s", tc.want, out)
+			}
+			if got, _ := c.ledger().Sessions("A-1"); len(got) != 1 {
+				t.Fatalf("ledger %v", got)
+			}
+		})
+	}
+}
+
+func TestTicketBindSkipsWithoutAgentEnv(t *testing.T) {
+	c, out := ticketTest(t)
+	calls := 0
+	fakeDaemon(t, c, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls++ }))
+	if err := c.ticket([]string{"new", "A-1", "--session", "s1"}); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 0 || !strings.Contains(out.String(), "A-1: this terminal is not an Orca or OverSire session") {
+		t.Fatalf("%d calls\n%s", calls, out)
+	}
+}
+
+func TestTicketBindSkipsAnotherSession(t *testing.T) {
+	c, out := ticketTest(t)
+	calls := 0
+	fakeDaemon(t, c, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls++ }))
+	agentEnv(c, map[string]string{"ORCA_PANE_KEY": "t1:l1", "CLAUDE_CODE_SESSION_ID": "s1"})
+	if err := c.ticket([]string{"new", "A-1", "--session", "s2"}); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 0 || !strings.Contains(out.String(), "does not link it") {
+		t.Fatalf("%d calls\n%s", calls, out)
 	}
 }

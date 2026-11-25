@@ -261,6 +261,9 @@ func (c *cli) serveTasks(ctx context.Context, cfg config.Config, reg *runtime.Re
 	direct := orders.NewDirect(runner, func(m any) { srv.Notify(false, m) }, time.Now)
 	direct.Log = c.log
 	srv.Handle(direct.Routes()...)
+	claims := orders.NewClaims(runner, capture.NewClaimRows(capt).OnClaim)
+	claims.Log = c.log
+	srv.Handle(claims.Routes()...)
 	reports.add(book)
 	reports.add(direct)
 	runbookRows := capture.NewRunbookRows(capt)

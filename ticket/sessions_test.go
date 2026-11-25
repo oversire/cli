@@ -63,3 +63,22 @@ func TestLive(t *testing.T) {
 		}
 	}
 }
+
+func TestStartKeyFor(t *testing.T) {
+	for _, c := range []struct {
+		role string
+		keys []string
+		want string
+		ok   bool
+	}{
+		{"new", []string{"A-1"}, "work:A-1", true},
+		{"work", []string{"A-1"}, "work:A-1", true},
+		{"plan", []string{"A-1"}, "work:A-1", true},
+		{"plan", []string{"A-1", "B-2"}, "", false},
+		{"plan", nil, "", false},
+	} {
+		if got, ok := StartKeyFor(c.role, c.keys); got != c.want || ok != c.ok {
+			t.Errorf("%s %v: %q %v", c.role, c.keys, got, ok)
+		}
+	}
+}

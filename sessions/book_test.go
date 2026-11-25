@@ -2,6 +2,7 @@ package sessions
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -448,5 +449,100 @@ func TestRunWithConcurrentApply(t *testing.T) {
 	cancel()
 	if err := <-done; err != nil {
 		t.Fatal(err)
+	}
+}
+
+func keyed(b *Book, id, runtime, key string) {
+	p := Patch{ID: id, Source: SourceHook, At: at(0), Runtime: ptr(runtime), State: ptr(wire.PhaseWorking)}
+	if key != "" {
+		p.Key = ptr(key)
+	}
+	b.Apply(p)
+}
+
+func TestClaimSetsTheKey(t *testing.T) {
+	b, _ := newBook("")
+	b.Apply(orca("t1:l1", 0, wire.PhaseWorking))
+	c, err := b.Claim("t1:l1", "work:A-1")
+	if err != nil || !c.Changed || c.Session.Key != "work:A-1" || c.Previous != "" || len(c.Freed) != 0 {
+		t.Fatalf("claim = %+v, %v", c, err)
+	}
+	if s, ok := b.ByKey(wire.RuntimeOrca, "work:A-1"); !ok || s.ID != "t1:l1" {
+		t.Fatalf("by key = %+v %v", s, ok)
+	}
+}
+
+func TestClaimMovesTheKeyOnOneRuntime(t *testing.T) {
+	b, _ := newBook("")
+	keyed(b, "a", wire.RuntimeOrca, "work:A-1")
+	keyed(b, "b", wire.RuntimeOrca, "")
+	keyed(b, "w", "oversire", "work:A-1")
+	c, err := b.Claim("b", "work:A-1")
+	if err != nil || !c.Changed || len(c.Freed) != 1 || c.Freed[0] != "a" {
+		t.Fatalf("claim = %+v, %v", c, err)
+	}
+	if s, _ := b.Get("a"); s.Key != "" {
+		t.Fatalf("a keeps %q", s.Key)
+	}
+	if s, ok := b.ByKey("oversire", "work:A-1"); !ok || s.ID != "w" {
+		t.Fatalf("w = %+v %v", s, ok)
+	}
+	if s, ok := b.ByKey(wire.RuntimeOrca, "work:A-1"); !ok || s.ID != "b" {
+		t.Fatalf("b = %+v %v", s, ok)
+	}
+}
+
+func TestClaimGivesThePreviousKey(t *testing.T) {
+	b, _ := newBook("")
+	keyed(b, "s", wire.RuntimeOrca, "plan:A-1")
+	c, err := b.Claim("s", "work:A-1")
+	if err != nil || c.Previous != "plan:A-1" || !c.Changed {
+		t.Fatalf("claim = %+v, %v", c, err)
+	}
+}
+
+func TestClaimSameKeyChangesNothing(t *testing.T) {
+	clock := t0
+	b := NewBook("mini", "", &memLog{}, func() time.Time { return clock })
+	keyed(b, "s", wire.RuntimeOrca, "")
+	if c, err := b.Claim("s", "work:A-1"); err != nil || !c.Changed {
+		t.Fatalf("first = %+v, %v", c, err)
+	}
+	before, _ := b.Get("s")
+	clock = clock.Add(time.Minute)
+	c, err := b.Claim("s", "work:A-1")
+	if err != nil || c.Changed || c.Previous != "" || c.Session.Key != "work:A-1" {
+		t.Fatalf("second = %+v, %v", c, err)
+	}
+	if after, _ := b.Get("s"); !after.UpdatedAt.Equal(before.UpdatedAt) {
+		t.Fatalf("UpdatedAt moved: %v to %v", before.UpdatedAt, after.UpdatedAt)
+	}
+}
+
+func TestClaimUnknownOrEndedSession(t *testing.T) {
+	b, _ := newBook("")
+	if _, err := b.Claim("nope", "work:A-1"); !errors.Is(err, ErrNoSession) {
+		t.Fatalf("unknown: %v", err)
+	}
+	keyed(b, "c", wire.RuntimeCLI, "")
+	b.Apply(Patch{ID: "c", Source: SourceHook, At: at(time.Second), End: true})
+	if _, err := b.Claim("c", "work:A-1"); !errors.Is(err, ErrNoSession) {
+		t.Fatalf("ended: %v", err)
+	}
+}
+
+func TestClaimLivesThroughARestart(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sessions.json")
+	b, _ := newBook(path)
+	b.Apply(orca("t1:l1", 0, wire.PhaseWorking))
+	if _, err := b.Claim("t1:l1", "work:A-1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.Save(true); err != nil {
+		t.Fatal(err)
+	}
+	c, _ := newBook(path)
+	if s, ok := c.ByKey(wire.RuntimeOrca, "work:A-1"); !ok || s.ID != "t1:l1" {
+		t.Fatalf("after load: %+v %v", s, ok)
 	}
 }

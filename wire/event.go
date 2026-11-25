@@ -134,6 +134,7 @@ type ItemLinks struct {
 const (
 	KindSessionStarted     = "session.started"
 	KindSessionEnded       = "session.ended"
+	KindSessionClaimed     = "session.claimed"
 	KindTurnStarted        = "turn.started"
 	KindTurnEnded          = "turn.ended"
 	KindTurnInterrupted    = "turn.interrupted"

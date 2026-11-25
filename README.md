@@ -241,8 +241,8 @@ The budget of the order has caps: 50 earlier turns, 10 last turns and 20000 char
 | `oversire visor ls\|session\|workdir\|project\|harness\|status` | Show and control the agent sessions of the `oversire` runtime. See "runtime:oversire". |
 | `oversire ticket skill [new\|plan\|work\|done\|groom\|sweep\|spec]` | Print the body of the `oversire` agent skill. See "Ticket skill". |
 | `oversire ticket skill --install\|--refresh [--harness claude,codex]` | Install the skill file, or update the installed files. |
-| `oversire ticket new\|work <KEY> [--session ID] [--harness H]` | Bind the agent session to a ticket. `work` prints the earlier sessions and a digest. The agent runs it. |
-| `oversire ticket plan <KEY>... [--session ID] [--harness H]` | Bind the agent session to one ticket or a batch of at most 20. With one key it prints the earlier sessions and a digest. With more keys it prints one line for each key. The agent runs it. |
+| `oversire ticket new\|work <KEY> [--session ID] [--harness H]` | Bind the agent session to a ticket. `work` prints the earlier sessions and a digest. With one key, it also gives this Orca or OverSire session the start key `work:<KEY>`, so Work in the app reuses it. The agent runs it. |
+| `oversire ticket plan <KEY>... [--session ID] [--harness H]` | Bind the agent session to one ticket or a batch of at most 20. With one key it prints the earlier sessions and a digest. With more keys it prints one line for each key. With one key, it also gives this Orca or OverSire session the start key `work:<KEY>`, so Work in the app reuses it. With more keys, it gives no start key. The agent runs it. |
 | `oversire ticket groom <PROJECT> [--session ID]` | Check that no Groom of the project runs on this daemon (key `groom:<PROJECT>`), and list the items of the project with a live session. It sets no key. The agent runs it. |
 | `oversire ticket applied groom\|sweep --file F [--project P] [--session ID]` | Write one event row for each item that the skill changed (`groom.applied`, `sweep.applied`). The agent runs it. |
 | `oversire ticket sweep [KEY...] [--project P] [--root DIR] [--stale DAYS] [--json]` | The facts of the started tickets: the sessions (daemon and ledger), the code review, the worktree group, the commits on the base branches, and a signal (merged, conflict, approved, ready, working, stalled, open, none). With no key it finds the keys of the local work. The agent runs it. |
@@ -430,6 +430,7 @@ The daemon writes these rows itself (package `capture`, OVERSIRE-380):
 | The session book | The same session, turn and wait rows for a session with no hooks (the Orca screen, the `oversire` runtime). |
 | Questions | `question.answered` when the app answers through the daemon. |
 | Reviews | `review.ready`, `review.submitted`, `review.approved`. A merge gives `git.merge` for each repository (id `git:<sha>:refs/heads/<base>`, the same id as the git watcher) and `item.shipped`. |
+| Claims | `session.claimed` when `oversire ticket new\|plan\|work` sets the key of a session. |
 | Runbooks | `plan.started` for each run, `runbook.step_started` and `runbook.step_ended` for each step round. |
 | Git (package `gitwatch`) | `worktree.added`, `worktree.removed`, `git.commit`, `git.rebase`, `git.reset`, `git.merge` and `git.push`, from the reflogs of the branches. No git hooks. |
 
@@ -753,6 +754,15 @@ Orca does not let a local process pair by itself. The user makes a pairing link 
 ### Keyed sessions
 
 A `sessionStart` order can carry `key`, for example `enhance:OVERSIRE-317`. The daemon keeps at most one live session for each key. A start with the key of a live session gives that session and starts nothing. A `sessionStop` frees the key at once, so a start after it makes a new session. Each runtime has the capability `sessionKey`.
+
+A user can start an agent by hand in an Orca terminal. The session book has this session, but it has no key. `oversire ticket new|plan|work <KEY>` gives it the key `work:<KEY>`, so a later Work start of the app reuses it. The command calls `POST /v1/sessions/claim`:
+
+- Access: loopback only. Over Tailscale the daemon does not serve the route, and a POST gets 405 (the `GET /v1/sessions/{id}` route is on that listener).
+- Body: `{key, paneKey?, session?, harnessSession?, role?}`. `paneKey` is `ORCA_PANE_KEY`. `session` is `OVERSIRE_SESSION`. The daemon looks for the pane first, then for the session. `harnessSession` is only a check. `role` is `new`, `plan` or `work`, for the event row.
+- Answer 200: `{session, previous?, freed?, changed}`. The key moves off each other live session of the same runtime. `changed` is false when the session held the key already.
+- Answer 400: a bad key or role, or no `paneKey` and no `session`. Answer 404: no live session for the terminal. Answer 409: the harness session differs, or the session has the runtime `cli` (OverSire cannot type into it).
+
+A claim writes one `session.claimed` row when the key changes. A claim never fails the ticket command: the command prints one line.
 
 The app runs Enhance this way: one keyed session in place, in the main checkout, with the read-only Enhance prompt. The agent asks with `AskUserQuestion`, so the questions come as `form` questions. The result is a fenced block with the info string `oversire-result` in the last message. The app reads it with `sessionHistory`.
 

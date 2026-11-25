@@ -85,6 +85,48 @@
       }
     },
     {
+      "kind": "session.claimed",
+      "domain": "agent",
+      "actorTypes": [
+        "agent",
+        "human"
+      ],
+      "private": false,
+      "summary": "the item and the start key that the session now holds",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "new",
+              "plan",
+              "work"
+            ]
+          },
+          "runtime": {
+            "type": "string"
+          },
+          "previous": {
+            "type": "string"
+          },
+          "freed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "runtime"
+        ]
+      }
+    },
+    {
       "kind": "turn.started",
       "domain": "agent",
       "actorTypes": [
