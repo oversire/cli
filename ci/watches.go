@@ -83,7 +83,9 @@ func (w *Watches) Add(req wire.CIWatchRequest, machine string) (wire.CIWatchAnsw
 		return wire.CIWatchAnswer{}, err
 	}
 	t, err := w.index.Resolve(st.Repo, ref)
-	if err != nil {
+	// The app can poll a new run or PR later. Give no watch yet: the app cannot poll a ref that names no commit.
+	pending := server.NotFound.Of(err)
+	if err != nil && !pending {
 		return wire.CIWatchAnswer{}, err
 	}
 	roll, err := w.index.Rollup(st.Repo, t, nil)
@@ -91,6 +93,9 @@ func (w *Watches) Add(req wire.CIWatchRequest, machine string) (wire.CIWatchAnsw
 		return wire.CIWatchAnswer{}, err
 	}
 	roll.Ref = req.Ref
+	if pending {
+		return wire.CIWatchAnswer{Rollup: &roll}, nil
+	}
 	if roll.Done {
 		return wire.CIWatchAnswer{Rollup: &roll, Done: true}, nil
 	}

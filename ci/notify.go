@@ -273,8 +273,12 @@ func (n *Notifier) run(j NotifyJob, extend bool) {
 		began := time.Now()
 		roll, done, err := n.step(j, extend, since, left)
 		extend = true
+		var he *HomeError
 		switch {
 		case n.ctx.Err() != nil:
+			return
+		case errors.As(err, &he) && he.Status == http.StatusNotFound:
+			n.finish(j, notFoundText(j, he.Text))
 			return
 		case err != nil:
 			n.Log.Warn("ci notify: wait", "repo", j.Request.Repo, "ref", j.Request.Ref, "err", err)
@@ -426,6 +430,11 @@ func resultText(r wire.CIRollup, ref string) string {
 func timeoutText(j NotifyJob) string {
 	ttl := j.ExpiresAt.Sub(j.CreatedAt)
 	return fmt.Sprintf("[OverSire] CI of %s (%s) did not end in %s. Run: oversire ci status %s", sanitize(j.Request.Ref, notifyLineMax), j.Request.Repo, spanText(int(ttl.Seconds())), j.Request.Ref)
+}
+
+// notFoundText is the message when home does not know the ref after the settle time.
+func notFoundText(j NotifyJob, why string) string {
+	return fmt.Sprintf("[OverSire] %s Run: oversire ci status %s", sanitize(why, notifyLineMax), j.Request.Ref)
 }
 
 func sha7(r wire.CIRollup, ref string) string {

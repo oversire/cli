@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -78,6 +79,20 @@ func TestWatchesDoneGivesNoWatch(t *testing.T) {
 	}
 	if !ans.Done || ans.Watch != nil || ans.Rollup == nil || ans.Rollup.State != wire.CISuccess || f.count() != 0 || len(w.List()) != 0 {
 		t.Fatalf("%+v frames %d", ans, f.count())
+	}
+}
+
+func TestWatchesUnknownRunGivesNoWatch(t *testing.T) {
+	_, w, f := newWatches(t)
+	ans, err := w.Add(wire.CIWatchRequest{Repo: "o/r", Ref: "9002"}, "mba")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ans.Done || ans.Watch != nil || ans.Rollup == nil || ans.Rollup.State != wire.CINone || ans.Rollup.Ref != "9002" || f.count() != 0 || len(w.List()) != 0 {
+		t.Fatalf("%+v frames %d", ans, f.count())
+	}
+	if _, err := w.Add(wire.CIWatchRequest{Repo: "o/x", Ref: "9002"}, "mba"); !errors.Is(err, ErrUntracked) {
+		t.Fatal(err)
 	}
 }
 
@@ -227,7 +242,7 @@ func TestWatchesRoutes(t *testing.T) {
 	if code, body := post(`{"repo":"o/other","ref":"main"}`); code != 404 || !strings.Contains(body, "does not track") {
 		t.Fatalf("untracked: %d %s", code, body)
 	}
-	if code, body := post(`{"repo":"o/r","ref":"#999"}`); code != 404 || !strings.Contains(body, "no PR #999") {
+	if code, body := post(`{"repo":"o/r","ref":"#999"}`); code != 200 || strings.Contains(body, `"watch"`) {
 		t.Fatalf("unknown ref: %d %s", code, body)
 	}
 	if code, _ := post(`{"repo":"o/r","ref":"main","ttl":9000}`); code != 400 {

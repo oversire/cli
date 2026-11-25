@@ -427,3 +427,24 @@ func TestNotifierRoutes(t *testing.T) {
 		t.Fatalf("%v %+v", err, jobs)
 	}
 }
+
+func TestNotifierUnknownRun(t *testing.T) {
+	e := newNotifyEnv(t, func(n int, _ WaitQuery) (wire.CIRollup, error) {
+		if n == 1 {
+			return wire.CIRollup{Repo: "o/r", Ref: "9002", State: wire.CINone, Rev: "r0"}, nil
+		}
+		return wire.CIRollup{}, &HomeError{Status: http.StatusNotFound, Text: "OverSire has no run 9002 in o/r."}
+	})
+	e.adder.ans = wire.CIWatchAnswer{Rollup: &wire.CIRollup{Repo: "o/r", Ref: "9002", State: wire.CINone}}
+	req := e.req("s1")
+	req.Ref = "9002"
+	ans, err := e.n.Start(context.Background(), req)
+	if err != nil || ans.Notify != "queued" || ans.Watch != nil {
+		t.Fatalf("%v %+v", err, ans)
+	}
+	eventually(t, "the text", func() bool { return len(e.sender.sent()) == 1 })
+	if got, want := e.sender.sent()[0], "[OverSire] OverSire has no run 9002 in o/r. Run: oversire ci status 9002"; got != want {
+		t.Fatalf("%q", got)
+	}
+	eventually(t, "the job to end", func() bool { return len(e.n.List()) == 0 })
+}
